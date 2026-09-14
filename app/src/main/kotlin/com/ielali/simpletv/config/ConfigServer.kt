@@ -42,7 +42,7 @@ import java.net.URL
  * PIN is on the backlog before any wider distribution.
  */
 class ConfigServer(
-    private val context: Context,
+    private val appContext: Context,
     private val repo: ChannelRepository,
     private val port: Int,
 ) {
@@ -66,14 +66,14 @@ class ConfigServer(
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; encodeDefaults = true }) }
             routing {
                 get("/") {
-                    val html = withContext(Dispatchers.IO) { context.assets.open("config/index.html").bufferedReader().readText() }
+                    val html = withContext(Dispatchers.IO) { appContext.assets.open("config/index.html").bufferedReader().readText() }
                     call.respondText(html, ContentType.Text.Html)
                 }
                 get("/api/status") {
                     val version = runCatching {
-                        context.packageManager.getPackageInfo(context.packageName, 0).versionName
+                        appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
                     }.getOrNull() ?: "dev"
-                    call.respond(Status(version, repo.current().channels.size, NetworkAddress.configUrl(context, port)))
+                    call.respond(Status(version, repo.current().channels.size, NetworkAddress.configUrl(appContext, port)))
                 }
                 get("/api/channels") { call.respond(repo.current()) }
                 put("/api/channels") {
@@ -100,7 +100,7 @@ class ConfigServer(
             runCatching { it.start(wait = false) }
                 .onFailure { e -> Log.e(TAG, "Config server failed to start on port $port", e) }
         }
-        Log.i(TAG, "Config server listening on ${NetworkAddress.configUrl(context, port)}")
+        Log.i(TAG, "Config server listening on ${NetworkAddress.configUrl(appContext, port)}")
     }
 
     fun stop() {
