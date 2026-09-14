@@ -50,6 +50,15 @@ network or behind-live-window errors so a dropped stream recovers without user a
 and wraps it in a full-bleed HTML page loaded into a WebView with autoplay allowed. Channel-id sources
 use `embed/live_stream?channel=UC…`, which always plays that channel's current live broadcast.
 
+## YouTube playback modes
+
+`AppSettings.youtubePlayback` selects between the embedded player (default) and a hand-off to the
+YouTube app. In `YOUTUBE_APP` mode `TvViewModel.switchTo` emits the channel on `openExternal`;
+`MainActivity` builds a watch or channel-live URL with `YouTubeEmbed.watchUrl` and tries the TV
+YouTube package, then the mobile package, then any URL handler. If none exists it reports back and
+the UI falls back to the embed for that channel. See ADR-007 for why the device account cannot be
+used by the embedded player.
+
 ## Testing strategy
 
 Pure logic (tuner, navigator, parser, YouTube parsing) is JVM-tested. Android layers are verified

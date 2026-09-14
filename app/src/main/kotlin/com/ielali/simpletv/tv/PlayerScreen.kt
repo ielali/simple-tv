@@ -36,6 +36,7 @@ import androidx.media3.ui.PlayerView
 import com.ielali.simpletv.R
 import com.ielali.simpletv.data.Channel
 import com.ielali.simpletv.data.SourceType
+import com.ielali.simpletv.data.YouTubePlayback
 import com.ielali.simpletv.player.PlaybackState
 import com.ielali.simpletv.youtube.YouTubeEmbed
 
@@ -53,7 +54,12 @@ fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
             state.channels.isEmpty() -> NoChannels(state.configUrl)
             current == null -> Unit
             current.type == SourceType.STREAM -> VideoSurface(vm)
-            current.type == SourceType.YOUTUBE -> YouTubeSurface(current)
+            current.type == SourceType.YOUTUBE ->
+                if (state.settings.youtubePlayback == YouTubePlayback.YOUTUBE_APP && !state.externalPlayerUnavailable) {
+                    CenterMessage(stringResource(R.string.playing_in_youtube_app))
+                } else {
+                    YouTubeSurface(current)
+                }
         }
 
         if (current?.type == SourceType.STREAM && state.playback == PlaybackState.ERROR) {

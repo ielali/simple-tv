@@ -7,13 +7,18 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
 import com.ielali.simpletv.SimpleTvApp
 import com.ielali.simpletv.config.NetworkAddress
+import com.ielali.simpletv.data.AppSettings
 import com.ielali.simpletv.data.Channel
 import com.ielali.simpletv.data.SourceType
+import com.ielali.simpletv.data.YouTubePlayback
 import com.ielali.simpletv.player.PlaybackEngine
 import com.ielali.simpletv.player.PlaybackState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -28,6 +33,9 @@ data class TvUiState(
     val settingsVisible: Boolean = false,
     val playback: PlaybackState = PlaybackState.IDLE,
     val configUrl: String = "",
+    val settings: AppSettings = AppSettings(),
+    /** True when the YouTube app could not be launched for the current channel; UI falls back to the embed. */
+    val externalPlayerUnavailable: Boolean = false,
 )
 
 @UnstableApi
@@ -35,6 +43,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
 
     private val simpleTv = app as SimpleTvApp
     private val repo = simpleTv.channels
+    private val settingsRepo = simpleTv.settings
     private val prefs = app.getSharedPreferences("tv", Application.MODE_PRIVATE)
 
     val engine = PlaybackEngine(app)
@@ -43,10 +52,16 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     private val current = MutableStateFlow<Channel?>(null)
     private val bannerVisible = MutableStateFlow(false)
     private val settingsVisible = MutableStateFlow(false)
+    private val externalUnavailable = MutableStateFlow(false)
     private var bannerJob: Job? = null
+
+    /** Channels the Activity should open in the YouTube app (settings say YOUTUBE_APP). */
+    private val _openExternal = MutableSharedFlow<Channel>(extraBufferCapacity = 1)
+    val openExternal: SharedFlow<Channel> = _openExternal.asSharedFlow()
 
     val uiState: StateFlow<TvUiState> = combine(
         repo.channels, current, tuner.pendingDigits, bannerVisible, settingsVisible, engine.state,
+        settingsRepo.settings, externalUnavailable,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         TvUiState(
@@ -57,6 +72,8 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             settingsVisible = values[4] as Boolean,
             playback = values[5] as PlaybackState,
             configUrl = NetworkAddress.configUrl(app, SimpleTvApp.CONFIG_PORT),
+            settings = values[6] as AppSettings,
+            externalPlayerUnavailable = values[7] as Boolean,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, TvUiState())
 
@@ -126,11 +143,23 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         prefs.edit().putInt(KEY_LAST, channel.number).apply()
+        externalUnavailable.value = false
         when (channel.type) {
             SourceType.STREAM -> engine.play(channel)
-            SourceType.YOUTUBE -> engine.stop() // WebView in the UI layer takes over
+            SourceType.YOUTUBE -> {
+                engine.stop()
+                if (settingsRepo.current().youtubePlayback == YouTubePlayback.YOUTUBE_APP) {
+                    _openExternal.tryEmit(channel) // Activity launches the YouTube app
+                }
+                // otherwise the WebView in the UI layer takes over
+            }
         }
         showBanner()
+    }
+
+    /** Called by the Activity when no YouTube app could handle the channel; the embed is used instead. */
+    fun onExternalPlayerUnavailable() {
+        externalUnavailable.value = true
     }
 
     private fun showBanner() {

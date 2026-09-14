@@ -59,6 +59,12 @@ object YouTubeEmbed {
         }
     }
 
+    /** URL to hand to the YouTube app on the box; it plays with the account signed in there. */
+    fun watchUrl(target: Target): String = when (target) {
+        is Target.Video -> "https://www.youtube.com/watch?v=${target.id}"
+        is Target.ChannelLive -> "https://www.youtube.com/channel/${target.channelId}/live"
+    }
+
     /** Full-bleed page so the video fills the TV with no page chrome. */
     fun html(target: Target): String = """
         <!doctype html>

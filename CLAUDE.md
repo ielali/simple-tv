@@ -20,8 +20,9 @@ This file is the contract for any AI agent working in this repository. Read it f
    "No signal" and keep retrying. An empty channel list shows the config URL in large text.
 5. **Text on the TV is huge.** Banner number 96sp, names 48sp, hints 32sp minimum. Light text on
    dark, no thin weights.
-6. **YouTube goes through the official embedded player only.** Never add stream-URL extraction
-   (yt-dlp, NewPipe, Invidious). It violates YouTube's terms and it breaks constantly.
+6. **YouTube goes through the official embedded player or the YouTube app only.** Never add
+   stream-URL extraction (yt-dlp, NewPipe, Invidious) or user-agent spoofing to get past Google's
+   WebView sign-in block. Both violate the terms and break constantly. See ADR-007.
 7. **Configuration happens off the TV.** New settings go into the web UI at
    `app/src/main/assets/config/index.html` and the JSON API in `ConfigServer`, not into on-TV forms.
 
@@ -39,6 +40,8 @@ app/src/main/kotlin/com/ielali/simpletv/
   youtube/YouTubeEmbed.kt Parses YouTube links/ids and builds the iframe page
   data/Channel.kt         Channel model + ChannelList (JSON, kotlinx.serialization)
   data/ChannelRepository.kt JSON-file persistence, StateFlow of the list
+  data/AppSettings.kt     App-wide settings (YouTube playback mode)
+  data/SettingsRepository.kt settings.json persistence
   data/M3uParser.kt       IPTV playlist import
   config/ConfigServer.kt  Ktor CIO server on :8080, serves web UI and JSON API
   config/NetworkAddress.kt LAN IP discovery

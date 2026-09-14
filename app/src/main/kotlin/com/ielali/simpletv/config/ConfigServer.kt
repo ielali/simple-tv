@@ -3,7 +3,9 @@ package com.ielali.simpletv.config
 import android.content.Context
 import android.util.Log
 import com.ielali.simpletv.data.ChannelList
+import com.ielali.simpletv.data.AppSettings
 import com.ielali.simpletv.data.ChannelRepository
+import com.ielali.simpletv.data.SettingsRepository
 import com.ielali.simpletv.data.M3uParser
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -37,6 +39,8 @@ import java.net.URL
  *  GET  /api/channels          -> ChannelList
  *  PUT  /api/channels          <- ChannelList (replaces everything)
  *  POST /api/import/m3u        <- { url } or { text }  appends parsed channels
+ *  GET  /api/settings          -> AppSettings
+ *  PUT  /api/settings          <- AppSettings
  *
  * There is no authentication: it binds to every interface of a device on a home network. Adding a
  * PIN is on the backlog before any wider distribution.
@@ -44,6 +48,7 @@ import java.net.URL
 class ConfigServer(
     private val appContext: Context,
     private val repo: ChannelRepository,
+    private val settingsRepo: SettingsRepository,
     private val port: Int,
 ) {
     private var engine: ApplicationEngine? = null
@@ -80,6 +85,8 @@ class ConfigServer(
                     val list = call.receive<ChannelList>()
                     call.respond(repo.replaceAll(list))
                 }
+                get("/api/settings") { call.respond(settingsRepo.current()) }
+                put("/api/settings") { call.respond(settingsRepo.replace(call.receive<AppSettings>())) }
                 post("/api/import/m3u") {
                     val req = call.receive<ImportRequest>()
                     val text = when {

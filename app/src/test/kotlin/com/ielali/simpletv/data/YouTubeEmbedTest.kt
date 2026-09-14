@@ -33,4 +33,13 @@ class YouTubeEmbedTest {
         assertTrue(url.contains("autoplay=1"))
         assertTrue(url.contains("controls=0"))
     }
+
+    @Test
+    fun `watch url targets the youtube app`() {
+        assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ", YouTubeEmbed.watchUrl(Target.Video("dQw4w9WgXcQ")))
+        assertEquals(
+            "https://www.youtube.com/channel/UCupvZG-5ko_eiXAupbDfxWw/live",
+            YouTubeEmbed.watchUrl(Target.ChannelLive("UCupvZG-5ko_eiXAupbDfxWw")),
+        )
+    }
 }

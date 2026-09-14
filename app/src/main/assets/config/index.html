@@ -86,8 +86,19 @@
 
   <section class="card">
     <h2>YouTube channels</h2>
-    <p class="hint">Set type to <b>YouTube</b> and paste a live video link, a <code>youtube.com/live/…</code> link, or the channel ID (starts with <code>UC</code>) to always show that channel's current live stream. Playback uses YouTube's own embedded player; some channels block embedding.</p>
+    <p class="hint">Set type to <b>YouTube</b> and paste a live video link, a <code>youtube.com/live/…</code> link, or the channel ID (starts with <code>UC</code>) to always show that channel's current live stream.</p>
+    <h3 style="font-size:15px;margin:12px 0 6px">How YouTube plays on the TV</h3>
+    <label class="row" style="align-items:flex-start;margin-bottom:8px">
+      <input type="radio" name="ytmode" value="EMBEDDED" style="margin-top:4px">
+      <span><b>Inside Simple TV</b> (embedded player) — the remote keeps working exactly like a TV. Plays as a signed-out viewer: ads show, and age-restricted or members-only streams will not play.</span>
+    </label>
+    <label class="row" style="align-items:flex-start">
+      <input type="radio" name="ytmode" value="YOUTUBE_APP" style="margin-top:4px">
+      <span><b>In the YouTube app</b> — uses the Google account already signed in on the TV box (YouTube Premium removes ads; subscriptions and restrictions apply). While YouTube is on screen the remote drives YouTube; the viewer presses BACK, then a channel number, to return.</span>
+    </label>
+    <p class="hint" style="margin-top:10px">Saved immediately when changed.</p>
   </section>
+
 </main>
 
 <div class="toolbar">
@@ -195,6 +206,21 @@
     } catch (e) { setMsg('Save failed: ' + e.message, 'err'); }
   };
   $('#reload').onclick = load;
+
+  async function loadSettings() {
+    try {
+      const st = await api('/api/settings');
+      const r = document.querySelector(`input[name=ytmode][value=${st.youtubePlayback}]`);
+      if (r) r.checked = true;
+    } catch (e) { /* status line already reports connectivity */ }
+  }
+  document.querySelectorAll('input[name=ytmode]').forEach((r) => r.addEventListener('change', async () => {
+    try {
+      await api('/api/settings', { method: 'PUT', body: JSON.stringify({ youtubePlayback: r.value }) });
+      setMsg('YouTube playback mode saved.', 'ok');
+    } catch (e) { setMsg('Could not save setting: ' + e.message, 'err'); }
+  }));
+  loadSettings();
 
   async function importM3u(body) {
     try {
