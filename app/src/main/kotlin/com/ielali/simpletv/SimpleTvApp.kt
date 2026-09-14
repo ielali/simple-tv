@@ -3,6 +3,7 @@ package com.ielali.simpletv
 import android.app.Application
 import com.ielali.simpletv.config.ConfigServer
 import com.ielali.simpletv.data.ChannelRepository
+import com.ielali.simpletv.data.ProviderRepository
 import com.ielali.simpletv.data.SettingsRepository
 
 class SimpleTvApp : Application() {
@@ -13,13 +14,17 @@ class SimpleTvApp : Application() {
     lateinit var settings: SettingsRepository
         private set
 
+    lateinit var providers: ProviderRepository
+        private set
+
     private var configServer: ConfigServer? = null
 
     override fun onCreate() {
         super.onCreate()
         channels = ChannelRepository(this)
         settings = SettingsRepository(this)
-        configServer = ConfigServer(this, channels, settings, CONFIG_PORT).also { it.start() }
+        providers = ProviderRepository(this)
+        configServer = ConfigServer(this, channels, settings, providers, CONFIG_PORT).also { it.start() }
     }
 
     companion object {

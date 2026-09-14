@@ -33,6 +33,14 @@
 One JSON file, `files/channels.json`, holding a `ChannelList`. The repository normalises on write:
 unique numbers, non-blank names, generated ids. The list is small; whole-file rewrite is deliberate.
 
+## Providers
+
+`Provider` describes an IPTV subscription. `Provider.playlistUrl()` builds the Xtream `get.php`
+link or returns the M3U link; `authHeaders()` yields Basic auth for M3U accounts. `ProviderImport.merge`
+is pure: it appends channels not yet present for that provider, numbering after the highest existing
+number, inheriting the provider icon and auth headers. `ConfigServer` fetches the playlist on the TV so
+credentials never pass through the browser.
+
 ## Config server
 
 Ktor with the CIO engine, bound to all interfaces on port 8080. Serves `assets/config/index.html`

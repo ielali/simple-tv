@@ -46,6 +46,10 @@ class ChannelRepository(context: Context) {
         return replaceAll(existing.copy(channels = existing.channels + numbered))
     }
 
+    /** Drop every channel imported from [providerId]. */
+    suspend fun removeProvider(providerId: String): ChannelList =
+        replaceAll(current().copy(channels = current().channels.filterNot { it.providerId == providerId }))
+
     private fun normalise(list: ChannelList): ChannelList {
         val seen = HashSet<Int>()
         val fixed = list.channels

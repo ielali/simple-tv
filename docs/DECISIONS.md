@@ -63,3 +63,19 @@ Cloud project and OAuth client owned by the operator.
 Consequences: with `YOUTUBE_APP` the remote drives YouTube while it is in front and the viewer must
 press BACK to return; that trade-off is stated in the config UI. No credentials are stored by the
 app in either mode.
+
+## ADR-008 IPTV providers as first-class records
+
+Context: Subscriptions are almost always Xtream Codes accounts (server, username, password). Asking
+a caregiver to assemble a `get.php` URL by hand is error-prone, and channel lists need re-importing
+when the provider changes them.
+
+Decision: store providers separately from channels (`providers.json`) with name, icon, kind
+(XTREAM or M3U), URL, username and password. Import fetches the playlist server-side on the TV and
+merges new channels, tagging each with `providerId`. The config API never returns passwords; a blank
+password on write keeps the stored one. M3U providers with credentials use HTTP Basic auth for the
+playlist and the streams; Xtream credentials travel in the URL as the protocol requires.
+
+Consequences: removing a provider removes its channels in one step; re-import is additive only
+(full sync is a backlog item); the LAN config page still needs a PIN before the password-holding
+endpoints are safe on shared networks.

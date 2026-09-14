@@ -41,6 +41,10 @@ app/src/main/kotlin/com/ielali/simpletv/
   data/Channel.kt         Channel model + ChannelList (JSON, kotlinx.serialization)
   data/ChannelRepository.kt JSON-file persistence, StateFlow of the list
   data/AppSettings.kt     App-wide settings (YouTube playback mode)
+  data/Provider.kt        IPTV subscription (Xtream Codes or M3U link), URL building, Basic auth
+  data/ProviderRepository.kt providers.json; blank password on write keeps the stored one
+  data/ProviderImport.kt  Pure merge of a fetched playlist into the channel list
+  data/JsonStore.kt       Generic one-file JSON persistence with a StateFlow
   data/SettingsRepository.kt settings.json persistence
   data/M3uParser.kt       IPTV playlist import
   config/ConfigServer.kt  Ktor CIO server on :8080, serves web UI and JSON API

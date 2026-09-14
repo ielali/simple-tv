@@ -36,6 +36,11 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 ## Later
 
+- Provider re-sync that also removes channels the provider dropped and refreshes names/logos
+  (today import only adds new ones).
+- Xtream `player_api.php` support: categories and EPG straight from the API instead of the M3U.
+- Encrypt providers.json with Android Keystore (today it is plaintext in app-private storage).
+
 - XMLTV EPG: show "now playing" title in the banner.
 - Favourites / hidden channels toggled from the web UI.
 - Export/import of `channels.json` from the web UI.
@@ -45,6 +50,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- IPTV providers: name, icon, Xtream Codes server + username + password (or M3U link with Basic
+  auth), one-click channel import, per-provider removal. Passwords never leave the TV.
 
 - YouTube playback mode setting (embedded player or hand-off to the signed-in YouTube app), with
   `/api/settings` and a radio choice in the config page. See ADR-007.

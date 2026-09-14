@@ -74,6 +74,16 @@
   </section>
 
   <section class="card">
+    <h2>IPTV providers</h2>
+    <p class="hint">Your IPTV subscription. Most providers give a server address, a username and a password (Xtream Codes). If you only have a playlist link, choose <b>M3U link</b>. Passwords stay on the TV and are never shown here again.</p>
+    <div id="providers"></div>
+    <div class="row" style="margin-top:12px">
+      <button id="addProvider">+ Add provider</button>
+      <button id="saveProviders" class="primary">Save providers</button>
+    </div>
+  </section>
+
+  <section class="card">
     <h2>Import a playlist (M3U)</h2>
     <p class="hint">Paste the M3U URL from your IPTV provider, or paste the playlist text. Imported channels are added after the highest existing number.</p>
     <div class="row">
@@ -230,6 +240,87 @@
   }
   $('#importUrl').onclick = () => { const url = $('#m3uUrl').value.trim(); if (url) importM3u({ url }); };
   $('#importText').onclick = () => { const text = $('#m3uText').value.trim(); if (text) importM3u({ text }); };
+
+  // ---- Providers ----
+  let providers = [];
+  const provBox = $('#providers');
+
+  function renderProviders() {
+    provBox.innerHTML = '';
+    if (!providers.length) { provBox.innerHTML = '<p class="hint">No providers yet.</p>'; return; }
+    providers.forEach((p, i) => {
+      const div = document.createElement('div');
+      div.className = 'card';
+      div.style.marginBottom = '10px';
+      div.dataset.index = i;
+      div.innerHTML = `
+        <div class="row" style="margin-bottom:8px">
+          <input data-k="name" value="${esc(p.name)}" placeholder="Provider name" style="flex:1;min-width:160px;font-weight:600">
+          <select data-k="kind">
+            <option value="XTREAM" ${p.kind === 'XTREAM' ? 'selected' : ''}>Xtream Codes (server + login)</option>
+            <option value="M3U" ${p.kind === 'M3U' ? 'selected' : ''}>M3U link</option>
+          </select>
+          <span class="badge">${p.channelCount || 0} channels</span>
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <input data-k="url" value="${esc(p.url)}" placeholder="${p.kind === 'M3U' ? 'https://provider.example/playlist.m3u8' : 'http://server.example:8080'}" style="flex:2;min-width:220px;font-family:ui-monospace,monospace;font-size:13px">
+          <input data-k="logoUrl" value="${esc(p.logoUrl || '')}" placeholder="Icon URL (optional)" style="flex:1;min-width:160px;font-size:13px">
+        </div>
+        <div class="row">
+          <input data-k="username" value="${esc(p.username || '')}" placeholder="Username" autocomplete="off" style="flex:1;min-width:140px">
+          <input data-k="password" type="password" value="" placeholder="${p.hasPassword ? 'Password saved — type to change' : 'Password'}" autocomplete="new-password" style="flex:1;min-width:140px">
+          <button data-act="import" ${p.id ? '' : 'disabled title="Save first"'}>Import channels</button>
+          <button data-act="remove" class="danger">Remove</button>
+        </div>`;
+      provBox.appendChild(div);
+    });
+  }
+
+  provBox.addEventListener('input', (e) => {
+    const box = e.target.closest('[data-index]'); const k = e.target.dataset.k; if (!box || !k) return;
+    providers[+box.dataset.index][k] = e.target.value;
+    if (k === 'kind') renderProviders();
+  });
+  provBox.addEventListener('click', async (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const i = +b.closest('[data-index]').dataset.index; const p = providers[i];
+    if (b.dataset.act === 'remove') {
+      if (p.id && !confirm(`Remove "${p.name}" and all ${p.channelCount || 0} of its channels?`)) return;
+      if (p.id) {
+        try { await api('/api/providers/remove', { method: 'POST', body: JSON.stringify({ providerId: p.id }) }); }
+        catch (err) { setMsg('Remove failed: ' + err.message, 'err'); return; }
+      }
+      providers.splice(i, 1); renderProviders(); load(); return;
+    }
+    if (b.dataset.act === 'import') {
+      b.disabled = true; b.textContent = 'Importing…'; setMsg('Downloading playlist from ' + p.name + '…');
+      try {
+        const res = await api('/api/providers/import', { method: 'POST', body: JSON.stringify({ providerId: p.id }) });
+        await load(); await loadProviders();
+        setMsg(`${p.name}: ${res.added} new channel(s) added, ${res.skipped} already present. Total ${res.total}.`, 'ok');
+      } catch (err) { setMsg('Import failed: ' + err.message, 'err'); renderProviders(); }
+    }
+  });
+
+  $('#addProvider').onclick = () => {
+    providers.push({ id: '', name: '', kind: 'XTREAM', url: '', username: '', password: '', logoUrl: null, hasPassword: false, channelCount: 0 });
+    renderProviders(); provBox.lastElementChild.querySelector('[data-k=name]').focus();
+  };
+  $('#saveProviders').onclick = async () => {
+    const bad = providers.find((p) => !p.url.trim() || !p.name.trim());
+    if (bad) { setMsg('Every provider needs a name and a server or playlist URL', 'err'); return; }
+    try {
+      const body = { version: 1, providers: providers.map((p) => ({
+        id: p.id || '', name: p.name, kind: p.kind, url: p.url, username: p.username || null,
+        password: p.password || null, logoUrl: p.logoUrl || null })) };
+      await api('/api/providers', { method: 'PUT', body: JSON.stringify(body) });
+      await loadProviders(); setMsg('Providers saved. Use "Import channels" to load their channel lists.', 'ok');
+    } catch (e) { setMsg('Save failed: ' + e.message, 'err'); }
+  };
+  async function loadProviders() {
+    try { providers = (await api('/api/providers')).providers; renderProviders(); } catch (e) { /* reported by status */ }
+  }
+  loadProviders();
 
   window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
   load();

@@ -29,8 +29,10 @@ data class Channel(
     val url: String,
     val logoUrl: String? = null,
     val group: String? = null,
-    /** Optional HTTP headers some IPTV providers require (User-Agent, Referer). */
+    /** Optional HTTP headers some IPTV providers require (User-Agent, Referer, Authorization). */
     val headers: Map<String, String> = emptyMap(),
+    /** Set when the channel was imported from a Provider; lets the list be re-synced or removed together. */
+    val providerId: String? = null,
 )
 
 @Serializable
