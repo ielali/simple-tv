@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simple TV – Channels</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --ink: #14161a; --muted: #5d6470; --line: #e2e5ea;
+    --accent: #1b2a41; --accent-ink: #ffffff; --warn: #b4232c; --ok: #1f7a4d; --gold: #ffc857;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1216; --card: #171b21; --ink: #f2f4f8; --muted: #9aa3b2; --line: #2a303a; --accent: #ffc857; --accent-ink: #14161a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { background: var(--accent); color: var(--accent-ink); padding: 18px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 22px; font-weight: 700; }
+  header .status { margin-left: auto; font-size: 14px; opacity: .85; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 120px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 8px; font-size: 17px; }
+  .hint { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input, select, textarea, button { font: inherit; color: inherit; }
+  input, select, textarea { background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--gold); border-color: transparent; }
+  button { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+  button.danger { color: var(--warn); }
+  button:disabled { opacity: .5; cursor: default; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+  th { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+  td input[type=number] { width: 74px; font-size: 20px; font-weight: 700; text-align: center; }
+  td input.name { width: 100%; }
+  td input.url { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  td .mv { display: inline-flex; gap: 4px; }
+  td .mv button { padding: 4px 8px; }
+  tr.dragging { opacity: .4; }
+  .toolbar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 12px 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .toolbar .msg { margin-left: auto; font-size: 14px; color: var(--muted); }
+  .toolbar .msg.ok { color: var(--ok); } .toolbar .msg.err { color: var(--warn); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--line); }
+  @media (max-width: 720px) {
+    table, thead, tbody, tr, td, th { display: block; }
+    thead { display: none; }
+    tr { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 10px; }
+    td { border: 0; padding: 4px 0; }
+    td::before { content: attr(data-label); display: block; font-size: 12px; color: var(--muted); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Simple TV</h1>
+  <span class="badge" id="count">0 channels</span>
+  <span class="status" id="status">Connecting…</span>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Channels</h2>
+    <p class="hint">The number is what gets typed on the remote. Drag rows or use the arrows to reorder, then <b>Renumber</b> to make the numbers follow the order.</p>
+    <table id="grid">
+      <thead><tr><th>No.</th><th>Name</th><th>Type</th><th>Source URL / ID</th><th>Logo URL</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="row" style="margin-top:12px">
+      <button id="add">+ Add channel</button>
+      <button id="renumber">Renumber 1…n in this order</button>
+      <button id="sortByNumber">Sort by number</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Import a playlist (M3U)</h2>
+    <p class="hint">Paste the M3U URL from your IPTV provider, or paste the playlist text. Imported channels are added after the highest existing number.</p>
+    <div class="row">
+      <input id="m3uUrl" type="url" placeholder="https://provider.example/playlist.m3u8" style="flex:1; min-width: 240px">
+      <button id="importUrl">Import from URL</button>
+    </div>
+    <textarea id="m3uText" rows="4" placeholder="#EXTM3U …" style="width:100%; margin-top:8px"></textarea>
+    <div class="row" style="margin-top:8px"><button id="importText">Import pasted text</button></div>
+  </section>
+
+  <section class="card">
+    <h2>YouTube channels</h2>
+    <p class="hint">Set type to <b>YouTube</b> and paste a live video link, a <code>youtube.com/live/…</code> link, or the channel ID (starts with <code>UC</code>) to always show that channel's current live stream. Playback uses YouTube's own embedded player; some channels block embedding.</p>
+  </section>
+</main>
+
+<div class="toolbar">
+  <button class="primary" id="save">Save to TV</button>
+  <button id="reload">Discard changes</button>
+  <span class="msg" id="msg"></span>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const rows = $('#rows');
+  let channels = [];
+  let dirty = false;
+
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+  const setMsg = (text, cls = '') => { const m = $('#msg'); m.textContent = text; m.className = 'msg ' + cls; };
+  const markDirty = () => { dirty = true; setMsg('Unsaved changes'); };
+
+  function render() {
+    rows.innerHTML = '';
+    channels.forEach((c, i) => {
+      const tr = document.createElement('tr');
+      tr.draggable = true;
+      tr.dataset.index = i;
+      tr.innerHTML = `
+        <td data-label="Number"><input type="number" min="1" value="${c.number}" data-k="number"></td>
+        <td data-label="Name"><input class="name" value="${esc(c.name)}" data-k="name" placeholder="Channel name"></td>
+        <td data-label="Type"><select data-k="type">
+          <option value="STREAM" ${c.type === 'STREAM' ? 'selected' : ''}>Stream</option>
+          <option value="YOUTUBE" ${c.type === 'YOUTUBE' ? 'selected' : ''}>YouTube</option>
+        </select></td>
+        <td data-label="Source"><input class="url" value="${esc(c.url)}" data-k="url" placeholder="https://… or UC…"></td>
+        <td data-label="Logo"><input class="url" value="${esc(c.logoUrl || '')}" data-k="logoUrl" placeholder="optional"></td>
+        <td><span class="mv">
+          <button title="Move up" data-act="up">▲</button>
+          <button title="Move down" data-act="down">▼</button>
+          <button class="danger" title="Remove" data-act="del">✕</button>
+        </span></td>`;
+      rows.appendChild(tr);
+    });
+    $('#count').textContent = `${channels.length} channel${channels.length === 1 ? '' : 's'}`;
+  }
+
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
+  rows.addEventListener('input', (e) => {
+    const tr = e.target.closest('tr'); const k = e.target.dataset.k; if (!tr || !k) return;
+    const c = channels[+tr.dataset.index];
+    let v = e.target.value;
+    if (k === 'number') v = parseInt(v, 10) || 0;
+    if (k === 'logoUrl' && !v) v = null;
+    if (k === 'url' && /youtu\.?be/i.test(v) && c.type === 'STREAM') { c.type = 'YOUTUBE'; tr.querySelector('[data-k=type]').value = 'YOUTUBE'; }
+    c[k] = v; markDirty();
+  });
+
+  rows.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const i = +b.closest('tr').dataset.index; const act = b.dataset.act;
+    if (act === 'del') channels.splice(i, 1);
+    if (act === 'up' && i > 0) [channels[i - 1], channels[i]] = [channels[i], channels[i - 1]];
+    if (act === 'down' && i < channels.length - 1) [channels[i + 1], channels[i]] = [channels[i], channels[i + 1]];
+    render(); markDirty();
+  });
+
+  let dragFrom = null;
+  rows.addEventListener('dragstart', (e) => { const tr = e.target.closest('tr'); if (!tr) return; dragFrom = +tr.dataset.index; tr.classList.add('dragging'); });
+  rows.addEventListener('dragover', (e) => e.preventDefault());
+  rows.addEventListener('drop', (e) => {
+    const tr = e.target.closest('tr'); if (!tr || dragFrom === null) return;
+    const to = +tr.dataset.index; const [moved] = channels.splice(dragFrom, 1); channels.splice(to, 0, moved);
+    dragFrom = null; render(); markDirty();
+  });
+  rows.addEventListener('dragend', () => rows.querySelectorAll('tr').forEach((r) => r.classList.remove('dragging')));
+
+  $('#add').onclick = () => {
+    const next = channels.reduce((m, c) => Math.max(m, c.number), 0) + 1;
+    channels.push({ id: uid(), number: next, name: '', type: 'STREAM', url: '', logoUrl: null, group: null, headers: {} });
+    render(); markDirty(); rows.lastElementChild.querySelector('.name').focus();
+  };
+  $('#renumber').onclick = () => { channels.forEach((c, i) => c.number = i + 1); render(); markDirty(); };
+  $('#sortByNumber').onclick = () => { channels.sort((a, b) => a.number - b.number); render(); markDirty(); };
+
+  async function api(path, opts = {}) {
+    const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+    return r.json();
+  }
+
+  async function load() {
+    try {
+      const [status, list] = await Promise.all([api('/api/status'), api('/api/channels')]);
+      channels = list.channels; render(); dirty = false;
+      $('#status').textContent = `Simple TV v${status.appVersion} · ${status.configUrl}`;
+      setMsg('');
+    } catch (e) { setMsg('Cannot reach the TV: ' + e.message, 'err'); }
+  }
+
+  $('#save').onclick = async () => {
+    const bad = channels.find((c) => !c.url.trim());
+    if (bad) { setMsg('Every channel needs a source URL', 'err'); return; }
+    try {
+      const saved = await api('/api/channels', { method: 'PUT', body: JSON.stringify({ version: 1, channels }) });
+      channels = saved.channels; render(); dirty = false; setMsg('Saved. The TV updates immediately.', 'ok');
+    } catch (e) { setMsg('Save failed: ' + e.message, 'err'); }
+  };
+  $('#reload').onclick = load;
+
+  async function importM3u(body) {
+    try {
+      const res = await api('/api/import/m3u', { method: 'POST', body: JSON.stringify(body) });
+      await load(); setMsg(`Imported ${res.added} channel(s). Total ${res.total}.`, 'ok');
+    } catch (e) { setMsg('Import failed: ' + e.message, 'err'); }
+  }
+  $('#importUrl').onclick = () => { const url = $('#m3uUrl').value.trim(); if (url) importM3u({ url }); };
+  $('#importText').onclick = () => { const text = $('#m3uText').value.trim(); if (text) importM3u({ text }); };
+
+  window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+  load();
+})();
+</script>
+</body>
+</html>

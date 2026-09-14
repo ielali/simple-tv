@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 320x180 leanback banner. Replace with a bitmap before store release. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <size android:width="320dp" android:height="180dp" />
+            <solid android:color="#1B2A41" />
+        </shape>
+    </item>
+    <item android:gravity="center">
+        <shape android:shape="rectangle">
+            <size android:width="120dp" android:height="80dp" />
+            <corners android:radius="8dp" />
+            <stroke android:width="6dp" android:color="#F2F4F8" />
+            <solid android:color="#0B1220" />
+        </shape>
+    </item>
+</layer-list>

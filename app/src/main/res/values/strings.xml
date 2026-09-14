@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Simple TV</string>
+    <string name="no_channels_title">No channels yet</string>
+    <string name="no_channels_hint">On a phone or computer connected to the same Wi‑Fi, open:</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_hint">Open this address on a phone or computer to change channels:</string>
+    <string name="settings_close">Press BACK to close</string>
+    <string name="no_signal">No signal</string>
+    <string name="loading">Loading…</string>
+</resources>
