@@ -51,6 +51,24 @@ adb shell input keyevent KEYCODE_CHANNEL_UP
 adb shell input keyevent KEYCODE_MENU
 ```
 
+## Testing on a Chromecast with Google TV
+
+The cheapest real test rig. (The older cast-only Chromecast cannot run apps.)
+
+1. Settings > System > About > press "Android TV OS build" 7x to unlock Developer options.
+2. Settings > System > Developer options > USB debugging on (this also enables network ADB).
+3. Settings > Network shows the IP. Then `adb connect <ip>:5555`, accept the prompt on the TV, and
+   install as above. Alternative without ADB: the "Downloader" app opening a direct APK link.
+4. The bundled remote has no digits. Pair any Bluetooth keyboard: number keys, Enter, Page Up/Down
+   map to digits, OK, channel up/down. Or drive it from the laptop with `adb shell input keyevent`.
+
+Proves: tuning, banner, config page, QR, IPTV playback, YouTube embed in Google's WebView, hand-off to
+the pre-installed YouTube app. Does not prove: the final remote's key mapping, boot-to-app (Chromecast
+resists custom launchers).
+
+Without hardware, the Android TV emulator in Android Studio runs the APK with keyboard digits; use it
+for UI and config flow, not for judging video playback.
+
 ## Configuring channels
 
 Open the address shown on the TV (for example `http://192.168.1.50:8080`) from any browser on the same
