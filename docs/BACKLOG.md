@@ -36,6 +36,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 ## Later
 
+- Tizen (Samsung) / webOS (LG) web-app port sharing the channel model and config page; needs the
+  hosted-config item below first. See DEPLOYMENT.md.
+
 - Provider re-sync that also removes channels the provider dropped and refreshes names/logos
   (today import only adds new ones).
 - Xtream `player_api.php` support: categories and EPG straight from the API instead of the M3U.

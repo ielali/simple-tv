@@ -16,6 +16,21 @@ Known-good combinations to verify (update after testing):
 | Any Android TV box | Bluetooth "senior" remote with keypad | Pairs as a HID keyboard |
 | Chromecast with Google TV / Shield | Bundled remote | No digits; needs a keypad remote |
 
+## TVs that are not Android TV (Samsung Tizen, LG webOS)
+
+The APK only runs on Android TV / Google TV / Fire TV. Samsung sets such as the BU8000 run Tizen and
+LG sets run webOS. Two routes:
+
+1. **Android TV box on HDMI.** Any box above works. The Samsung Solar Cell remote has no number keys
+   (its "123" button opens a Tizen-only on-screen keypad that never reaches the box), so pair a
+   Bluetooth remote with a real number pad directly to the box and drive TV power through HDMI-CEC.
+2. **Tizen / webOS web app port.** Both platforms run HTML/JS apps: AVPlay (Tizen) or the HTML5
+   video element with HLS.js (webOS) for playback, and the TV input-device API for number keys.
+   Constraints to plan for: no local HTTP server (the config page would move to a hosted page that
+   writes a JSON file the TV polls), no launcher replacement (only "autorun last app"), sideloading
+   through Tizen Studio / webOS CLI in developer mode. The channel model, tuner rules, provider
+   import and the config page are reusable as-is in JavaScript.
+
 ## Installing
 
 ```bash
