@@ -15,7 +15,7 @@
                                        ├─ PlayerView (STREAM)            │ HTTP
                                        ├─ WebView (YOUTUBE embed)   phone / laptop browser
                                        ├─ ChannelBanner                 index.html
-                                       └─ Settings / NoChannels overlays
+                                       └─ Settings / NoChannels overlays (URL + QR code)
 ```
 
 ## Data flow for a channel change

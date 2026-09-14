@@ -9,6 +9,7 @@ coreKtx = "1.15.0"
 lifecycle = "2.8.7"
 media3 = "1.5.1"
 ktor = "2.3.12"
+zxing = "3.5.3"
 junit = "4.13.2"
 
 [libraries]
@@ -37,6 +38,7 @@ ktor-server-cio = { module = "io.ktor:ktor-server-cio", version.ref = "ktor" }
 ktor-server-content-negotiation = { module = "io.ktor:ktor-server-content-negotiation", version.ref = "ktor" }
 ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
 
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]

@@ -27,7 +27,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -150,33 +149,55 @@ private fun ChannelBanner(current: Channel?, pendingDigits: String) {
 
 @Composable
 private fun NoChannels(configUrl: String) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(64.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(stringResource(R.string.no_channels_title), color = Fg, fontSize = 56.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(24.dp))
-        Text(stringResource(R.string.no_channels_hint), color = Fg, fontSize = 32.sp, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(16.dp))
-        Text(configUrl, color = Accent, fontSize = 48.sp, fontWeight = FontWeight.Bold)
-    }
+    ConfigPrompt(
+        title = stringResource(R.string.no_channels_title),
+        hint = stringResource(R.string.no_channels_hint),
+        configUrl = configUrl,
+        footer = null,
+        modifier = Modifier.fillMaxSize(),
+    )
 }
 
 @Composable
 private fun SettingsOverlay(configUrl: String) {
-    Column(
-        modifier = Modifier.fillMaxSize().background(Color(0xE60B1220)).padding(64.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
+    ConfigPrompt(
+        title = stringResource(R.string.settings_title),
+        hint = stringResource(R.string.settings_hint),
+        configUrl = configUrl,
+        footer = stringResource(R.string.settings_close),
+        modifier = Modifier.fillMaxSize().background(Color(0xE60B1220)),
+    )
+}
+
+/**
+ * The one screen a caregiver reads off the TV: the config address in large text and a QR code that
+ * opens it. Both carry the same URL so either works from across the room.
+ */
+@Composable
+private fun ConfigPrompt(title: String, hint: String, configUrl: String, footer: String?, modifier: Modifier) {
+    Row(
+        modifier = modifier.padding(64.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(stringResource(R.string.settings_title), color = Fg, fontSize = 56.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(24.dp))
-        Text(stringResource(R.string.settings_hint), color = Fg, fontSize = 32.sp, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(16.dp))
-        Text(configUrl, color = Accent, fontSize = 48.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(48.dp))
-        Text(stringResource(R.string.settings_close), color = Fg.copy(alpha = 0.7f), fontSize = 28.sp)
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(title, color = Fg, fontSize = 56.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(24.dp))
+            Text(hint, color = Fg, fontSize = 32.sp)
+            Spacer(Modifier.height(16.dp))
+            Text(configUrl, color = Accent, fontSize = 48.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(16.dp))
+            Text(stringResource(R.string.scan_hint), color = Fg.copy(alpha = 0.8f), fontSize = 28.sp)
+            if (footer != null) {
+                Spacer(Modifier.height(48.dp))
+                Text(footer, color = Fg.copy(alpha = 0.7f), fontSize = 28.sp)
+            }
+        }
+        Spacer(Modifier.width(48.dp))
+        QrCodeView(text = configUrl, size = 300.dp)
     }
 }
 

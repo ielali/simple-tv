@@ -42,6 +42,8 @@ app/src/main/kotlin/com/ielali/simpletv/
   data/M3uParser.kt       IPTV playlist import
   config/ConfigServer.kt  Ktor CIO server on :8080, serves web UI and JSON API
   config/NetworkAddress.kt LAN IP discovery
+  config/QrCode.kt        ZXing wrapper: URL -> module matrix (pure JVM)
+  tv/QrCodeView.kt        Compose canvas renderer for the QR matrix
   boot/BootReceiver.kt    Start on boot
 app/src/main/assets/config/index.html   Caregiver web UI (vanilla JS, no build step)
 app/src/test/kotlin/...                 JVM unit tests for everything without Android deps

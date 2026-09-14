@@ -37,5 +37,8 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 ## Done
 
+- QR code beside the config URL on the empty-state screen and the settings overlay (ZXing core,
+  drawn on a Compose canvas).
+
 - Project scaffold: Gradle, Compose, Media3, Ktor, tuner + navigator + parser + YouTube parsing with
   unit tests, config web UI, CI workflow, docs.
