@@ -36,6 +36,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 ## Later
 
+- Release signing: replace the committed debug key with a release keystore held in GitHub Actions
+  secrets before any distribution outside the family. The debug key in `app/keystore` is not secret.
+
 - Tizen (Samsung) / webOS (LG) web-app port sharing the channel model and config page; needs the
   hosted-config item below first. See DEPLOYMENT.md.
 

@@ -31,6 +31,39 @@ LG sets run webOS. Two routes:
    through Tizen Studio / webOS CLI in developer mode. The channel model, tuner rules, provider
    import and the config page are reusable as-is in JavaScript.
 
+## Getting the APK
+
+Every push to `main` publishes the newest build as the GitHub pre-release named **latest**, with one
+file, `simple-tv.apk`. Releases do not expire. The repository is private, so download it while signed
+in to GitHub. To rebuild without a code change: Actions tab, Android CI, Run workflow.
+
+All builds share one signing key (`app/keystore`), so a newer APK installs over an older one and
+keeps the channel list. The config page header shows the installed build number.
+
+## Installing on a Google TV dongle (Kogan KAGDSX5MA, Blaupunkt BPTV30, Chromecast)
+
+1. On the dongle: Settings, System, About, press **Android TV OS build** seven times.
+2. Settings, System, Developer options: turn on **USB debugging**. Note the IP address under
+   Settings, Network and Internet.
+3. From a laptop on the same Wi-Fi, with Android platform-tools installed:
+
+   ```bash
+   adb connect <dongle-ip>:5555      # accept "Allow USB debugging" on the TV, tick Always allow
+   adb install -r simple-tv.apk
+   adb shell am start -n com.ielali.simpletv/.MainActivity
+   ```
+
+   Without a laptop: install **Send Files to TV** on the dongle and a phone, download the APK on the
+   phone, send it, then open it on the TV with the dongle's file manager after allowing
+   Settings, Apps, Security and restrictions, Unknown sources for that app.
+
+4. The TV shows "No channels yet" with an address and a QR code. Scan it with a phone on the same
+   Wi-Fi, add one channel, press Save to TV.
+
+Do not set up kiosk / device-owner mode yet. `dpm set-device-owner` refuses to run while any Google
+account is on the device, so it needs either removing the account or a factory reset, and the app
+side of it (backlog item 10) is not built yet.
+
 ## Installing
 
 ```bash

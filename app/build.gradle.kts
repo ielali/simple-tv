@@ -13,11 +13,28 @@ android {
         applicationId = "com.ielali.simpletv"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI stamps each build with its run number so the config page shows which build is installed
+        // and every new APK installs over the previous one.
+        val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = buildNumber
+        versionName = "0.1.$buildNumber"
+    }
+
+    signingConfigs {
+        // One shared debug key, committed, so APKs from any CI run or laptop upgrade each other
+        // instead of failing with a signature mismatch. Not a release key: see docs/BACKLOG.md.
+        create("shared") {
+            storeFile = file("keystore/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("shared")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
