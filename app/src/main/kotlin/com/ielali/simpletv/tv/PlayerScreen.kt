@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -54,15 +56,26 @@ fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
             current == null -> Unit
             current.type == SourceType.STREAM -> VideoSurface(vm)
             current.type == SourceType.YOUTUBE ->
-                if (state.youtubeInApp) OpeningYouTube(current) else YouTubeSurface(current)
+                if (state.youtubeInApp) ChannelCard(current, stringResource(R.string.opening_youtube)) else YouTubeSurface(current)
         }
 
-        if (current?.type == SourceType.STREAM && state.playback == PlaybackState.ERROR) {
-            CenterMessage(stringResource(R.string.no_signal))
+        // While a stream tunes or has no signal, a card keeps the channel's number and name on screen.
+        val streamCard = when {
+            current?.type != SourceType.STREAM -> null
+            state.playback == PlaybackState.TUNING -> stringResource(R.string.tuning)
+            state.playback == PlaybackState.ERROR -> stringResource(R.string.no_signal_retrying)
+            else -> null
+        }
+        if (current != null && streamCard != null) ChannelCard(current, streamCard)
+        if (current?.type == SourceType.STREAM && state.playback == PlaybackState.REBUFFERING) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner(size = 72) }
         }
 
+        // The card already names the channel; the corner banner still shows digits being typed.
+        val cardShown = streamCard != null || (current?.type == SourceType.YOUTUBE && state.youtubeInApp)
         AnimatedVisibility(
-            visible = state.bannerVisible && state.channels.isNotEmpty(),
+            visible = state.channels.isNotEmpty() &&
+                (state.pendingDigits.isNotEmpty() || (state.bannerVisible && !cardShown)),
             enter = fadeIn(), exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopStart),
         ) {
@@ -202,19 +215,29 @@ private fun ConfigPrompt(title: String, hint: String, configUrl: String, footer:
     }
 }
 
-/** Shown for a moment while the YouTube app opens; the channel banner stays readable meanwhile. */
+/**
+ * Full-screen card naming the channel while its picture is on the way: tuning a stream, no signal
+ * (retrying), or the YouTube app opening. Large and centred so it reads from across the room.
+ */
 @Composable
-private fun OpeningYouTube(channel: Channel) {
+private fun ChannelCard(channel: Channel, status: String) {
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().background(Color.Black),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(channel.number.toString(), color = Accent, fontSize = 120.sp, fontWeight = FontWeight.Black)
         Text(channel.name, color = Fg, fontSize = 56.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(40.dp))
+        Spinner(size = 64)
         Spacer(Modifier.height(24.dp))
-        Text(stringResource(R.string.opening_youtube), color = Fg.copy(alpha = 0.7f), fontSize = 32.sp)
+        Text(status, color = Fg.copy(alpha = 0.75f), fontSize = 32.sp)
     }
+}
+
+@Composable
+private fun Spinner(size: Int) {
+    CircularProgressIndicator(color = Accent, strokeWidth = 6.dp, modifier = Modifier.size(size.dp))
 }
 
 @Composable

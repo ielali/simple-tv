@@ -43,7 +43,8 @@ app/src/main/kotlin/com/ielali/simpletv/
   tv/ExternalPlayer.kt    Opens the YouTube app / brings Simple TV forward from app context
   tv/TvViewModel.kt       Screen adapter: video surface + settings overlay, exposes TvUiState
   tv/PlayerScreen.kt      Compose UI: video surface, YouTube WebView, banner, overlays
-  player/PlaybackEngine.kt Media3 ExoPlayer wrapper tuned for live TV
+  player/PlaybackEngine.kt Media3 ExoPlayer wrapper tuned for live TV; never stops retrying
+  player/TuneTracker.kt   Pure: tuning / rebuffering / no-signal state and retry backoff
   youtube/YouTubeEmbed.kt Parses YouTube links/ids and builds the iframe page
   data/Channel.kt         Channel model + ChannelList (JSON, kotlinx.serialization)
   data/ChannelRepository.kt JSON-file persistence, StateFlow of the list

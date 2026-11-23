@@ -65,8 +65,11 @@ and a JSON API. No authentication yet (backlog item). Runs for the app's lifetim
 ## Playback
 
 `PlaybackEngine` wraps a single `ExoPlayer`: short start buffer for quick zapping, 6 s live offset,
-per-channel HTTP headers for providers that need a User-Agent or Referer, and automatic re-prepare on
-network or behind-live-window errors so a dropped stream recovers without user action.
+per-channel HTTP headers (User-Agent applied through the data source factory), and retries for any
+playback error: at once for behind-live-window, otherwise 3 s doubling to 30 s, for as long as the
+channel stays on. A pure `TuneTracker` turns player events into what the viewer sees: TUNING (card
+with number, name and spinner until the first picture), REBUFFERING (small spinner over the frozen
+frame), ERROR ("No signal. Trying again…" until the picture plays) and PLAYING.
 
 ## YouTube
 

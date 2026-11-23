@@ -9,6 +9,8 @@
     <string name="settings_close">Press BACK to close</string>
     <string name="opening_youtube">Opening YouTube…</string>
     <string name="no_signal">No signal</string>
+    <string name="no_signal_retrying">No signal. Trying again…</string>
+    <string name="tuning">Tuning…</string>
     <string name="loading">Loading…</string>
     <string name="guard_service_label">Simple TV home guard</string>
     <string name="guard_service_description">Keeps the TV on Simple TV: the Home button returns here, and assistant and app shortcut buttons on the remote do nothing. Turn it off or pause it from the Simple TV config page.</string>

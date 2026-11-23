@@ -66,6 +66,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 ## Done
 
+- Tuning card: channel number, name and spinner while an IPTV stream loads; small spinner on stalls;
+  "No signal. Trying again…" with endless backoff retries; YouTube-app opening uses the same card.
+
 - Provider import rebuilt (ADR-011): Xtream API first with account checks, playlist fallback,
   User-Agent retry, plain-language errors without credentials, pick categories before adding.
 
