@@ -148,6 +148,7 @@ class TvController(
     private fun openExternal(channel: Channel) {
         GuardState.allowedExternalPackages = YOUTUBE_PACKAGES
         lastExternalOpen = clock()
+        GuardState.externalLaunchedAt = clock()
         if (!launcher.open(channel)) {
             _externalUnavailable.value = true // the screen falls back to the embedded player
             GuardState.allowedExternalPackages = emptySet()

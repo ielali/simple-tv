@@ -79,6 +79,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 ## Done
 
+- YouTube "Who's watching?" handled automatically after a hand-off (ADR-013). Verify on the Kogan;
+  if it does not trigger, read `/api/debug/youtube-screen` right after the picker appears.
+
 - TV screen in English and Arabic with right-to-left layout, chosen on the config page (ADR-012).
 
 - Tuning card: channel number, name and spinner while an IPTV stream loads; small spinner on stalls;

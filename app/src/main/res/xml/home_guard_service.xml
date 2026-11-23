@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Keep packageNames equal to HomeGuardPolicy.WATCHED_PACKAGES (HomeGuardConfigTest checks it). -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagRequestFilterKeyEvents"
+    android:accessibilityFlags="flagRequestFilterKeyEvents|flagReportViewIds|flagIncludeNotImportantViews"
     android:canRequestFilterKeyEvents="true"
-    android:canRetrieveWindowContent="false"
+    android:canRetrieveWindowContent="true"
     android:description="@string/guard_service_description"
-    android:notificationTimeout="50"
+    android:notificationTimeout="200"
     android:packageNames="com.google.android.apps.tv.launcherx,com.netflix.ninja,com.amazon.amazonvideo.livingroom,com.disney.disneyplus,com.google.android.youtube.tv" />

@@ -76,6 +76,7 @@ app/src/main/kotlin/com/ielali/simpletv/
   guard/GuardSetup.kt     Enables/disables the service via WRITE_SECURE_SETTINGS (granted over adb)
   guard/KeyLog.kt         Recent key presses for the config page's "Remote buttons" card
   guard/BannerOverlay.kt  Channel banner drawn over the YouTube app (accessibility overlay window)
+  guard/AccountPicker.kt  Pure detector for YouTube's "Who's watching?" + throttle + screen log
   data/SettingsMerge.kt   Partial PUT /api/settings; also sanitizes blocked keys
 app/src/main/assets/config/index.html   Caregiver web UI (vanilla JS, no build step)
 tools/tv-admin.sh                       adb admin: status, install, guard-on/off, stock, debloat, restore

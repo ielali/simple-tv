@@ -2,7 +2,9 @@ package com.ielali.simpletv.guard
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.os.Build
 import android.os.SystemClock
+import android.view.accessibility.AccessibilityNodeInfo
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
@@ -68,11 +70,82 @@ class HomeGuardService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        if (event == null) return
         val pkg = event.packageName?.toString()
-        if (HomeGuardPolicy.onWindow(pkg, config(), System.currentTimeMillis()) == WindowAction.GO_HOME) {
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            HomeGuardPolicy.onWindow(pkg, config(), System.currentTimeMillis()) == WindowAction.GO_HOME
+        ) {
             goHome("window $pkg")
+            return
         }
+        if (pkg in HomeGuardPolicy.YOUTUBE_PACKAGES) handleYouTubeScreen(pkg!!)
+    }
+
+    private val pickerThrottle = PickerThrottle()
+    private var lastPickerCheck = 0L
+
+    /**
+     * Right after Simple TV opens YouTube, a cold start can stop on "Who's watching?". Pick the first
+     * account (the household's main one) so the viewer goes straight to the channel.
+     */
+    private fun handleYouTubeScreen(pkg: String) {
+        val now = System.currentTimeMillis()
+        val cfg = config()
+        if (!HomeGuardPolicy.isActive(cfg, now) || pkg !in cfg.allowedExternalPackages) return
+        if (now - GuardState.externalLaunchedAt > PICKER_WINDOW_MS) return
+        if (now - lastPickerCheck < 500) return
+        lastPickerCheck = now
+
+        val root = rootInActiveWindow ?: return
+        if (root.packageName?.toString() != pkg) return
+        val infos = ArrayList<AccessibilityNodeInfo>()
+        val nodes = ArrayList<ScreenNode>()
+        flatten(root, infos, nodes)
+
+        val canPressOk = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+        val action = AccountPickerDetector.decide(nodes, canPressOk)
+        YouTubeScreenLog.recordScreen(now, nodes, picker = action != PickerAction.None)
+        if (action == PickerAction.None || !pickerThrottle.tryAcquire(now)) return
+
+        val done = when (action) {
+            is PickerAction.Click -> {
+                val clicked = infos[action.index].performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                if (clicked) "Chose \"${nodes[action.index].label.take(40)}\"" else if (canPressOk && pressOk()) "Pressed OK" else "Could not choose an account"
+            }
+            PickerAction.PressOk -> if (pressOk()) "Pressed OK on the first account" else "Could not press OK"
+            PickerAction.None -> return
+        }
+        YouTubeScreenLog.recordAction(now, done)
+        Log.i(TAG, "YouTube account picker: $done")
+    }
+
+    private fun pressOk(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            performGlobalAction(GLOBAL_ACTION_DPAD_CENTER)
+
+    /** Depth-first, so the order follows the screen's reading order. Clickable rows take their children's words. */
+    private fun flatten(node: AccessibilityNodeInfo, infos: MutableList<AccessibilityNodeInfo>, out: MutableList<ScreenNode>) {
+        if (out.size >= MAX_NODES) return
+        val own = listOfNotNull(node.text?.toString(), node.contentDescription?.toString())
+            .joinToString(" ").trim()
+        val label = if (own.isEmpty() && node.isClickable) subtreeText(node, depth = 3) else own
+        infos += node
+        out += ScreenNode(label.take(120), node.isClickable, node.isFocused)
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            flatten(child, infos, out)
+        }
+    }
+
+    private fun subtreeText(node: AccessibilityNodeInfo, depth: Int): String {
+        if (depth == 0) return ""
+        val parts = mutableListOf<String>()
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            listOfNotNull(child.text?.toString(), child.contentDescription?.toString()).forEach { if (it.isNotBlank()) parts += it }
+            if (parts.size < 4) subtreeText(child, depth - 1).takeIf { it.isNotBlank() }?.let { parts += it }
+        }
+        return parts.joinToString(" ").trim()
     }
 
     override fun onKeyEvent(event: KeyEvent?): Boolean {
@@ -122,5 +195,9 @@ class HomeGuardService : AccessibilityService() {
 
     override fun onInterrupt() = Unit
 
-    private companion object { const val TAG = "HomeGuard" }
+    private companion object {
+        const val TAG = "HomeGuard"
+        const val PICKER_WINDOW_MS = 30_000L
+        const val MAX_NODES = 300
+    }
 }

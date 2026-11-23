@@ -139,6 +139,7 @@
       <button id="guardToggle"></button>
     </div>
     <p id="guardSetupHint" class="hint" style="margin-top:10px" hidden></p>
+    <p id="pickerLine" class="hint" style="margin-top:6px"></p>
   </section>
 
   <section class="card">
@@ -468,6 +469,9 @@
         ? 'The TV switched the guard off. Restart the TV, or turn the guard off and on again here.'
         : 'One-time setup needed from a computer: <code>tools/tv-admin.sh guard-on</code> (see the deployment guide).';
     } else hint.hidden = true;
+    $('#pickerLine').textContent = guard.youtubePickerAt
+      ? `YouTube account screen: ${guard.youtubePickerAction} at ${fmtTime(Date.now() + (guard.youtubePickerAt - guard.now))}.`
+      : 'YouTube account screen: not needed so far.';
     $('#blockedList').textContent = guard.blockedKeys.length
       ? guard.blockedKeys.map((k) => `${k.name.replace('KEYCODE_', '')} (${k.code})`).join(', ') : 'none';
   }

@@ -32,6 +32,8 @@ object HomeGuardPolicy {
     const val YOUTUBE_MOBILE = "com.google.android.youtube"
 
     /** Apps reachable by sponsored remote buttons. Bounced back to Simple TV unless Simple TV opened them. */
+    val YOUTUBE_PACKAGES: Set<String> = setOf(YOUTUBE_TV, YOUTUBE_MOBILE)
+
     val SPONSORED_APPS: Set<String> = setOf(
         "com.netflix.ninja",
         "com.amazon.amazonvideo.livingroom",
@@ -102,4 +104,8 @@ class Debouncer(private val windowMs: Long) {
 object GuardState {
     @Volatile
     var allowedExternalPackages: Set<String> = emptySet()
+
+    /** When Simple TV last opened the YouTube app; the account-picker helper only acts shortly after. */
+    @Volatile
+    var externalLaunchedAt: Long = 0L
 }

@@ -157,3 +157,22 @@ them. Remote digits and channel numbers stay Western (0-9), matching the remote'
 Consequences: works on every Android version without the per-app-language API. The config page
 itself is still English; translating it is on the backlog. The Arabic strings should be reviewed by
 a native speaker.
+
+## ADR-013 Choose the first account on YouTube's "Who's watching?" screen
+
+Context: On the Kogan, YouTube channels sometimes stopped on YouTube's account picker. Likely
+cause: on a 2 GB device Android closes the YouTube app while IPTV plays, and a cold start asks
+"Who's watching?". The household's main account is the first entry.
+
+Decision: the home guard reads YouTube's screen (canRetrieveWindowContent) only within 30 s after
+Simple TV opened YouTube for a channel, and only while that hand-off is active. A pure
+`AccountPickerDetector` recognises the picker by its own words (English and Arabic titles, or
+"Add account" plus "Guest") and picks the first pressable entry that is not an action such as Add
+account, Guest, Back or Search. If no entry can be pressed it sends OK (Android 13+), which chooses
+the focused first account. `PickerThrottle` allows at most three tries a minute. What the guard saw
+and did is served at `/api/debug/youtube-screen`, and the config page shows the last choice.
+
+Consequences: depends on YouTube exposing its screen to accessibility services and on its wording.
+If YouTube changes either, the guard does nothing rather than press the wrong thing. The debug
+endpoint shows what it saw so the detector can be tuned. Reading window content is a broader
+accessibility capability; it is used only for this, inside the 30-second window.

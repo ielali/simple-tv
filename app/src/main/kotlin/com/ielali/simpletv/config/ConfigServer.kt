@@ -18,6 +18,7 @@ import com.ielali.simpletv.guard.GuardKeys
 import com.ielali.simpletv.guard.GuardSetup
 import com.ielali.simpletv.guard.HomeGuardPolicy
 import com.ielali.simpletv.guard.KeyLog
+import com.ielali.simpletv.guard.YouTubeScreenLog
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -54,6 +55,7 @@ import kotlinx.serialization.json.JsonObject
  *  GET  /api/guard             -> GuardStatus (home guard on/off/paused, blocked keys)
  *  POST /api/guard/pause       <- { minutes }  lets the caregiver use Google TV for a while
  *  POST /api/guard/resume
+ *  GET  /api/debug/youtube-screen -> what the guard last saw on YouTube's screen after a hand-off
  *  GET  /api/keys              -> recent remote key presses, newest first
  *  POST /api/keys/clear
  *  GET  /api/providers         -> ProviderList with passwords blanked (hasPassword flags instead)
@@ -143,6 +145,9 @@ class ConfigServer(
         val pausedUntil: Long,
         val now: Long,
         val blockedKeys: List<KeyName>,
+        /** Last automatic choice on YouTube's account screen; 0 if it never happened. */
+        val youtubePickerAt: Long = 0L,
+        val youtubePickerAction: String = "",
     )
 
     @Serializable
@@ -166,6 +171,8 @@ class ConfigServer(
             pausedUntil = s.guardPausedUntil,
             now = System.currentTimeMillis(),
             blockedKeys = s.guardBlockedKeys.map { keyName(it) },
+            youtubePickerAt = YouTubeScreenLog.snapshot.lastActionAt,
+            youtubePickerAction = YouTubeScreenLog.snapshot.lastAction,
         )
     }
 
@@ -228,6 +235,7 @@ class ConfigServer(
                     settingsRepo.replace(settingsRepo.current().copy(guardPausedUntil = 0L))
                     call.respond(guardStatus())
                 }
+                get("/api/debug/youtube-screen") { call.respond(YouTubeScreenLog.snapshot) }
                 get("/api/keys") { call.respond(keyRows()) }
                 post("/api/keys/clear") {
                     KeyLog.shared.clear()
