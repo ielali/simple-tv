@@ -1,18 +1,18 @@
 package com.ielali.simpletv.data
 
-import com.sun.net.httpserver.HttpServer
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Test
-import java.net.InetSocketAddress
+import java.net.ConnectException
+import java.net.URI
 
-/** Runs ProviderLoader against a fake Xtream panel over real HTTP (JDK's built-in server). */
+/**
+ * Runs ProviderLoader against an in-memory fake Xtream panel. (Android unit tests compile against
+ * android.jar, which has no com.sun.net.httpserver; HttpFetcherTest covers the real HTTP class.)
+ */
 class ProviderLoaderTest {
 
-    private lateinit var server: HttpServer
     private val requests = mutableListOf<Pair<String, String?>>() // path?query to User-Agent
 
     // Panel behaviour, changed per test
@@ -29,39 +29,32 @@ class ProviderLoaderTest {
     private val categories = """[{"category_id":"5","category_name":"UK | News"},{"category_id":7,"category_name":"UK | Sport"}]"""
     private val playlist = "#EXTM3U\n#EXTINF:-1 group-title=\"Films\",Film 1\nhttp://panel/live/u/p/1.ts\n"
 
-    private val base get() = "http://127.0.0.1:${server.address.port}"
+    private val base = "http://panel.test:8080"
 
-    @Before
-    fun start() {
-        server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-        server.createContext("/") { ex ->
-            val target = ex.requestURI.toString()
-            val ua = ex.requestHeaders.getFirst("User-Agent")
-            synchronized(requests) { requests += target to ua }
-            val (code, body) = when {
-                refuseUserAgent != null && ua == refuseUserAgent -> 403 to "blocked"
-                target.startsWith("/player_api.php") && !apiEnabled -> 404 to "no api"
-                target.contains("action=get_live_streams") -> 200 to streams
-                target.contains("action=get_live_categories") -> 200 to categories
-                target.startsWith("/player_api.php") -> 200 to accountBody
-                target.startsWith("/get.php") && playlistEnabled -> 200 to playlist
-                target.startsWith("/list.m3u") -> 200 to playlist
-                else -> 404 to "not found"
-            }
-            val bytes = body.toByteArray()
-            ex.sendResponseHeaders(code, bytes.size.toLong())
-            ex.responseBody.use { it.write(bytes) }
+    /** Routes like the real panel; "unreachable" host throws like a refused connection. */
+    private val panel = TextFetcher { url, headers ->
+        val uri = URI(url)
+        if (uri.host == "unreachable.test") throw ConnectException("Connection refused")
+        val target = uri.rawPath + (uri.rawQuery?.let { "?$it" } ?: "")
+        val ua = headers["User-Agent"]
+        requests += target to ua
+        val (code, body) = when {
+            refuseUserAgent != null && ua == refuseUserAgent -> 403 to "blocked"
+            target.startsWith("/player_api.php") && !apiEnabled -> 404 to "no api"
+            target.contains("action=get_live_streams") -> 200 to streams
+            target.contains("action=get_live_categories") -> 200 to categories
+            target.startsWith("/player_api.php") -> 200 to accountBody
+            target.startsWith("/get.php") && playlistEnabled -> 200 to playlist
+            target.startsWith("/list.m3u") -> 200 to playlist
+            else -> 404 to "not found"
         }
-        server.start()
+        HttpResult(code, body)
     }
-
-    @After
-    fun stop() = server.stop(0)
 
     private fun xtream(password: String = "s3cret!") =
         Provider(id = "p", name = "P", kind = ProviderKind.XTREAM, url = base, username = "user", password = password)
 
-    private fun load(p: Provider) = ProviderLoader(HttpFetcher(2_000, 5_000)).load(p)
+    private fun load(p: Provider) = ProviderLoader(panel).load(p)
 
     @Test
     fun `xtream api import names, groups and orders channels`() {
@@ -126,9 +119,9 @@ class ProviderLoaderTest {
 
     @Test
     fun `unreachable server is reported as such`() {
-        val closed = Provider(id = "p", name = "P", url = "http://127.0.0.1:1", username = "user", password = "pw")
+        val closed = Provider(id = "p", name = "P", url = "http://unreachable.test:8080", username = "user", password = "pw")
         val r = load(closed) as ProviderLoader.Result.Failed
-        assertTrue(r.message, r.message.contains("could not be reached") || r.message.contains("did not answer"))
+        assertTrue(r.message, r.message.contains("could not be reached"))
     }
 
     @Test

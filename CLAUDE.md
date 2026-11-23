@@ -88,6 +88,9 @@ docs/                                   Feasibility, architecture, decisions, ba
   `youtube/`, `guard/HomeGuardPolicy`, `guard/GuardKeys`, `guard/AccessibilityServiceList`, `guard/KeyLog`
   must compile without Android so it is unit-testable on the JVM. Put Android calls in the
   ViewModel, Activity, Compose or engine classes.
+- **Unit tests compile against android.jar, not the full JDK.** JDK-only APIs such as
+  `com.sun.net.httpserver` fail in CI even when a plain JVM run passes. Fake `TextFetcher` for HTTP
+  logic; use `java.net.ServerSocket` when real sockets are needed (see `HttpFetcherTest`).
 - **Every behaviour change to pure logic ships with a unit test.** Tests use JUnit 4 and
   `kotlinx-coroutines-test` with virtual time; see `ChannelTunerTest` for the pattern
   (launch collector, `runCurrent()`, act, `advanceTimeBy`, assert).
