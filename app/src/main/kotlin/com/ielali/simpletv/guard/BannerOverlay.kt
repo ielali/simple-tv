@@ -80,10 +80,13 @@ class BannerOverlay(private val service: AccessibilityService) {
         return runCatching {
             windowManager.addView(layout, params)
             root = layout
+            Log.i(TAG, "Banner window added over YouTube")
             true
         }.getOrElse {
-            Log.w("BannerOverlay", "Could not show the banner over YouTube", it)
+            Log.w(TAG, "Could not show the banner over YouTube", it)
             false
         }
     }
+
+    private companion object { const val TAG = "BannerOverlay" }
 }

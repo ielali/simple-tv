@@ -119,6 +119,7 @@ class ConfigServer(
     data class KeyRow(
         val atMillis: Long, val keyCode: Int, val name: String, val source: String, val action: String,
         val needed: Boolean, val blockedByDefault: Boolean, val blocked: Boolean, val blockable: Boolean,
+        val returnsHome: Boolean,
     )
 
     private fun keyName(code: Int) = KeyName(code, android.view.KeyEvent.keyCodeToString(code))
@@ -144,6 +145,7 @@ class ConfigServer(
                 blockedByDefault = it.keyCode in GuardKeys.DEFAULT_BLOCKED,
                 blocked = it.keyCode in extra,
                 blockable = HomeGuardPolicy.isBlockable(it.keyCode),
+                returnsHome = it.keyCode in GuardKeys.GO_HOME,
             )
         }
     }

@@ -401,6 +401,10 @@
     await api('/api/settings', { method: 'PUT', body: JSON.stringify({ guardBlockedKeys: [...keys] }) });
     await loadGuard(); await loadKeys();
   }
+  const RESULT_LABELS = {
+    ROUTE: 'channel control', GO_HOME: 'back to the TV', SWALLOW: 'blocked',
+    PASS: 'passed on', HANDLED: 'used by Simple TV', SYSTEM: 'passed on',
+  };
   async function loadKeys() {
     let rows = [];
     try { rows = await api('/api/keys'); } catch (e) { return; }
@@ -409,13 +413,14 @@
     rows.forEach((k) => {
       const tr = document.createElement('tr');
       let action = '';
-      if (k.needed) action = '<span class="hint">Needed</span>';
+      if (k.returnsHome) action = '<span class="hint">Returns to the TV</span>';
+      else if (k.needed) action = '<span class="hint">Needed</span>';
       else if (k.blockedByDefault) action = '<span class="hint">Blocked by default</span>';
       else if (k.blocked) action = `<button data-unblock="${k.keyCode}">Unblock</button>`;
       else if (k.blockable) action = `<button data-block="${k.keyCode}">Block</button>`;
       tr.innerHTML = `<td data-label="Time">${fmtTime(k.atMillis)}</td><td data-label="Button">${esc(k.name.replace('KEYCODE_', ''))}</td>
         <td data-label="Code">${k.keyCode}</td><td data-label="Seen by">${k.source === 'guard' ? 'Guard' : 'Simple TV'}</td>
-        <td data-label="Result">${esc(k.action.toLowerCase().replace('_', ' '))}</td><td>${action}</td>`;
+        <td data-label="Result">${esc(RESULT_LABELS[k.action] || k.action.toLowerCase())}</td><td>${action}</td>`;
       body.appendChild(tr);
     });
   }
