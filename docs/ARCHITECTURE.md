@@ -52,15 +52,36 @@ unique numbers, non-blank names, generated ids. The list is small; whole-file re
 accounts the `player_api.php` interface first (account check, categories, live streams via
 `XtreamApi`), then the `get.php` playlist; for M3U providers the link itself with Basic auth from
 `authHeaders()`. Each step retries with a player User-Agent after a refusal, and the accepted one is
-stored on the channels for playback. Import is preview-then-add: `/api/providers/preview` returns
-categories with counts, `/api/providers/import` adds the ticked ones. `ProviderImport.merge` is pure: it appends channels not yet present for that provider, numbering after the highest existing
+stored on the channels for playback. Channels are added from the cached catalog (see below):
+`/api/catalog/{pid}/categories` and `/items` browse it, `/api/channels/catalog` adds the ticked
+channels or whole categories. `ProviderImport.merge` is pure: it appends channels not yet present for that provider, numbering after the highest existing
 number, inheriting the provider icon and auth headers. `ConfigServer` fetches the playlist on the TV so
 credentials never pass through the browser.
 
 ## Config server
 
 Ktor with the CIO engine, bound to all interfaces on port 8080. Serves `assets/config/index.html`
-and a JSON API. No authentication yet (backlog item). Runs for the app's lifetime from `SimpleTvApp`.
+(one self-contained page built from docs/design/handoff) and a JSON API. Runs for the app's lifetime
+from `SimpleTvApp`. `ConfigServer` holds the shell, PIN sign-in (`PinAuth`), status, settings, the
+home guard and the key log; `ContentRoutes` holds lineup, subscriptions, catalog, film channels,
+YouTube preview, now playing and Play on TV. Responses are built from `ApiViews`, which never carry a
+stream address or a password (ADR-015).
+
+API outline: `GET /api/auth`, `POST /api/auth/login|logout`, `PUT /api/auth/pin`; `GET /api/status`,
+`GET /api/qr`; `GET|PUT /api/settings`; `GET|PUT /api/channels`, `POST /api/channels/youtube|link|
+catalog|film`, `GET /api/channels/{id}/queue`, `POST /api/channels/{id}/restart`,
+`POST /api/films/queue-preview`; `GET|POST /api/providers`, `POST /api/providers/test|refresh-all`,
+`POST /api/providers/{id}/refresh`, `DELETE /api/providers/{id}`; `GET /api/catalog/{pid}/categories|
+items`, `GET /api/catalog/{pid}/series/{sid}`; `POST /api/youtube/preview`, `PUT /api/youtube/key`;
+`GET /api/nowplaying`, `POST /api/play`; plus the guard, key log and debug routes.
+
+## Catalogs, film and series channels
+
+`CatalogService` keeps each subscription's catalog in `CatalogRepository` (files in `files/catalog/`)
+and refreshes it daily at `catalogRefreshTime` and on demand (ADR-016). `CatalogQuery` pages and
+searches it for the page; `LineupFlags` and `LineupRepair` keep the lineup in step. Film and series
+channels carry a `PlaylistSpec`; `QueuePlayback` turns it into the item to play and its address,
+`TvViewModel` plays it with a start position, moves on at the end and saves progress.
 
 ## Playback
 

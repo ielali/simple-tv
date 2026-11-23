@@ -1,557 +1,1783 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Simple TV – Channels</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Simple TV</title>
+<!--
+  Simple TV caregiver page. Served by the TV itself (ConfigServer), so it is one self-contained file:
+  no external fonts, scripts or images. Built from docs/design/handoff/Main.dc.html.
+  Rules: never show a stream address or a provider password; error text never contains a URL.
+-->
 <style>
-  :root {
-    --bg: #f5f6f8; --card: #ffffff; --ink: #14161a; --muted: #5d6470; --line: #e2e5ea;
-    --accent: #1b2a41; --accent-ink: #ffffff; --warn: #b4232c; --ok: #1f7a4d; --gold: #ffc857;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #0f1216; --card: #171b21; --ink: #f2f4f8; --muted: #9aa3b2; --line: #2a303a; --accent: #ffc857; --accent-ink: #14161a; }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  header { background: var(--accent); color: var(--accent-ink); padding: 18px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-  header h1 { margin: 0; font-size: 22px; font-weight: 700; }
-  header .status { margin-left: auto; font-size: 14px; opacity: .85; }
-  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 120px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-  .card h2 { margin: 0 0 8px; font-size: 17px; }
-  .hint { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
-  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  input, select, textarea, button { font: inherit; color: inherit; }
-  input, select, textarea { background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; }
-  input:focus, select:focus, textarea:focus { outline: 2px solid var(--gold); border-color: transparent; }
-  button { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 14px; cursor: pointer; }
-  button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
-  button.danger { color: var(--warn); }
-  button:disabled { opacity: .5; cursor: default; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
-  th { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
-  td input[type=number] { width: 74px; font-size: 20px; font-weight: 700; text-align: center; }
-  td input.name { width: 100%; }
-  td input.url { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
-  td .mv { display: inline-flex; gap: 4px; }
-  td .mv button { padding: 4px 8px; }
-  tr.dragging { opacity: .4; }
-  .toolbar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 12px 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .toolbar .msg { margin-left: auto; font-size: 14px; color: var(--muted); }
-  .toolbar .msg.ok { color: var(--ok); } .toolbar .msg.err { color: var(--warn); }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--line); }
-  @media (max-width: 720px) {
-    table, thead, tbody, tr, td, th { display: block; }
-    thead { display: none; }
-    tr { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 10px; }
-    td { border: 0; padding: 4px 0; }
-    td::before { content: attr(data-label); display: block; font-size: 12px; color: var(--muted); }
-  }
+:root{--bg:#f4f4fc;--card:#fcfcfc;--tint:#f4f4fc;--line:#dcdce4;--ink:#1c1c1c;--muted:#6b6b78;--primary:#2464ec;--onp:#ffffff;--hl:#fcd444;--sky:#8cbcfc;--violet:#ac8cfc;--mint:#dcfcec;--okink:#0f7a43;--warnbg:#fff3c4;--warnink:#6b4a00;--errbg:#fde8e6;--errink:#a8201a;--ring:rgba(36,100,236,.2);--navy:#1B2A41;--gold:#FFC857;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121216;--card:#1c1c22;--tint:#26262e;--line:#383844;--ink:#f3f3f6;--muted:#a9a9b8;--primary:#7aa4ff;--onp:#0b1220;--mint:#14382a;--okink:#6ee0a4;--warnbg:#3a3110;--warnink:#ffd96a;--errbg:#3f1d1b;--errink:#ffb4ac;--ring:rgba(122,164,255,.3);color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121216;--card:#1c1c22;--tint:#26262e;--line:#383844;--ink:#f3f3f6;--muted:#a9a9b8;--primary:#7aa4ff;--onp:#0b1220;--mint:#14382a;--okink:#6ee0a4;--warnbg:#3a3110;--warnink:#ffd96a;--errbg:#3f1d1b;--errink:#ffb4ac;--ring:rgba(122,164,255,.3);color-scheme:dark}
+html,body{margin:0;background:var(--bg)}
+body{color:var(--ink);font:400 14px/20px Inter,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic","Noto Naskh Arabic",sans-serif}
+body *,body *::before,body *::after{box-sizing:border-box}
+button,input,select{font:inherit;color:inherit}
+.toasts button,.dialog button{cursor:pointer}
+.dialog h3,.dialog p{margin:0}
+.app{min-height:100vh;min-height:100dvh;display:flex;background:var(--bg);color:var(--ink);font:400 14px/20px Inter,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic","Noto Naskh Arabic",sans-serif;box-sizing:border-box}
+.app *{box-sizing:border-box}
+.app button,.app input,.app select{font:inherit;color:inherit}
+.app h1,.app h2,.app h3,.app p{margin:0}
+.app button{cursor:pointer}
+.app :focus-visible{outline:3px solid var(--primary);outline-offset:2px}
+.side{width:248px;flex:none;padding:20px 16px;display:flex;flex-direction:column;gap:4px;background:var(--card);border-inline-end:1px solid var(--line);position:sticky;top:0;height:100vh;height:100dvh}
+.tablet .side{width:76px;align-items:center;padding:16px 8px}
+.tablet .nlabel,.tablet .brandtext,.tablet .sidefoot .txt{display:none}
+.phone .side{display:none}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 8px 20px;font-weight:700;font-size:16px}
+.logo-mark{width:36px;height:36px;border-radius:10px;background:var(--navy);color:var(--gold);display:grid;place-items:center;font-weight:800;font-size:16px;flex:none}
+.nav{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 12px;border-radius:999px;color:var(--muted);font-weight:600;text-decoration:none;background:none;border:0;width:100%;text-align:start}
+.tablet .nav{width:48px;justify-content:center;padding:0}
+.nav.on{background:var(--primary);color:var(--onp)}
+.nav:not(.on):hover{background:var(--tint);color:var(--ink)}
+.sidefoot{margin-top:auto;display:flex;align-items:center;gap:10px;padding:12px;border-radius:16px;background:var(--tint)}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;gap:16px;padding:28px 40px 0;flex-wrap:wrap}
+.tablet .top{padding:24px 28px 0}
+.phone .top{padding:16px 16px 0}
+.titleblock{flex:1;min-width:200px}
+.h1{font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.01em}
+.phone .h1{font-size:24px;line-height:28px}
+.sub{color:var(--muted)}
+.nowchip{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 14px 0 6px;border-radius:999px;background:var(--navy);color:#F2F4F8;font-weight:600;border:0;max-width:100%}
+.nowchip>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nowchip .n{min-width:32px;height:32px;padding:0 6px;border-radius:999px;background:var(--gold);color:#0B1220;display:grid;place-items:center;font-weight:800;flex:none}
+.nowchip.off{background:var(--tint);color:var(--muted);padding:0 14px}
+.nowbar{display:none}
+.phone .nowbar{display:flex;margin:12px 16px 0}
+.phone .nowchip.deskonly{display:none}
+.content{padding:24px 40px 48px;display:flex;flex-direction:column;gap:24px;flex:1}
+.tablet .content{padding:20px 28px 40px}
+.phone .content{padding:16px 16px 32px;gap:16px}
+.tabbar{display:none}
+.phone .tabbar{display:grid;grid-template-columns:repeat(5,1fr);position:sticky;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:6px 4px calc(10px + env(safe-area-inset-bottom));z-index:5}
+.tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:48px;border:0;background:none;color:var(--muted);font-size:11px;line-height:14px;font-weight:600;border-radius:12px;text-decoration:none}
+.tab.on{color:var(--primary)}
+.tab.add .plus{width:44px;height:44px;border-radius:999px;background:var(--primary);color:var(--onp);display:grid;place-items:center;margin-top:-14px;border:4px solid var(--card)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 1px 2px rgba(28,28,28,.06)}
+.phone .card{padding:16px}
+.cols{display:grid;gap:24px;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);align-items:start}
+.tablet .cols,.phone .cols{grid-template-columns:minmax(0,1fr)}
+.phone .cols{gap:16px}
+.g2{display:grid;gap:24px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+.phone .g2{grid-template-columns:minmax(0,1fr);gap:16px}
+.f{display:flex;align-items:center}.fw{flex-wrap:wrap}.col{display:flex;flex-direction:column}.grow{flex:1;min-width:0}
+.g4{gap:4px}.g8{gap:8px}.g12{gap:12px}.g16{gap:16px}.g24{gap:24px}
+.sec{font-size:16px;line-height:22px;font-weight:700}
+.cap{font-size:12px;line-height:16px;color:var(--muted)}
+.muted{color:var(--muted)}
+.btn{min-height:44px;padding:0 18px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn.pri{background:var(--primary);color:var(--onp);border-color:transparent}
+.btn.dng{color:var(--errink);border-color:var(--errink)}
+.btn.ghost{border-color:transparent;background:none;color:var(--primary);padding:0 10px}
+.btn.dis,.btn:disabled{opacity:.45;pointer-events:none}
+.btn.block{width:100%}
+.ibtn{width:44px;height:44px;border-radius:999px;border:0;background:none;color:var(--muted);display:grid;place-items:center;flex:none}
+.ibtn.bd{border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.ibtn:hover{background:var(--tint)}
+.ibtn.dis,.ibtn:disabled{opacity:.45;pointer-events:none}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-weight:600;font-size:12px;line-height:16px;white-space:nowrap;max-width:100%}
+.pill.wrap{white-space:normal}
+.pill.ok{background:var(--mint);color:var(--okink)}
+.pill.warn{background:var(--warnbg);color:var(--warnink)}
+.pill.err{background:var(--errbg);color:var(--errink)}
+.pill.info{background:var(--tint);color:var(--muted);border:1px solid var(--line)}
+.dot{width:8px;height:8px;border-radius:999px;background:currentColor;flex:none}
+.badge{display:inline-flex;align-items:center;padding:1px 8px;border-radius:6px;font-weight:700;font-size:11px;line-height:16px;color:#1c1c1c}
+.badge.live{background:var(--sky)}.badge.yt{background:var(--violet)}
+.badge.film,.badge.series{background:var(--tint);color:var(--ink);border:1px solid var(--line)}
+.seg{display:inline-flex;background:var(--tint);border-radius:999px;padding:4px;gap:2px;max-width:100%;flex-wrap:wrap}
+.seg button{min-height:44px;padding:0 16px;border-radius:999px;border:0;background:none;font-weight:600;color:var(--muted);white-space:nowrap}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(28,28,28,.12)}
+.seg button .cap{margin-inline-start:4px}
+.phone .seg.full{display:flex;width:100%}.phone .seg.full button{flex:1;padding:0 8px}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field>span:first-child{font-weight:600;font-size:13px}
+.inp{min-height:44px;width:100%;border:1px solid var(--line);border-radius:10px;background:var(--card);padding:0 12px;display:flex;align-items:center;gap:8px;color:var(--ink)}
+.inp.big{min-height:52px}
+.inp input,.inp select{border:0;background:none;outline:0;flex:1;min-width:0;min-height:42px;padding:0}
+.inp:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)}
+.inp.bad{border-color:var(--errink)}
+.hint{font-size:12px;line-height:16px;color:var(--muted)}
+.hint.err{color:var(--errink);font-weight:600}
+.numfield{width:96px;flex:none}
+.num{min-width:56px;height:56px;padding:0 6px;border-radius:14px;background:var(--tint);display:grid;place-items:center;font-size:28px;line-height:1;font-weight:800;letter-spacing:-.02em;flex:none;font-variant-numeric:tabular-nums}
+.phone .num{min-width:48px;height:48px;font-size:24px;border-radius:12px}
+.num.playing{background:var(--navy);color:var(--gold)}
+.logo{width:40px;height:40px;border-radius:10px;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;font-weight:800;font-size:12px;color:var(--muted);flex:none;overflow:hidden}
+.logo{position:relative}.logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:var(--card)}
+.phone .logo{display:none}
+.lrow{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;min-height:72px}
+.lrow:hover,.lrow.sel{background:var(--tint)}
+.lrow+.lrow,.editpanel+.lrow{margin-top:2px}
+.lrow.bad{background:var(--warnbg)}
+.lrow.dragging{opacity:.4}
+.lrow.dropbefore{box-shadow:inset 0 3px 0 var(--primary)}
+.nm{font-weight:700;font-size:16px;line-height:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rowsub{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;flex-wrap:wrap}
+.flag{display:flex;align-items:center;gap:6px;color:var(--warnink);font-weight:600;font-size:12px;line-height:16px;margin-top:4px}
+.editpanel{margin:0 0 8px;padding:16px;border-radius:14px;border:1px solid var(--primary);background:var(--card)}
+.grip{color:var(--muted);width:28px;display:grid;place-items:center;flex:none;cursor:grab;touch-action:none}
+.phone .grip{display:none}
+.callout{background:var(--hl);color:#1c1c1c;border-radius:16px;padding:16px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.callout .btn{background:#1c1c1c;color:#fcfcfc;border-color:transparent}
+.tvcard{background:var(--navy);color:#F2F4F8;border-radius:20px;padding:24px;display:flex;align-items:center;gap:24px}
+.phone .tvcard{padding:18px;gap:16px}
+.tvnum{font-size:88px;line-height:1;font-weight:800;color:var(--gold);letter-spacing:-.03em;min-width:96px;text-align:center;font-variant-numeric:tabular-nums}
+.phone .tvnum{font-size:60px;min-width:64px}
+.tvcard .btn{background:rgba(242,244,248,.12);color:#F2F4F8;border-color:transparent}
+.tvcard .btn.pri{background:var(--gold);color:#0B1220}
+.tvcard .cap{color:#b8c2d4}
+.icobox{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex:none}
+.icobox.warn{background:var(--warnbg);color:var(--warnink)}.icobox.err{background:var(--errbg);color:var(--errink)}.icobox.ok{background:var(--mint);color:var(--okink)}.icobox.pr{background:var(--primary);color:var(--onp)}.icobox.t{background:var(--tint);color:var(--ink)}
+.divider{height:1px;background:var(--line);margin:4px 0}
+.list>*+*{border-top:1px solid var(--line)}
+.li{display:flex;align-items:center;gap:12px;padding:12px 4px;min-height:56px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.phone .chips.scroll{flex-wrap:nowrap;overflow-x:auto;margin-inline:-16px;padding-inline:16px;scrollbar-width:none}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);font-weight:600;white-space:nowrap}
+.chip.on{background:var(--ink);color:var(--bg);border-color:transparent}
+.chip .c{color:var(--muted);font-weight:500}.chip.on .c{color:inherit;opacity:.75}
+.lchip{display:flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;border-radius:999px;background:var(--tint);font-weight:600;max-width:100%}
+.lchip span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lchip .n{min-width:32px;height:32px;padding:0 6px;border-radius:999px;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;font-weight:800}
+.lchip .n.playing{background:var(--navy);color:var(--gold);border-color:transparent}
+.savebar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;border-radius:16px;background:var(--card);border:1px solid var(--primary);position:sticky;top:8px;z-index:4;box-shadow:0 6px 20px rgba(28,28,28,.08)}
+.phone .savebar{top:auto;bottom:84px;position:sticky}
+.toasts{position:fixed;inset-inline:0;bottom:24px;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;z-index:50}
+.phone .toasts{bottom:96px}
+.toast{display:inline-flex;align-items:center;gap:12px;padding:6px 8px 6px 18px;min-height:44px;border-radius:999px;background:var(--ink);color:var(--bg);font-weight:600;pointer-events:auto;max-width:calc(100vw - 32px)}
+.toast.plain{padding:6px 18px}
+.toast .btn{background:none;color:var(--bg);border-color:transparent;text-decoration:underline;min-height:32px;padding:0 10px}
+.catlayout{display:grid;gap:24px;grid-template-columns:300px minmax(0,1fr);align-items:start}
+.phone .catlayout,.tablet .catlayout{grid-template-columns:minmax(0,1fr);gap:16px}
+.catitem{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;border-radius:12px;font-weight:600;width:100%;border:0;background:none;text-align:start}
+.catitem span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.catitem.on{background:var(--tint)}
+.catitem:hover{background:var(--tint)}
+.catitem .c{margin-inline-start:auto;color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
+.phone .catlist,.tablet .catlist{display:flex;flex-direction:row;overflow-x:auto;gap:8px;scrollbar-width:none}
+.phone .catlist .catitem,.tablet .catlist .catitem{width:auto;flex:none;border:1px solid var(--line);border-radius:999px}
+.phone .catlist .catitem.on,.tablet .catlist .catitem.on{background:var(--ink);color:var(--bg);border-color:transparent}
+.phone .catlist .catitem.on .c,.tablet .catlist .catitem.on .c{color:inherit;opacity:.75}
+.chk{display:flex;align-items:center;gap:12px;min-height:60px;padding:6px 8px;border-radius:12px;cursor:pointer}
+.chk:hover{background:var(--tint)}
+.chk input{width:22px;height:22px;accent-color:var(--primary);flex:none;margin:0}
+.chk .grow{display:flex;flex-direction:column}
+.addbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;margin:12px -8px -8px;border-radius:14px;background:var(--tint);border:1px solid var(--line);position:sticky;bottom:8px}
+.phone .addbar{bottom:84px}
+.poster{aspect-ratio:2/3;border-radius:12px;background:var(--tint) center/cover no-repeat;border:1px solid var(--line);display:flex;align-items:flex-end;padding:10px;font-weight:700;line-height:18px;overflow:hidden;width:100%;text-align:start;color:var(--ink)}
+.poster.img{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.poster.sm{width:56px;flex:none;padding:6px;font-size:10px;line-height:12px}
+.postergrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+.postergrid button{border:0;background:none;padding:0;text-align:start}
+.thumb{aspect-ratio:16/9;background:var(--navy) center/cover no-repeat;border-radius:14px;display:grid;place-items:center;position:relative;color:#F2F4F8;overflow:hidden}
+.thumb .live{position:absolute;inset-inline-start:10px;top:10px;background:var(--gold);color:#0B1220;font-weight:800;font-size:11px;padding:2px 8px;border-radius:6px}
+.qr{width:132px;height:132px;background:#fff;border-radius:12px;padding:8px;flex:none;color:#0B1220}
+.qr svg{width:100%;height:100%;display:block}
+.opt{display:flex;gap:12px;align-items:flex-start;padding:16px;border-radius:14px;border:1px solid var(--line);background:var(--card);min-height:64px;width:100%;text-align:start}
+.opt.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--ring)}
+.radio{width:22px;height:22px;border-radius:999px;border:2px solid var(--line);flex:none;margin-top:1px;display:grid;place-items:center}
+.opt.on .radio{border-color:var(--primary)}.opt.on .radio::after{content:"";width:10px;height:10px;border-radius:999px;background:var(--primary)}
+.sw{width:52px;height:32px;border-radius:999px;background:var(--line);position:relative;flex:none;border:0;padding:0}
+.sw::after{content:"";position:absolute;top:4px;inset-inline-start:4px;width:24px;height:24px;border-radius:999px;background:#fff;transition:inset-inline-start .15s}
+.sw.on{background:var(--okink)}.sw.on::after{inset-inline-start:24px}
+.skel{height:16px;border-radius:8px;background:var(--tint);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.5}}
+@media (prefers-reduced-motion:reduce){.skel{animation:none}.sw::after{transition:none}}
+.pin{display:flex;gap:8px}.pin span{width:44px;height:52px;border-radius:10px;border:1px solid var(--line);display:grid;place-items:center;font-size:22px;font-weight:700;background:var(--card)}
+.pin span.cur{border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)}
+.pin.bad span{border-color:var(--errink);background:var(--errbg)}
+.pin.locked span{opacity:.5}
+.keypad{display:grid;grid-template-columns:repeat(3,64px);gap:12px;justify-content:start}
+.keypad .ibtn{width:64px;height:56px;border-radius:16px;font-size:20px;font-weight:700}
+.step{display:flex;align-items:center;gap:8px;color:var(--muted);font-weight:600}
+.step .b{width:28px;height:28px;border-radius:999px;border:1px solid var(--line);display:grid;place-items:center;font-size:13px}
+.step.on{color:var(--ink)}.step.on .b{background:var(--primary);color:var(--onp);border-color:transparent}.step.done .b{background:var(--mint);color:var(--okink);border-color:transparent}
+.center{max-width:720px;width:100%;margin-inline:auto}
+.solo{min-height:100vh;min-height:100dvh;display:flex;justify-content:center;padding:40px 16px}
+.solo>.center{padding-top:24px}
+.dialogback{position:fixed;inset:0;background:rgba(10,10,20,.45);display:grid;place-items:center;padding:16px;z-index:60}
+.dialog{max-width:440px;width:100%;border-radius:20px;border:1px solid var(--line);background:var(--card);padding:24px;box-shadow:0 12px 40px rgba(28,28,28,.18)}
+.dialog h3{font-size:18px;line-height:24px}
+details summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center;gap:8px;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details[open] summary svg{transform:rotate(90deg)}
+[dir="rtl"] details:not([open]) summary svg{transform:scaleX(-1)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* Names keep their own direction but line up with the page (ready for an Arabic page later). */
+.app [dir="auto"]{text-align:left}
+[dir="rtl"] .app [dir="auto"]{text-align:right}
+.hide{display:none!important}
+.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spin{width:18px;height:18px;border-radius:999px;border:2px solid currentColor;border-inline-end-color:transparent;animation:rot .8s linear infinite;flex:none}
+@keyframes rot{to{transform:rotate(360deg)}}
+.qitem{display:flex;align-items:center;gap:12px;padding:10px 4px;min-height:56px}
+.qitem .i{width:28px;text-align:center;flex:none}
+.empty{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
 </style>
 </head>
 <body>
-<header>
-  <h1>Simple TV</h1>
-  <span class="badge" id="count">0 channels</span>
-  <span class="status" id="status">Connecting…</span>
-</header>
-
-<main>
-  <section class="card">
-    <h2>Getting started</h2>
-    <p class="hint" style="margin-bottom:6px">There are two kinds of channel. Each gets a number that is typed on the remote.</p>
-    <ol style="margin:0 0 0 18px;padding:0;line-height:1.6">
-      <li><b>IPTV</b> (from an IPTV subscription). In <b>IPTV providers</b> below, add the server address, username and password your provider sent you, or the playlist link they gave you. Press <b>Save providers</b>, then <b>Import channels</b> and tick the categories you want. For a single stream link, use <b>+ Add channel</b> and leave the type on <b>Stream</b>.</li>
-      <li><b>YouTube</b>. Use <b>+ Add channel</b>, set the type to <b>YouTube</b> and paste a live link or channel ID. To avoid ads with your YouTube Premium account, choose <b>In the YouTube app</b> at the bottom of this page.</li>
-    </ol>
-    <p class="hint" style="margin-top:8px">Then press a number on the remote. Channel up/down and numbers also work while YouTube is playing.</p>
-  </section>
-
-  <section class="card">
-    <h2>TV language</h2>
-    <p class="hint">Language of the words on the TV screen. Channel names stay as the provider sends them.</p>
-    <select id="tvLanguage">
-      <option value="">Same as the TV's own language</option>
-      <option value="en">English</option>
-      <option value="ar" lang="ar">العربية (Arabic)</option>
-    </select>
-  </section>
-
-  <section class="card">
-    <h2>IPTV providers</h2>
-    <p class="hint">Your IPTV subscription. Most providers give a server address, a username and a password (Xtream Codes). If you only have a playlist link, choose <b>M3U link</b>. Passwords stay on the TV and are never shown here again.</p>
-    <div id="providers"></div>
-    <div class="row" style="margin-top:12px">
-      <button id="addProvider">+ Add provider</button>
-      <button id="saveProviders" class="primary">Save providers</button>
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>Channels</h2>
-    <p class="hint">The number is what gets typed on the remote. Drag rows or use the arrows to reorder, then <b>Renumber</b> to make the numbers follow the order.</p>
-    <table id="grid">
-      <thead><tr><th>No.</th><th>Name</th><th>Type</th><th>Source URL / ID</th><th>Logo URL</th><th></th></tr></thead>
-      <tbody id="rows"></tbody>
-    </table>
-    <div class="row" style="margin-top:12px">
-      <button id="add">+ Add channel</button>
-      <button id="renumber">Renumber 1…n in this order</button>
-      <button id="sortByNumber">Sort by number</button>
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>Import a playlist (M3U)</h2>
-    <p class="hint">Paste the M3U URL from your IPTV provider, or paste the playlist text. Imported channels are added after the highest existing number.</p>
-    <div class="row">
-      <input id="m3uUrl" type="url" placeholder="https://provider.example/playlist.m3u8" style="flex:1; min-width: 240px">
-      <button id="importUrl">Import from URL</button>
-    </div>
-    <textarea id="m3uText" rows="4" placeholder="#EXTM3U …" style="width:100%; margin-top:8px"></textarea>
-    <div class="row" style="margin-top:8px"><button id="importText">Import pasted text</button></div>
-  </section>
-
-  <section class="card">
-    <h2>YouTube channels</h2>
-    <p class="hint">Set type to <b>YouTube</b> and paste a live video link, a <code>youtube.com/live/…</code> link, or the channel ID (starts with <code>UC</code>) to always show that channel's current live stream.</p>
-    <h3 style="font-size:15px;margin:12px 0 6px">How YouTube plays on the TV</h3>
-    <label class="row" style="align-items:flex-start;margin-bottom:8px">
-      <input type="radio" name="ytmode" value="EMBEDDED" style="margin-top:4px">
-      <span><b>Inside Simple TV</b> (embedded player) — the remote keeps working exactly like a TV. Plays as a signed-out viewer: ads show, and age-restricted or members-only streams will not play.</span>
-    </label>
-    <label class="row" style="align-items:flex-start">
-      <input type="radio" name="ytmode" value="YOUTUBE_APP" style="margin-top:4px">
-      <span><b>In the YouTube app</b> — uses the Google account already signed in on the TV box (YouTube Premium removes ads; subscriptions and restrictions apply). Numbers and channel up/down keep working while YouTube plays, and the channel banner shows over it. Needs the home guard to be on.</span>
-    </label>
-    <p class="hint" style="margin-top:10px">Saved immediately when changed.</p>
-  </section>
-
-  <section class="card">
-    <h2>Home guard</h2>
-    <p class="hint">Keeps the TV on Simple TV. The Home button comes back here, and the assistant and app shortcut buttons on the remote do nothing. Pause it when you need Google TV's own settings, for example to change Wi-Fi.</p>
-    <p id="guardState" style="font-weight:600;margin:8px 0"></p>
-    <div class="row">
-      <button id="guardPause">Pause 15 minutes</button>
-      <button id="guardResume">Resume now</button>
-      <button id="guardToggle"></button>
-    </div>
-    <p id="guardSetupHint" class="hint" style="margin-top:10px" hidden></p>
-    <h3 style="font-size:15px;margin:14px 0 6px">YouTube "Who's watching?" screen</h3>
-    <p class="hint">YouTube sometimes asks who is watching. Simple TV can answer for you by choosing the first account, but it has to learn what that screen looks like once. The next time it appears on the TV, press <b>Remember this screen</b> while it is still showing.</p>
-    <p id="pickerLine" style="font-weight:600;margin:8px 0"></p>
-    <div class="row">
-      <button id="pickerRemember">Remember this screen</button>
-      <button id="pickerForget">Forget it</button>
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>Remote buttons</h2>
-    <p class="hint">Press buttons on the TV remote, then press <b>Refresh</b>. Each press shows its code. Use <b>Block</b> on any button that opens something it should not, such as a Netflix or YouTube shortcut. Buttons Simple TV needs cannot be blocked.</p>
-    <div class="row" style="margin-bottom:8px">
-      <button id="keysRefresh">Refresh</button>
-      <button id="keysClear">Clear list</button>
-    </div>
-    <table>
-      <thead><tr><th>Time</th><th>Button</th><th>Code</th><th>Seen by</th><th>Result</th><th></th></tr></thead>
-      <tbody id="keyRows"></tbody>
-    </table>
-    <p class="hint" style="margin-top:10px">Extra blocked buttons: <span id="blockedList">none</span></p>
-  </section>
-
-</main>
-
-<div class="toolbar">
-  <button class="primary" id="save">Save to TV</button>
-  <button id="reload">Discard changes</button>
-  <span class="msg" id="msg"></span>
-</div>
-
+<div id="app" class="app desktop"></div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+<div id="dialogs"></div>
 <script>
-(() => {
-  const $ = (s) => document.querySelector(s);
-  const rows = $('#rows');
-  let channels = [];
-  let dirty = false;
+'use strict';
+/* ---------- Small helpers ---------- */
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const nf = new Intl.NumberFormat('en');
+const fmtN = (n) => nf.format(n || 0);
+const plural = (n, one, many) => fmtN(n) + ' ' + (n === 1 ? one : (many || one + 's'));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } },
+  set(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* private mode */ } },
+  sget(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } },
+  sset(k, v) { try { if (v == null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { /* private mode */ } },
+};
 
-  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
-  const setMsg = (text, cls = '') => { const m = $('#msg'); m.textContent = text; m.className = 'msg ' + cls; };
-  const markDirty = () => { dirty = true; setMsg('Unsaved changes'); };
+const IC = {
+  home: 'M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z',
+  list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
+  plus: 'M12 5v14M5 12h14',
+  server: 'M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01',
+  gear: 'M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6',
+  play: 'M7 5l12 7-12 7z',
+  tv: 'M3 5h18v12H3zM8 21h8M12 17v4',
+  dots: 'M5 12h.01M12 12h.01M19 12h.01',
+  up: 'M6 14l6-6 6 6',
+  down: 'M6 10l6 6 6-6',
+  search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4',
+  refresh: 'M20 11a8 8 0 0 0-14.5-4M4 4v4h4M4 13a8 8 0 0 0 14.5 4M20 20v-4h-4',
+  check: 'M5 12l5 5 9-10',
+  alert: 'M12 4l9 16H3zM12 10v4M12 17h.01',
+  grip: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01',
+  trash: 'M5 7h14M10 4h4M7 7l1 13h8l1-13',
+  film: 'M4 5h16v14H4zM8 5v14M16 5v14M4 9h4M4 15h4M16 9h4M16 15h4',
+  stack: 'M4 9h16v10H4zM7 6h10M9.5 3h5',
+  yt: 'M3 7a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3zM10 9l5 3-5 3z',
+  link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
+  close: 'M6 6l12 12M18 6L6 18',
+  right: 'M9 6l6 6-6 6',
+  pencil: 'M4 20h4L19 9l-4-4L4 16z',
+};
+const ico = (name, size = 20, sw = 1.8) =>
+  `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${IC[name]}"/></svg>`;
+const initials = (name) => {
+  const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return '';
+  const first = Array.from(words[0]);
+  if (/[\u0600-\u06FF]/.test(first[0])) return (first[0] === '\u0627' && first[1] === '\u0644' && first.length > 2) ? first[2] : first[0];
+  return (words.length > 1 ? first[0] + Array.from(words[1])[0] : first.slice(0, 2).join('')).toUpperCase();
+};
+const logoBox = (name, url) => `<span class="logo">${esc(initials(name))}${url ? `<img src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span>`;
 
-  function render() {
-    rows.innerHTML = '';
-    channels.forEach((c, i) => {
-      const tr = document.createElement('tr');
-      tr.draggable = true;
-      tr.dataset.index = i;
-      tr.innerHTML = `
-        <td data-label="Number"><input type="number" min="1" value="${c.number}" data-k="number"></td>
-        <td data-label="Name"><input class="name" value="${esc(c.name)}" data-k="name" placeholder="Channel name"></td>
-        <td data-label="Type"><select data-k="type">
-          <option value="STREAM" ${c.type === 'STREAM' ? 'selected' : ''}>Stream</option>
-          <option value="YOUTUBE" ${c.type === 'YOUTUBE' ? 'selected' : ''}>YouTube</option>
-        </select></td>
-        <td data-label="Source"><input class="url" value="${esc(c.url)}" data-k="url" placeholder="https://… or UC…"></td>
-        <td data-label="Logo"><input class="url" value="${esc(c.logoUrl || '')}" data-k="logoUrl" placeholder="optional"></td>
-        <td><span class="mv">
-          <button title="Move up" data-act="up">▲</button>
-          <button title="Move down" data-act="down">▼</button>
-          <button class="danger" title="Remove" data-act="del">✕</button>
-        </span></td>`;
-      rows.appendChild(tr);
-    });
-    $('#count').textContent = `${channels.length} channel${channels.length === 1 ? '' : 's'}`;
+/* ---------- Dates and times, in plain words ---------- */
+const DAY = 86400000;
+const startOfDay = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const clock = (t) => {
+  const d = new Date(t); let h = d.getHours(); const m = d.getMinutes(); const am = h < 12;
+  h = h % 12 || 12; return `${h}:${String(m).padStart(2, '0')} ${am ? 'am' : 'pm'}`;
+};
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const longDate = (t) => { const d = new Date(t); return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`; };
+/** "today at 6:42 pm", "last night at 9:00 pm", "Sunday at 9:00 pm", "3 March at 9:00 pm". */
+const whenPast = (t, now = Date.now()) => {
+  const days = Math.round((startOfDay(now) - startOfDay(t)) / DAY);
+  const at = clock(t); const evening = new Date(t).getHours() >= 18;
+  if (days <= 0) return (evening ? 'tonight' : 'today') + ' at ' + at;
+  if (days === 1) return (evening ? 'last night' : 'yesterday') + ' at ' + at;
+  if (days === 2 && evening) return 'the night before at ' + at;
+  if (days < 7) return WEEKDAYS[new Date(t).getDay()] + ' at ' + at;
+  const d = new Date(t); return `${d.getDate()} ${MONTHS[d.getMonth()]} at ${at}`;
+};
+const whenNext = (t, now = Date.now()) => {
+  const days = Math.round((startOfDay(t) - startOfDay(now)) / DAY);
+  const at = clock(t); const evening = new Date(t).getHours() >= 18;
+  if (days <= 0) return (evening ? 'tonight' : 'today') + ' at ' + at;
+  if (days === 1) return 'tomorrow at ' + at;
+  return WEEKDAYS[new Date(t).getDay()] + ' at ' + at;
+};
+const cap1 = (s) => s ? s[0].toUpperCase() + s.slice(1) : s;
+const ago = (t, now = Date.now()) => {
+  const s = Math.max(0, Math.round((now - t) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.round(s / 60); if (m < 60) return plural(m, 'minute') + ' ago';
+  const h = Math.round(m / 60); if (h < 24) return plural(h, 'hour') + ' ago';
+  return whenPast(t, now);
+};
+/** Account expiry from the provider (epoch seconds). */
+const expiry = (sec, now = Date.now()) => {
+  if (!sec) return null;
+  const t = sec * 1000; const days = Math.ceil((startOfDay(t) - startOfDay(now)) / DAY);
+  return { t, days, ended: t <= now, soon: t > now && days <= 14 };
+};
+/** [1,2,3,4,6,8,9] -> "1–4, 6 and 8–9" */
+const ranges = (nums) => {
+  const s = [...new Set(nums)].sort((a, b) => a - b); const out = [];
+  for (let i = 0; i < s.length; i++) {
+    let j = i; while (j + 1 < s.length && s[j + 1] === s[j] + 1) j++;
+    out.push(j > i ? `${s[i]}–${s[j]}` : String(s[i])); i = j;
   }
+  return out.length > 1 ? out.slice(0, -1).join(', ') + ' and ' + out[out.length - 1] : (out[0] || '');
+};
+const listWords = (a) => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : (a[0] || '');
 
-  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+/* ---------- Talking to the TV ---------- */
+class ApiError extends Error { constructor(msg, status, body) { super(msg); this.status = status; this.body = body || {}; } }
+const state = {
+  token: store.sget('stv.token'),
+  online: true, lastReached: 0,
+  status: null, lineup: null, providers: null, settings: null, now: null, guard: null, keys: null, qr: null,
+};
+async function api(path, opts = {}) {
+  const headers = { Accept: 'application/json' };
+  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (state.token) headers.Authorization = 'Bearer ' + state.token;
+  let res;
+  try {
+    res = await fetch(path, { method: opts.method || 'GET', headers, body: opts.body === undefined ? undefined : JSON.stringify(opts.body), cache: 'no-store' });
+  } catch (e) {
+    setOnline(false);
+    throw new ApiError("Couldn't reach the TV. Nothing was changed.", 0);
+  }
+  setOnline(true);
+  let body = null;
+  try { body = await res.json(); } catch (e) { body = null; }
+  if (res.status === 401 && body && body.code === 'signin') {
+    state.token = null; store.sset('stv.token', null);
+    showLogin();
+    throw new ApiError(body.error, 401, body);
+  }
+  if (!res.ok) throw new ApiError((body && body.error) || 'Something went wrong on the TV. Try again.', res.status, body);
+  return body;
+}
+const GET = (p) => api(p);
+const POST = (p, b) => api(p, { method: 'POST', body: b === undefined ? {} : b });
+const PUT = (p, b) => api(p, { method: 'PUT', body: b });
+const DEL = (p) => api(p, { method: 'DELETE' });
 
-  rows.addEventListener('input', (e) => {
-    const tr = e.target.closest('tr'); const k = e.target.dataset.k; if (!tr || !k) return;
-    const c = channels[+tr.dataset.index];
-    let v = e.target.value;
-    if (k === 'number') v = parseInt(v, 10) || 0;
-    if (k === 'logoUrl' && !v) v = null;
-    if (k === 'url' && /youtu\.?be/i.test(v) && c.type === 'STREAM') { c.type = 'YOUTUBE'; tr.querySelector('[data-k=type]').value = 'YOUTUBE'; }
-    c[k] = v; markDirty();
+function setOnline(on) {
+  if (on) state.lastReached = Date.now();
+  if (state.online === on) return;
+  state.online = on;
+  if (on) { try { store.set('stv.lastReached', String(Date.now())); } catch (e) { /* ignore */ } }
+  renderShellBits();
+  if (route.name === 'home') render();
+}
+/** Keeps a copy of what the TV last said, to show while it is off. */
+function snapshot() {
+  store.set('stv.snapshot', JSON.stringify({ at: Date.now(), status: state.status, lineup: state.lineup, providers: state.providers }));
+}
+function restoreSnapshot() {
+  try {
+    const s = JSON.parse(store.get('stv.snapshot', 'null'));
+    if (s) { state.status = state.status || s.status; state.lineup = state.lineup || s.lineup; state.providers = state.providers || s.providers; state.lastReached = s.at; }
+  } catch (e) { /* ignore */ }
+}
+
+async function loadCore() {
+  const [status, lineup, providers, settings] = await Promise.all([GET('/api/status'), GET('/api/channels'), GET('/api/providers'), GET('/api/settings')]);
+  Object.assign(state, { status, lineup, providers, settings });
+  snapshot(); renderShellBits();
+  return state;
+}
+async function refreshNow() {
+  try { state.now = await GET('/api/nowplaying'); renderShellBits(); if (route.name === 'home' || route.name === 'lineup') patchNowPlaying(); } catch (e) { /* offline is shown elsewhere */ }
+}
+
+/* ---------- Toasts and dialogs ---------- */
+function toast(text, action, ms = 4000) {
+  const el = document.createElement('div');
+  el.className = 'toast' + (action ? '' : ' plain');
+  el.innerHTML = `<span>${esc(text)}</span>` + (action ? `<button class="btn" type="button">${esc(action.label)}</button>` : '');
+  if (action) el.querySelector('button').onclick = () => { el.remove(); action.run(); };
+  const box = $('#toasts'); while (box.children.length >= 2) box.firstChild.remove();
+  box.appendChild(el);
+  const t = setTimeout(() => el.remove(), action ? Math.max(ms, 8000) : ms);
+  return { close() { clearTimeout(t); el.remove(); }, set(txt) { el.querySelector('span').textContent = txt; } };
+}
+/** Saving to the TV… / Saved. It's on the TV now. / Couldn't reach the TV. Nothing was changed. */
+async function saving(work, done = "Saved. It's on the TV now.") {
+  const t = toast('Saving to the TV…', null, 60000);
+  try { const r = await work(); t.close(); if (done) toast(done); return r; }
+  catch (e) { t.close(); if (e.status !== 401) toast(e.status === 0 ? "Couldn't reach the TV. Nothing was changed." : e.message, null, 6000); throw e; }
+}
+function dialog({ title, text, ok, cancel = 'Go back', danger = false }) {
+  return new Promise((resolve) => {
+    const back = document.createElement('div');
+    back.className = 'dialogback';
+    back.innerHTML = `<div class="dialog col g12" role="dialog" aria-modal="true" aria-labelledby="dlgT"><h3 id="dlgT">${esc(title)}</h3><p class="muted">${esc(text)}</p><div class="f fw g8"><button class="btn" data-a="no" type="button">${esc(cancel)}</button><button class="btn ${danger ? 'dng' : 'pri'}" data-a="yes" type="button">${esc(ok)}</button></div></div>`;
+    const close = (v) => { back.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const onKey = (e) => { if (e.key === 'Escape') close(false); };
+    back.addEventListener('click', (e) => { if (e.target === back) close(false); const a = e.target.closest('[data-a]'); if (a) close(a.dataset.a === 'yes'); });
+    document.addEventListener('keydown', onKey);
+    $('#dialogs').appendChild(back);
+    back.querySelector('[data-a="yes"]').focus();
   });
+}
 
-  rows.addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if (!b) return;
-    const i = +b.closest('tr').dataset.index; const act = b.dataset.act;
-    if (act === 'del') channels.splice(i, 1);
-    if (act === 'up' && i > 0) [channels[i - 1], channels[i]] = [channels[i], channels[i - 1]];
-    if (act === 'down' && i < channels.length - 1) [channels[i + 1], channels[i]] = [channels[i], channels[i + 1]];
-    render(); markDirty();
-  });
+/* ---------- Appearance (this browser only) and layout size ---------- */
+function applyTheme() {
+  const t = store.get('stv.theme', 'system');
+  if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+}
+function sizeClass() { const w = window.innerWidth; return w >= 1100 ? 'desktop' : (w >= 820 ? 'tablet' : 'phone'); }
+let currentSize = sizeClass();
+window.addEventListener('resize', () => { const s = sizeClass(); if (s !== currentSize) { currentSize = s; $('#app').className = 'app ' + s; } });
 
-  let dragFrom = null;
-  rows.addEventListener('dragstart', (e) => { const tr = e.target.closest('tr'); if (!tr) return; dragFrom = +tr.dataset.index; tr.classList.add('dragging'); });
-  rows.addEventListener('dragover', (e) => e.preventDefault());
-  rows.addEventListener('drop', (e) => {
-    const tr = e.target.closest('tr'); if (!tr || dragFrom === null) return;
-    const to = +tr.dataset.index; const [moved] = channels.splice(dragFrom, 1); channels.splice(to, 0, moved);
-    dragFrom = null; render(); markDirty();
-  });
-  rows.addEventListener('dragend', () => rows.querySelectorAll('tr').forEach((r) => r.classList.remove('dragging')));
-
-  $('#add').onclick = () => {
-    const next = channels.reduce((m, c) => Math.max(m, c.number), 0) + 1;
-    channels.push({ id: uid(), number: next, name: '', type: 'STREAM', url: '', logoUrl: null, group: null, headers: {} });
-    render(); markDirty(); rows.lastElementChild.querySelector('.name').focus();
-  };
-  $('#renumber').onclick = () => { channels.forEach((c, i) => c.number = i + 1); render(); markDirty(); };
-  $('#sortByNumber').onclick = () => { channels.sort((a, b) => a.number - b.number); render(); markDirty(); };
-
-  async function api(path, opts = {}) {
-    const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
-    return r.json();
+/* ---------- Routes ---------- */
+const NAV = [
+  { k: 'home', label: 'Home', short: 'Home', icon: 'home' },
+  { k: 'lineup', label: 'Lineup', short: 'Lineup', icon: 'list' },
+  { k: 'add', label: 'Add channel', short: 'Add', icon: 'plus' },
+  { k: 'subs', label: 'Subscriptions', short: 'Subscriptions', icon: 'server' },
+  { k: 'settings', label: 'TV settings', short: 'Settings', icon: 'gear' },
+];
+const route = { name: 'home', parts: [], q: new URLSearchParams() };
+function parseRoute() {
+  const h = location.hash.replace(/^#\/?/, '');
+  const [path, query] = h.split('?');
+  const parts = path.split('/').filter(Boolean).map(decodeURIComponent);
+  route.name = parts[0] || 'home'; route.parts = parts.slice(1); route.q = new URLSearchParams(query || '');
+  if (!['home', 'lineup', 'add', 'subs', 'film', 'settings', 'first'].includes(route.name)) route.name = 'home';
+}
+const go = (hash) => { if (location.hash === hash) render(); else location.hash = hash; };
+let leaving = false;
+window.addEventListener('hashchange', async () => {
+  if (leaving) return;
+  const prev = route.hashShown;
+  if (screens.lineup.dirty() && prev && prev.startsWith('#/lineup') && !location.hash.startsWith('#/lineup')) {
+    const n = screens.lineup.changeCount();
+    const ok = await dialog({ title: 'Leave without saving?', text: `You have ${plural(n, 'change')} that ${n === 1 ? "isn't" : "aren't"} on the TV yet.`, ok: 'Leave', cancel: 'Stay', danger: true });
+    if (!ok) { leaving = true; location.hash = prev; setTimeout(() => { leaving = false; }, 0); return; }
+    screens.lineup.discard();
   }
+  render();
+});
+window.addEventListener('beforeunload', (e) => { if (screens.lineup.dirty()) { e.preventDefault(); e.returnValue = ''; } });
 
-  async function load() {
-    try {
-      const [status, list] = await Promise.all([api('/api/status'), api('/api/channels')]);
-      channels = list.channels; render(); dirty = false;
-      $('#status').textContent = `Simple TV v${status.appVersion} · ${status.configUrl}`;
-      setMsg('');
-    } catch (e) { setMsg('Cannot reach the TV: ' + e.message, 'err'); }
+const TITLES = {
+  home: ['Home', 'Everything is set up. Here is how the TV is doing.'],
+  lineup: ['Your lineup', 'The numbers your viewer types on the remote.'],
+  add: ['Add a channel', 'It gets the next free number. You can change it.'],
+  subs: ['Subscriptions', 'Where your channel lists come from.'],
+  film: ['New film channel', 'A numbered channel that plays films one after another.'],
+  settings: ['TV settings', 'Settings for this TV and everyone watching it.'],
+};
+const activeNav = () => ({ film: 'lineup' }[route.name] || route.name);
+
+/* ---------- Shell ---------- */
+function nowLine() {
+  const n = state.now;
+  if (!n || !n.channel) return null;
+  const ch = n.channel;
+  return { num: ch.number > 0 ? ch.number : '▶', text: 'On the TV now: ' + ch.name + (n.title ? ' · ' + n.title : '') };
+}
+function nowChip(cls, full) {
+  const st = full ? ' style="width:100%"' : '';
+  if (!state.online) return `<div class="nowchip off ${cls}"${st}><span class="dot"></span><span>TV not reachable</span></div>`;
+  const l = nowLine();
+  if (!l) return '';
+  return `<a class="nowchip ${cls}" href="#/home" style="text-decoration:none${full ? ';width:100%' : ''}"><span class="n">${esc(l.num)}</span><span class="grow" dir="auto">${esc(l.text)}</span></a>`;
+}
+function renderShell(title, subtitle) {
+  const act = activeNav();
+  const host = state.status ? state.status.configUrl.replace(/^https?:\/\//, '').replace(/\/$/, '') : location.host;
+  $('#app').className = 'app ' + currentSize;
+  $('#app').innerHTML = `
+  <aside class="side" aria-label="Main">
+    <div class="brand"><div class="logo-mark">TV</div><span class="brandtext">Simple TV</span></div>
+    ${NAV.map((n) => `<a class="nav ${n.k === act ? 'on' : ''}" href="#/${n.k}" aria-label="${esc(n.label)}" ${n.k === act ? 'aria-current="page"' : ''}>${ico(n.icon)}<span class="nlabel">${esc(n.label)}</span></a>`).join('')}
+    <div class="sidefoot" id="sidefoot">
+      <span class="pill ${state.online ? 'ok' : 'warn'}"><span class="dot"></span></span>
+      <div class="txt grow"><div style="font-weight:700">${state.online ? 'TV connected' : 'TV not reachable'}</div><div class="cap">${esc(host)}</div></div>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <div class="titleblock"><h1 class="h1" id="pageTitle">${esc(title)}</h1><p class="sub" id="pageSub">${esc(subtitle)}</p></div>
+      <div id="nowDesk">${nowChip('deskonly')}</div>
+    </header>
+    <div class="nowbar" id="nowPhone">${nowChip('', true)}</div>
+    <main class="content" id="content"></main>
+    <nav class="tabbar" aria-label="Main">
+      ${NAV.map((n) => `<a class="tab ${n.k === act ? 'on' : ''} ${n.k === 'add' ? 'add' : ''}" href="#/${n.k}" ${n.k === act ? 'aria-current="page"' : ''}>${n.k === 'add' ? `<span class="plus">${ico('plus', 22, 2.2)}</span>` : ico(n.icon, 22)}${esc(n.short)}</a>`).join('')}
+    </nav>
+  </div>`;
+}
+function setTitle(title, sub) { const t = $('#pageTitle'); if (t) { t.textContent = title; $('#pageSub').textContent = sub; } document.title = title + ' · Simple TV'; }
+function renderShellBits() {
+  const d = $('#nowDesk'); if (d) d.innerHTML = nowChip('deskonly');
+  const p = $('#nowPhone'); if (p) p.innerHTML = nowChip('', true);
+  const f = $('#sidefoot');
+  if (f && state.status) f.querySelector('.cap').textContent = state.status.configUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  if (f) { f.querySelector('.pill').className = 'pill ' + (state.online ? 'ok' : 'warn'); f.querySelector('.txt div').textContent = state.online ? 'TV connected' : 'TV not reachable'; }
+}
+function loadingCard(rows = 4) {
+  return `<section class="card col g12" aria-busy="true"><span class="sr">Loading</span>${Array.from({ length: rows }, (_, i) => `<div class="f g12"><div class="skel" style="width:40px;height:40px;border-radius:10px"></div><div class="grow col g8"><div class="skel" style="width:${[70, 55, 80, 60][i % 4]}%"></div><div class="skel" style="width:30%;height:12px"></div></div></div>`).join('')}</section>`;
+}
+function errorCard(e, retry = 'location.reload()') {
+  return `<section class="card f g16" style="align-items:flex-start"><div class="icobox warn">${ico('alert', 22)}</div><div class="grow col g12"><div><h2 class="sec">${e && e.status === 0 ? "Your TV isn't answering" : 'Something went wrong'}</h2><p class="muted">${esc(e && e.message)}</p></div><div><button class="btn pri" onclick="${retry}">Try again</button></div></div></section>`;
+}
+
+/* ---------- Render loop ---------- */
+const screens = {};
+let renderSeq = 0;
+async function render() {
+  parseRoute();
+  const seq = ++renderSeq;
+  route.hashShown = location.hash || '#/home';
+  if (route.name === 'first') { await screens.first.render(seq); return; }
+  const meta = TITLES[route.name] || TITLES.home;
+  renderShell(meta[0], meta[1]);
+  document.title = meta[0] + ' · Simple TV';
+  const content = $('#content');
+  try {
+    await screens[route.name].render(content, seq);
+  } catch (e) {
+    if (seq !== renderSeq || e.status === 401) return;
+    content.innerHTML = errorCard(e);
   }
+  if (route.hashShown !== lastScrolled) { lastScrolled = route.hashShown; window.scrollTo(0, 0); }
+}
+let lastScrolled = null;
+const stale = (seq) => seq !== renderSeq;
 
-  $('#save').onclick = async () => {
-    const bad = channels.find((c) => !c.url.trim());
-    if (bad) { setMsg('Every channel needs a source URL', 'err'); return; }
-    try {
-      const saved = await api('/api/channels', { method: 'PUT', body: JSON.stringify({ version: 1, channels }) });
-      channels = saved.channels; render(); dirty = false; setMsg('Saved. The TV updates immediately.', 'ok');
-    } catch (e) { setMsg('Save failed: ' + e.message, 'err'); }
-  };
-  $('#reload').onclick = load;
-
-  async function loadSettings() {
-    try {
-      const st = await api('/api/settings');
-      $('#tvLanguage').value = st.language || '';
-      const r = document.querySelector(`input[name=ytmode][value=${st.youtubePlayback}]`);
-      if (r) r.checked = true;
-    } catch (e) { /* status line already reports connectivity */ }
+/* ---------- Shared bits about subscriptions and channels ---------- */
+const TYPE_LABEL = { STREAM: 'Live', YOUTUBE: 'YouTube', FILMS: 'Film', SERIES: 'Series' };
+const TYPE_BADGE = { STREAM: 'live', YOUTUBE: 'yt', FILMS: 'film', SERIES: 'series' };
+function subState(p) {
+  const s = p.status || {}; const ex = expiry(s.expiresAt);
+  if (p.refreshing) return { pc: 'info', word: 'Updating…' };
+  if (!s.ok && s.lastRefresh) return { pc: 'err', word: 'Update failed' };
+  if (ex && ex.ended) return { pc: 'err', word: 'Ended' };
+  if (ex && ex.soon) return { pc: 'warn', word: 'Ends soon' };
+  if (!s.lastGood) return { pc: 'info', word: 'Not loaded yet' };
+  return { pc: 'ok', word: 'Active' };
+}
+function endsLine(p, short) {
+  const ex = expiry(p.status && p.status.expiresAt);
+  if (!ex) return short ? '' : 'Your provider doesn’t say when it ends';
+  if (ex.ended) return (short ? 'Ended ' : 'Your subscription ended on ') + longDate(ex.t);
+  if (ex.days <= 14) return (short ? 'Ends in ' : 'Your subscription ends in ') + plural(ex.days, 'day');
+  return (short ? 'Ends ' : 'Your subscription ends on ') + longDate(ex.t);
+}
+function refreshLine(p) {
+  const s = p.status || {};
+  const next = state.providers ? whenNext(state.providers.nextRefresh) : '';
+  if (p.refreshing) return 'Downloading the channel list now…';
+  if (!s.lastRefresh) return 'Not downloaded yet';
+  if (!s.ok) return s.lastGood ? 'Last good update was ' + whenPast(s.lastGood) : 'It hasn’t worked yet';
+  return 'Updated ' + whenPast(s.lastGood) + (next ? ' · next update ' + next : '');
+}
+function changeLine(s) {
+  if (!s || !s.lastGood) return '';
+  const bits = [];
+  if (s.added) bits.push(plural(s.added, 'channel') + ' added');
+  if (s.removed) bits.push(fmtN(s.removed) + ' removed');
+  return bits.length ? bits.join(', ') : 'No changes';
+}
+const providerName = (id) => { const p = state.providers && state.providers.providers.find((x) => x.id === id); return p ? p.name : ''; };
+function channelSub(c) {
+  if (c.type === 'FILMS' && c.playlist) {
+    const pl = c.playlist;
+    const what = pl.titles && pl.titles.length ? plural(pl.titles.length, 'hand-picked film') : listWords(pl.categories || []);
+    return [what, pl.shuffle ? 'shuffled' : '', c.queueSize ? plural(c.queueSize, 'film') : ''].filter(Boolean).join(' · ');
   }
-  document.querySelectorAll('input[name=ytmode]').forEach((r) => r.addEventListener('change', async () => {
-    try {
-      await api('/api/settings', { method: 'PUT', body: JSON.stringify({ youtubePlayback: r.value }) });
-      setMsg('YouTube playback mode saved.', 'ok');
-    } catch (e) { setMsg('Could not save setting: ' + e.message, 'err'); }
-  }));
-  $('#tvLanguage').onchange = async (e) => {
-    try {
-      await api('/api/settings', { method: 'PUT', body: JSON.stringify({ language: e.target.value }) });
-      setMsg('TV language changed. The TV screen updates straight away.', 'ok');
-    } catch (err) { setMsg('Could not change the language: ' + err.message, 'err'); }
-  };
-  loadSettings();
+  if (c.type === 'SERIES') return c.resume ? c.resume.split(' · ')[0] + ' next' : (c.queueSize ? plural(c.queueSize, 'episode') : 'Plays episode by episode');
+  if (c.type === 'YOUTUBE') return c.group || 'YouTube';
+  return c.group || providerName(c.providerId) || 'Live';
+}
+const FLAG_TEXT = { missing: 'Your provider doesn’t offer this channel any more', failed: 'Didn’t play last time you tried it' };
+async function playOnTv(body, name) {
+  try {
+    state.now = await POST('/api/play', body);
+    renderShellBits(); patchNowPlaying();
+    toast((name ? name + ' is' : "It's") + ' on the TV now.');
+  } catch (e) { if (e.status !== 401) toast(e.status === 0 ? "Couldn't reach the TV." : e.message, null, 6000); }
+}
+function patchNowPlaying() {
+  const el = $('#tvNow'); if (el) el.outerHTML = tvCard();
+  $$('.num[data-id]').forEach((n) => n.classList.toggle('playing', !!(state.now && state.now.channel && state.now.channel.id === n.dataset.id)));
+}
+function tvCard() {
+  const n = state.now;
+  if (!state.online || !n || !n.channel) return '<div id="tvNow" class="hide"></div>';
+  const ch = n.channel;
+  const kind = TYPE_LABEL[ch.type] || 'Live';
+  const how = n.startedFromApp ? 'started from this app ' + ago(n.since, n.now) : (n.since ? 'on since ' + clock(n.since) : '');
+  return `<section class="tvcard" id="tvNow">
+    <div class="tvnum">${ch.number > 0 ? esc(ch.number) : ico('play', 56, 2)}</div>
+    <div class="grow col g8">
+      <div class="cap">ON THE TV NOW</div>
+      <div style="font-size:24px;line-height:30px;font-weight:700" dir="auto" class="ell">${esc(ch.name)}</div>
+      ${n.title ? `<div dir="auto">${esc(n.title)}</div>` : ''}
+      <div class="cap">${esc([n.preview ? 'Preview, not in your lineup' : kind, how].filter(Boolean).join(' · '))}</div>
+      <div class="f fw g8" style="margin-top:6px"><a class="btn pri" href="#/lineup">Open lineup</a></div>
+    </div>
+  </section>`;
+}
 
-  async function importM3u(body) {
-    try {
-      const res = await api('/api/import/m3u', { method: 'POST', body: JSON.stringify(body) });
-      await load(); setMsg(`Imported ${res.added} channel(s). Total ${res.total}.`, 'ok');
-    } catch (e) { setMsg('Import failed: ' + e.message, 'err'); }
-  }
-  $('#importUrl').onclick = () => { const url = $('#m3uUrl').value.trim(); if (url) importM3u({ url }); };
-  $('#importText').onclick = () => { const text = $('#m3uText').value.trim(); if (text) importM3u({ text }); };
-
-  // ---- Providers ----
-  let providers = [];
-  const provBox = $('#providers');
-
-  const pickers = {}; // providerId -> { preview, selected:Set, filter }, open after "Import channels"
-
-  function renderProviders() {
-    provBox.innerHTML = '';
-    if (!providers.length) { provBox.innerHTML = '<p class="hint">No providers yet.</p>'; return; }
-    providers.forEach((p, i) => {
-      const div = document.createElement('div');
-      div.className = 'card';
-      div.style.marginBottom = '10px';
-      div.dataset.index = i;
-      div.innerHTML = `
-        <div class="row" style="margin-bottom:8px">
-          <input data-k="name" value="${esc(p.name)}" placeholder="Provider name" style="flex:1;min-width:160px;font-weight:600">
-          <select data-k="kind">
-            <option value="XTREAM" ${p.kind === 'XTREAM' ? 'selected' : ''}>Xtream Codes (server + login)</option>
-            <option value="M3U" ${p.kind === 'M3U' ? 'selected' : ''}>M3U link</option>
-          </select>
-          <span class="badge">${p.channelCount || 0} channels</span>
+/* ---------- Home ---------- */
+screens.home = {
+  async render(el, seq) {
+    if (!state.status) { el.innerHTML = loadingCard(); try { await loadCore(); } catch (e) { restoreSnapshot(); } }
+    else { loadCore().then(() => { if (!stale(seq) && route.name === 'home') this.paint(el); }).catch(() => {}); }
+    if (stale(seq)) return;
+    renderShellBits();
+    if (state.status && state.status.firstRun && state.online) { go('#/first'); return; }
+    refreshNow();
+    this.paint(el);
+  },
+  paint(el) {
+    const off = !state.online;
+    if (!state.status) { el.innerHTML = errorCard({ status: 0, message: 'It may be switched off, or on a different Wi-Fi network.' }); return; }
+    if (off) setTitle('Home', 'The TV is not answering right now.'); else setTitle(...TITLES.home);
+    const lineup = (state.lineup && state.lineup.channels) || [];
+    const subs = (state.providers && state.providers.providers) || [];
+    const flagged = lineup.filter((c) => c.flag).length;
+    const urgent = subs.map((p) => ({ p, ex: expiry(p.status && p.status.expiresAt) }))
+      .filter((x) => x.ex && (x.ex.ended || x.ex.soon)).sort((a, b) => a.ex.t - b.ex.t)[0];
+    const host = state.status.configUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const chipsN = currentSize === 'phone' ? 4 : 6;
+    const playingId = state.now && state.now.channel && state.now.channel.id;
+    el.innerHTML = `
+      ${off ? `<section class="card f g16" style="align-items:flex-start;border-color:var(--warnink)">
+        <div class="icobox warn">${ico('alert', 22)}</div>
+        <div class="grow col g12">
+          <div><h2 class="sec">Your TV isn't answering</h2>
+          <p class="muted">It may be switched off, or on a different Wi-Fi network.${state.lastReached ? ' We last reached it ' + esc(whenPast(state.lastReached)) + '.' : ''}</p></div>
+          <div class="f fw g8"><button class="btn pri" id="retry">Try again</button></div>
+          <details><summary>${ico('right', 18)}How to get back in</summary>
+            <ol class="muted" style="margin:4px 0 0;padding-inline-start:20px;line-height:26px"><li>Switch the TV on and wait for Simple TV to start.</li><li>Check this phone is on the same Wi-Fi as the TV.</li><li>Open the address shown on the TV: ${esc(host)}</li></ol>
+          </details>
         </div>
-        <div class="row" style="margin-bottom:8px">
-          <input data-k="url" value="${esc(p.url)}" placeholder="${p.kind === 'M3U' ? 'https://provider.example/playlist.m3u8' : 'http://server.example:8080'}" style="flex:2;min-width:220px;font-family:ui-monospace,monospace;font-size:13px">
-          <input data-k="logoUrl" value="${esc(p.logoUrl || '')}" placeholder="Icon URL (optional)" style="flex:1;min-width:160px;font-size:13px">
-        </div>
-        <div class="row">
-          <input data-k="username" value="${esc(p.username || '')}" placeholder="Username" autocomplete="off" style="flex:1;min-width:140px">
-          <input data-k="password" type="password" value="" placeholder="${p.hasPassword ? 'Password saved — type to change' : 'Password'}" autocomplete="new-password" style="flex:1;min-width:140px">
-          <button data-act="import" ${p.id ? '' : 'disabled title="Save first"'}>${pickers[p.id] ? 'Download again' : 'Import channels'}</button>
-          <button data-act="remove" class="danger">Remove</button>
-        </div>`;
-      provBox.appendChild(div);
-      renderPicker(p, div);
-    });
-  }
+      </section>` : tvCard()}
+      ${!off && urgent ? `<section class="callout">
+        <div class="icobox" style="background:rgba(28,28,28,.1)">${ico('alert', 22)}</div>
+        <div class="grow" style="min-width:200px"><div class="sec" dir="auto">${esc(urgent.p.name)} ${urgent.ex.ended ? 'has ended' : 'ends in ' + plural(urgent.ex.days, 'day')}</div><div>Renew it with your provider so its ${plural(urgent.p.channelCount, 'channel')} keep playing.</div></div>
+        <a class="btn" href="#/subs/${encodeURIComponent(urgent.p.id)}">See subscription</a>
+      </section>` : ''}
+      <div class="f fw g8">
+        <a class="btn pri ${off ? 'dis' : ''}" href="#/add">${ico('plus', 18, 2)}Add channel</a>
+        <button class="btn ${off || !subs.length ? 'dis' : ''}" id="refreshAll">${ico('refresh', 18)}Refresh channel lists</button>
+      </div>
+      ${off && state.lastReached ? `<p class="cap" style="margin-top:-8px">Showing what was saved on the TV ${esc(whenPast(state.lastReached))}. You can look around, but changes can't be sent until the TV is back.</p>` : ''}
+      <div class="cols">
+        <section class="card col g16">
+          <div class="f g12"><h2 class="sec grow">Your lineup</h2><span class="pill info">${plural(lineup.length, 'channel')}</span></div>
+          ${lineup.length ? `<div class="chips" aria-label="First channels">
+            ${lineup.slice(0, chipsN).map((c) => `<div class="lchip"><span class="n ${c.id === playingId ? 'playing' : ''}">${esc(c.number)}</span><span dir="auto">${esc(c.name)}</span></div>`).join('')}
+            ${lineup.length > chipsN ? `<span class="pill info" style="align-self:center">+ ${fmtN(lineup.length - chipsN)} more</span>` : ''}
+          </div>` : `<div class="empty"><p class="muted">Nothing on the TV yet. Add your first channel and it appears on the TV straight away.</p></div>`}
+          <div class="f g8 fw">
+            ${flagged ? `<span class="pill warn">${plural(flagged, 'channel needs', 'channels need')} a look</span>` : ''}
+            <a class="btn ghost" href="#/lineup">Open lineup</a>
+          </div>
+        </section>
+        <section class="card col g8">
+          <h2 class="sec">Subscriptions</h2>
+          ${subs.length ? `<div class="list">${subs.map((p) => { const st = subState(p); const s = p.status || {};
+            const line = !s.ok && s.lastRefresh ? 'Last update didn’t work · showing ' + (s.lastGood ? 'the list from ' + whenPast(s.lastGood) : 'nothing yet')
+              : [endsLine(p, true), s.lastGood ? 'updated ' + whenPast(s.lastGood).replace(' at ', ', ') : ''].filter(Boolean).join(' · ');
+            return `<a class="li" href="#/subs/${encodeURIComponent(p.id)}" style="color:inherit;text-decoration:none"><div class="grow"><div style="font-weight:600" dir="auto">${esc(p.name)}</div><div class="cap">${esc(line)}</div></div><span class="pill ${st.pc}"><span class="dot"></span>${esc(st.word)}</span></a>`; }).join('')}</div>`
+            : `<p class="muted">No subscriptions yet. Add the details your provider gave you to bring in their channels.</p>`}
+          <a class="btn ghost" href="#/subs" style="align-self:flex-start">${subs.length ? 'Manage subscriptions' : 'Add subscription'}</a>
+        </section>
+      </div>`;
+    const r = $('#retry', el); if (r) r.onclick = () => { state.status = null; render(); };
+    const ra = $('#refreshAll', el);
+    if (ra) ra.onclick = async () => {
+      try { state.providers = await POST('/api/providers/refresh-all'); toast('Refreshing the channel lists. This can take a minute.'); pollProviders(); this.paint(el); }
+      catch (e) { if (e.status !== 401) toast(e.message, null, 6000); }
+    };
+  },
+};
+/** While any subscription is updating, check again every few seconds. */
+let pollTimer = null;
+function pollProviders() {
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(async () => {
+    try {
+      state.providers = await GET('/api/providers');
+      if (route.name === 'home') screens.home.paint($('#content'));
+      if (route.name === 'subs') screens.subs.paint();
+      if (route.name === 'add' && screens.add.onProviders) screens.add.onProviders();
+      if (state.providers.providers.some((p) => p.refreshing)) pollProviders();
+      else { state.lineup = await GET('/api/channels'); snapshot(); }
+    } catch (e) { /* offline */ }
+  }, 4000);
+}
 
-  provBox.addEventListener('input', (e) => {
-    const box = e.target.closest('[data-index]'); const k = e.target.dataset.k; if (!box || !k) return;
-    providers[+box.dataset.index][k] = e.target.value;
-    if (k === 'kind') renderProviders();
-  });
-  provBox.addEventListener('click', async (e) => {
-    const b = e.target.closest('button'); if (!b) return;
-    const i = +b.closest('[data-index]').dataset.index; const p = providers[i];
-    if (b.dataset.act === 'remove') {
-      if (p.id && !confirm(`Remove "${p.name}" and all ${p.channelCount || 0} of its channels?`)) return;
-      if (p.id) {
-        try { await api('/api/providers/remove', { method: 'POST', body: JSON.stringify({ providerId: p.id }) }); }
-        catch (err) { setMsg('Remove failed: ' + err.message, 'err'); return; }
-      }
-      providers.splice(i, 1); renderProviders(); load(); return;
+/* ---------- Lineup ---------- */
+screens.lineup = (() => {
+  let saved = [];      // what the TV has (views)
+  let rows = null;     // the edited copy: [{id, number, name, logoUrl, ...}]
+  let filter = 'all';
+  let open = null;     // id of the row whose edit panel is open
+  let showAll = false;
+  const PAGE = 200;
+  const byId = (id) => rows.find((r) => r.id === id);
+  const dirty = () => !!rows && changeCount() > 0;
+  function changeCount() {
+    if (!rows) return 0;
+    const now = new Map(rows.map((r) => [r.id, r]));
+    let n = saved.filter((s) => !now.has(s.id)).length;
+    for (const s of saved) { const r = now.get(s.id); if (r && (r.number !== s.number || r.name !== s.name)) n++; }
+    return n;
+  }
+  const conflicts = () => {
+    const seen = new Map(); const bad = new Set();
+    for (const r of rows) { if (seen.has(r.number)) { bad.add(r.id); bad.add(seen.get(r.number)); } else seen.set(r.number, r.id); }
+    return bad;
+  };
+  const invalid = (r) => !Number.isInteger(r.number) || r.number < 1 || r.number > 9999;
+  const FILTERS = [
+    ['all', 'All', () => true], ['live', 'Live TV', (c) => c.type === 'STREAM'], ['yt', 'YouTube', (c) => c.type === 'YOUTUBE'],
+    ['films', 'Films', (c) => c.type === 'FILMS'], ['series', 'Series', (c) => c.type === 'SERIES'], ['flag', 'Needs a look', (c) => !!c.flag],
+  ];
+  function load(view) { saved = view.channels.map((c) => ({ ...c })); rows = view.channels.map((c) => ({ ...c })); }
+
+  async function render(el, seq) {
+    if (!rows || !dirty()) {
+      el.innerHTML = loadingCard(6);
+      const [lineup] = await Promise.all([GET('/api/channels'), state.providers ? null : GET('/api/providers').then((p) => { state.providers = p; })]);
+      if (stale(seq)) return;
+      state.lineup = lineup; load(lineup);
     }
-    if (b.dataset.act === 'import') {
-      b.disabled = true; b.textContent = 'Downloading…'; setMsg('Downloading the channel list from ' + p.name + '. Large subscriptions can take a minute.');
-      try {
-        const preview = await api('/api/providers/preview', { method: 'POST', body: JSON.stringify({ providerId: p.id }) });
-        pickers[p.id] = { preview, selected: new Set(), filter: '' };
-        renderProviders();
-        const acct = preview.accountExpiresAt ? ` Account active until ${new Date(preview.accountExpiresAt * 1000).toLocaleDateString()}.` : '';
-        setMsg(`${p.name}: ${preview.total} channels in ${preview.groups.length} categories.${acct} Choose the categories to add.`, 'ok');
-      } catch (err) { setMsg('Import failed: ' + err.message, 'err'); renderProviders(); }
+    refreshNow();
+    paint();
+  }
+  function rowHtml(r, bad) {
+    const playing = state.now && state.now.channel && state.now.channel.id === r.id;
+    const flagged = r.flag;
+    const isOpen = open === r.id;
+    const changed = (() => { const s = saved.find((x) => x.id === r.id); return s && (s.number !== r.number || s.name !== r.name); })();
+    return `<div class="lrow ${isOpen ? 'sel' : ''} ${flagged ? 'bad' : ''}" data-row="${esc(r.id)}">
+      <div class="grip" draggable="true" title="Drag to move" aria-hidden="true">${ico('grip')}</div>
+      <div class="num ${playing ? 'playing' : ''}" data-id="${esc(r.id)}" ${bad ? 'style="box-shadow:0 0 0 2px var(--errink)"' : ''}>${esc(r.number)}</div>
+      ${logoBox(r.name, r.logoUrl)}
+      <div class="grow">
+        <div class="nm" dir="auto">${esc(r.name)}${changed ? ' <span class="pill info" style="vertical-align:middle">Changed</span>' : ''}</div>
+        <div class="rowsub"><span class="badge ${TYPE_BADGE[r.type]}">${TYPE_LABEL[r.type]}</span><span dir="auto">${esc(channelSub(r))}${playing ? ' · playing on the TV now' : ''}</span></div>
+        ${flagged ? `<div class="flag">${ico('alert', 14)}${esc(FLAG_TEXT[flagged] || '')}</div>` : ''}
+      </div>
+      <button class="ibtn bd" data-play="${esc(r.id)}" aria-label="Play ${esc(r.name)} on the TV" title="Play on TV" ${changed || r.id.startsWith('new') ? '' : ''}>${ico('play', 18)}</button>
+      <button class="ibtn" data-edit="${esc(r.id)}" aria-label="Edit ${esc(r.name)}" aria-expanded="${isOpen}" title="Edit">${ico(isOpen ? 'close' : 'pencil', 18)}</button>
+    </div>
+    ${isOpen ? editPanel(r) : ''}`;
+  }
+  function editPanel(r) {
+    const idx = rows.indexOf(r);
+    const clash = rows.find((x) => x !== r && x.number === r.number);
+    const playlist = r.type === 'FILMS' || r.type === 'SERIES';
+    return `<div class="editpanel col g12" data-panel="${esc(r.id)}">
+      <div class="f fw g12" style="align-items:flex-start">
+        <label class="field numfield"><span>Number</span><span class="inp ${clash || invalid(r) ? 'bad' : ''}"><input inputmode="numeric" pattern="[0-9]*" maxlength="4" value="${esc(r.number)}" data-f="number" aria-describedby="numHint"></span></label>
+        <label class="field grow"><span>Name</span><span class="inp"><input value="${esc(r.name)}" data-f="name" dir="auto" maxlength="80"></span></label>
+      </div>
+      <div class="hint ${clash || invalid(r) ? 'err' : ''}" id="numHint">${clash ? `Number ${esc(r.number)} is already ${esc(clash.name)}. Pick another number.` : invalid(r) ? 'Use a number from 1 to 9999.' : 'The number your viewer types on the remote.'}</div>
+      ${r.type === 'YOUTUBE' && r.source ? `<div class="hint">YouTube: <span dir="ltr">${esc(r.source)}</span></div>` : ''}
+      <div class="f fw g8">
+        <button class="btn" data-move="-1" ${idx === 0 ? 'disabled' : ''}>${ico('up', 18)}Move up</button>
+        <button class="btn" data-move="1" ${idx === rows.length - 1 ? 'disabled' : ''}>${ico('down', 18)}Move down</button>
+        ${playlist ? `<a class="btn" href="#/film/${encodeURIComponent(r.id)}">${ico('pencil', 18)}Change what plays</a>` : ''}
+        <button class="btn dng" data-remove="${esc(r.id)}">${ico('trash', 18)}Remove</button>
+      </div>
+    </div>`;
+  }
+  function paint() {
+    const el = $('#content'); if (!el || !rows) return;
+    const f = FILTERS.find((x) => x[0] === filter) || FILTERS[0];
+    const bad = conflicts();
+    const visible = rows.filter(f[2]);
+    const shown = showAll ? visible : visible.slice(0, PAGE);
+    const n = changeCount();
+    const sortedByNumber = rows.every((r, i) => i === 0 || rows[i - 1].number < r.number);
+    const blocked = bad.size > 0 || rows.some(invalid);
+    el.innerHTML = `
+      <div class="f fw g8">
+        <a class="btn pri" href="#/add">${ico('plus', 18, 2)}Add channel</a>
+        <button class="btn" id="renumber" ${rows.length < 2 ? 'disabled' : ''}>Renumber 1…${rows.length || 1} in this order</button>
+        <button class="btn" id="sortNum" ${sortedByNumber ? 'disabled' : ''}>Sort by number</button>
+      </div>
+      <div class="chips scroll" role="toolbar" aria-label="Show">
+        ${FILTERS.map(([k, label, fn]) => { const c = rows.filter(fn).length; return (k === 'all' || c) ? `<button class="chip ${filter === k ? 'on' : ''}" data-filter="${k}" aria-pressed="${filter === k}">${label} <span class="c">${fmtN(c)}</span></button>` : ''; }).join('')}
+      </div>
+      ${n ? `<div class="savebar" role="region" aria-label="Unsaved changes">
+        <span class="icobox pr">${ico('alert', 20)}</span>
+        <div class="grow"><div style="font-weight:700">${plural(n, 'change')} not saved yet</div><div class="cap">${blocked ? 'Give every channel its own number to save.' : 'The TV keeps its current lineup until you save.'}</div></div>
+        <button class="btn" id="discard">Discard</button><button class="btn pri" id="save" ${blocked ? 'disabled' : ''}>Save to TV</button>
+      </div>` : ''}
+      ${rows.length ? `<section class="card" id="rows">
+        ${shown.map((r) => rowHtml(r, bad.has(r.id))).join('') || `<p class="muted">No channels here.</p>`}
+        ${visible.length > shown.length ? `<div class="f fw g12" style="padding:8px 12px"><span class="cap grow">Showing ${fmtN(shown.length)} of ${fmtN(visible.length)} channels</span><button class="btn ghost" id="showAll">Show all</button></div>` : (visible.length > 10 ? `<div class="cap" style="padding:8px 12px">${plural(visible.length, 'channel')}</div>` : '')}
+      </section>` : `<section class="card col g12"><div class="icobox t">${ico('tv', 22)}</div><h2 class="sec">Nothing on the TV yet</h2><p class="muted">Add your first channel and it appears on the TV straight away.</p><div><a class="btn pri" href="#/add">Add channel</a></div></section>`}`;
+    bind(el);
+  }
+  function bind(el) {
+    $$('[data-filter]', el).forEach((b) => b.onclick = () => { filter = b.dataset.filter; paint(); });
+    const sa = $('#showAll', el); if (sa) sa.onclick = () => { showAll = true; paint(); };
+    $$('[data-edit]', el).forEach((b) => b.onclick = () => { open = open === b.dataset.edit ? null : b.dataset.edit; paint(); const i = $(`[data-panel="${CSS.escape(b.dataset.edit)}"] input[data-f="name"]`); if (i) i.focus(); });
+    $$('[data-play]', el).forEach((b) => b.onclick = () => { const r = byId(b.dataset.play); playOnTv({ channelId: r.id }, r.name); });
+    $$('[data-panel] input', el).forEach((inp) => {
+      inp.addEventListener('input', () => {
+        const r = byId(inp.closest('[data-panel]').dataset.panel);
+        if (inp.dataset.f === 'number') { const v = inp.value.replace(/\D/g, ''); inp.value = v; r.number = v === '' ? NaN : parseInt(v, 10); }
+        else r.name = inp.value;
+      });
+      inp.addEventListener('change', () => { const pos = inp.selectionStart; const f = inp.dataset.f; const id = inp.closest('[data-panel]').dataset.panel; const r = byId(id); if (f === 'name' && !r.name.trim()) r.name = saved.find((s) => s.id === id)?.name || r.name; paint(); const again = $(`[data-panel="${CSS.escape(id)}"] input[data-f="${f}"]`); if (again && document.activeElement === document.body) { again.focus(); try { again.setSelectionRange(pos, pos); } catch (e) { /* number */ } } });
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+    });
+    $$('[data-move]', el).forEach((b) => b.onclick = () => { move(open, parseInt(b.dataset.move, 10)); });
+    $$('[data-remove]', el).forEach((b) => b.onclick = () => remove(b.dataset.remove));
+    const rn = $('#renumber', el); if (rn) rn.onclick = () => { rows.forEach((r, i) => { r.number = i + 1; }); paint(); };
+    const sn = $('#sortNum', el); if (sn) sn.onclick = () => { rows.sort((a, b) => (a.number || 1e9) - (b.number || 1e9)); paint(); };
+    const d = $('#discard', el); if (d) d.onclick = () => { discard(); paint(); };
+    const s = $('#save', el); if (s) s.onclick = save;
+    dragging(el);
+  }
+  /** Moving keeps the set of numbers; the channels swap places and numbers. */
+  function move(id, delta) {
+    const i = rows.findIndex((r) => r.id === id); const j = i + delta;
+    if (i < 0 || j < 0 || j >= rows.length) return;
+    const a = rows[i], b = rows[j];
+    [a.number, b.number] = [b.number, a.number];
+    rows[i] = b; rows[j] = a; paint();
+  }
+  function reorder(id, beforeId) {
+    const nums = rows.map((r) => r.number);
+    const item = rows.find((r) => r.id === id);
+    const rest = rows.filter((r) => r.id !== id);
+    const at = beforeId ? rest.findIndex((r) => r.id === beforeId) : rest.length;
+    rest.splice(at < 0 ? rest.length : at, 0, item);
+    const sortedNums = nums.every((n, k) => k === 0 || nums[k - 1] < n) ? nums : nums.slice().sort((x, y) => x - y);
+    rest.forEach((r, k) => { r.number = sortedNums[k]; });
+    rows = rest; paint();
+  }
+  function dragging(el) {
+    let dragId = null;
+    $$('.grip', el).forEach((g) => {
+      g.addEventListener('dragstart', (e) => { dragId = g.closest('[data-row]').dataset.row; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragId); } catch (x) { /* ie */ } g.closest('.lrow').classList.add('dragging'); });
+      g.addEventListener('dragend', () => { $$('.lrow', el).forEach((r) => r.classList.remove('dragging', 'dropbefore')); });
+    });
+    $$('.lrow', el).forEach((row) => {
+      row.addEventListener('dragover', (e) => { if (!dragId) return; e.preventDefault(); $$('.lrow', el).forEach((r) => r.classList.remove('dropbefore')); row.classList.add('dropbefore'); });
+      row.addEventListener('drop', (e) => { e.preventDefault(); const target = row.dataset.row; if (dragId && target !== dragId) reorder(dragId, target); dragId = null; });
+    });
+  }
+  function remove(id) {
+    const i = rows.findIndex((r) => r.id === id); if (i < 0) return;
+    const [r] = rows.splice(i, 1); open = null; paint();
+    toast(`Removed "${r.name}"`, { label: 'Undo', run: () => { rows.splice(Math.min(i, rows.length), 0, r); paint(); } });
+  }
+  function discard() { rows = saved.map((c) => ({ ...c })); open = null; }
+  async function save() {
+    const body = { rows: rows.map((r) => ({ id: r.id, number: r.number, name: r.name.trim() || r.name, logoUrl: r.logoUrl || null })) };
+    try {
+      const view = await saving(() => PUT('/api/channels', body));
+      state.lineup = view; load(view); open = null; snapshot(); paint();
+    } catch (e) { /* toast shown */ }
+  }
+  return { render, paint, dirty, changeCount, discard: () => { discard(); rows = null; } };
+})();
+
+/* ---------- Add channel ---------- */
+const nextNumber = () => (state.lineup && state.lineup.nextNumber) || 1;
+const numbersWords = (start, n) => n <= 0 ? '' : n === 1 ? `It'll get number ${start}.` : n <= 3
+  ? `They'll get numbers ${listWords(Array.from({ length: n }, (_, i) => String(start + i)))}.` : `They'll get numbers ${start} to ${start + n - 1}.`;
+async function confirmMany(n, start) {
+  if (n <= 30) return true;
+  return dialog({ title: `Add ${fmtN(n)} channels?`, text: `That's a lot for one TV. The lineup works best with 10 to 30 channels. They'd get numbers ${start} to ${start + n - 1}.`, ok: `Add ${fmtN(n)} channels` });
+}
+screens.add = (() => {
+  const cat = { pid: null, type: 'live', category: null, q: '', items: [], total: 0, selected: new Map(), cats: null, catsAll: false, loaded: false, refreshing: false };
+  let yt = { input: '', preview: null, problem: null, busy: false, number: '', name: '' };
+  let link = { url: '', number: '', name: '', logo: '' };
+  let pollT = null; let searchT = null; let ytT = null;
+  const mode = () => route.parts[0] || ((state.providers && state.providers.providers.length) ? 'catalog' : 'youtube');
+
+  async function render(el, seq) {
+    clearTimeout(pollT);
+    if (!state.providers || !state.lineup || !state.status) {
+      el.innerHTML = loadingCard(4);
+      await loadCore(); if (stale(seq)) return;
+    } else {
+      Promise.all([GET('/api/channels'), GET('/api/providers')]).then(([l, p]) => { state.lineup = l; state.providers = p; }).catch(() => {});
+    }
+    const m = mode();
+    el.innerHTML = `
+      <div class="seg full" role="tablist" aria-label="Where the channel comes from">
+        <button role="tab" data-mode="catalog" class="${m === 'catalog' ? 'on' : ''}" aria-selected="${m === 'catalog'}">From my TV subscription</button><button role="tab" data-mode="youtube" class="${m === 'youtube' ? 'on' : ''}" aria-selected="${m === 'youtube'}">From YouTube</button><button role="tab" data-mode="link" class="${m === 'link' ? 'on' : ''}" aria-selected="${m === 'link'}">From a link</button>
+      </div>
+      <div id="addBody" class="col g24"></div>`;
+    $$('[data-mode]', el).forEach((b) => b.onclick = () => go('#/add/' + b.dataset.mode));
+    if (m === 'youtube') paintYt(); else if (m === 'link') paintLink(); else await startCatalog(seq);
+  }
+
+  /* --- From my TV subscription --- */
+  async function startCatalog(seq) {
+    const subs = state.providers.providers;
+    const body = $('#addBody');
+    if (!subs.length) {
+      body.innerHTML = `<section class="card col g12"><div class="icobox t">${ico('server', 22)}</div><h2 class="sec">No TV subscription yet</h2><p class="muted">Add the details your provider gave you. The TV then keeps their channel list and refreshes it every day.</p><div><a class="btn pri" href="#/subs/new">Add subscription</a></div></section>`;
       return;
     }
-    const picker = pickers[p.id];
-    if (!picker) return;
-    if (b.dataset.act === 'pick-all') { visibleGroups(picker).forEach((g) => picker.selected.add(g.name)); renderPicker(p, b.closest('[data-index]')); }
-    if (b.dataset.act === 'pick-none') { picker.selected.clear(); renderPicker(p, b.closest('[data-index]')); }
-    if (b.dataset.act === 'pick-cancel') { delete pickers[p.id]; renderProviders(); setMsg(''); }
-    if (b.dataset.act === 'pick-import') {
-      const count = selectedCount(picker);
-      if (!count) { setMsg('Tick at least one category.', 'err'); return; }
-      if (count > 300 && !confirm(`Add ${count} channels? With only up and down on the remote, that is a long list to step through.`)) return;
-      b.disabled = true; b.textContent = 'Adding…';
-      try {
-        const res = await api('/api/providers/import', { method: 'POST', body: JSON.stringify({ providerId: p.id, groups: [...picker.selected] }) });
-        delete pickers[p.id];
-        await load(); await loadProviders();
-        setMsg(`${p.name}: ${res.added} channel(s) added, ${res.skipped} already present. Total ${res.total}.`, 'ok');
-      } catch (err) { setMsg('Import failed: ' + err.message, 'err'); renderProviders(); }
+    const want = route.q.get('pid');
+    if (want && subs.some((p) => p.id === want)) { if (cat.pid !== want) reset(want); }
+    else if (!cat.pid || !subs.some((p) => p.id === cat.pid)) reset(subs[0].id);
+    const t = route.q.get('type'); if (t && ['live', 'film', 'series'].includes(t) && t !== cat.type) { cat.type = t; cat.category = null; cat.cats = null; }
+    await loadCats(seq);
+  }
+  function reset(pid) { Object.assign(cat, { pid, category: null, q: '', items: [], total: 0, cats: null, catsAll: false }); cat.selected.clear(); }
+  const provider = () => state.providers.providers.find((p) => p.id === cat.pid);
+  async function loadCats(seq) {
+    const r = await GET(`/api/catalog/${encodeURIComponent(cat.pid)}/categories?type=${cat.type}`);
+    if (seq && stale(seq)) return;
+    cat.loaded = r.loaded; cat.refreshing = r.refreshing; cat.cats = r.categories;
+    const p = provider(); if (p) p.status = r.status;
+    if (cat.category == null || !cat.cats.some((c) => c.id === cat.category)) cat.category = cat.cats.length ? cat.cats[0].id : null;
+    paintCatalog();
+    if (cat.loaded) await loadItems(false);
+    else if (cat.refreshing || !r.status.lastRefresh) pollT = setTimeout(() => loadCats(), 4000);
+  }
+  async function loadItems(more) {
+    const qs = new URLSearchParams({ type: cat.type, offset: more ? cat.items.length : 0, limit: 50 });
+    if (cat.q.trim()) qs.set('q', cat.q.trim()); else if (cat.category != null) qs.set('category', cat.category);
+    const my = (loadItems.seq = (loadItems.seq || 0) + 1);
+    const r = await GET(`/api/catalog/${encodeURIComponent(cat.pid)}/items?${qs}`);
+    if (my !== loadItems.seq) return; // a newer search or category won
+    cat.items = more ? cat.items.concat(r.page.items) : r.page.items; cat.total = r.page.total;
+    paintItems();
+  }
+  const unit = () => ({ live: ['channel', 'channels'], film: ['film', 'films'], series: ['series', 'series'] }[cat.type]);
+  function paintCatalog() {
+    const p = provider(); const s = p.status || {};
+    const subs = state.providers.providers;
+    const counts = { live: s.live, film: s.films, series: s.series };
+    const body = $('#addBody'); if (!body) return;
+    const catsShown = cat.cats ? (cat.catsAll || currentSize !== 'desktop' ? cat.cats : cat.cats.slice(0, 10)) : [];
+    body.innerHTML = `
+      <div class="card f fw g12">
+        <div class="icobox t">${ico('server', 22)}</div>
+        <div class="grow" style="min-width:200px">
+          ${subs.length > 1 ? `<label class="sr" for="pidSel">Subscription</label><select id="pidSel" class="sec" style="border:0;background:none;padding:0;max-width:100%">${subs.map((x) => `<option value="${esc(x.id)}" ${x.id === cat.pid ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : `<div class="sec" dir="auto">${esc(p.name)}</div>`}
+          <div class="cap">${cat.refreshing || p.refreshing ? 'Downloading the channel list now…' : s.lastGood ? `Saved on your TV · updated ${esc(whenPast(s.lastGood))} · next update ${esc(whenNext(state.providers.nextRefresh))}` : esc(s.error || 'Not downloaded yet')}</div>
+        </div>
+        <button class="btn" id="catRefresh" ${cat.refreshing ? 'disabled' : ''}>${cat.refreshing ? '<span class="spin"></span>' : ico('refresh', 18)}Refresh channel list</button>
+      </div>
+      ${!cat.loaded ? `<section class="card f g16" aria-busy="${cat.refreshing}">
+          ${cat.refreshing ? '<span class="spin" style="width:28px;height:28px"></span>' : `<div class="icobox ${s.error ? 'err' : 't'}">${ico(s.error ? 'alert' : 'server', 22)}</div>`}
+          <div class="grow"><div class="sec">${cat.refreshing ? `Getting ${esc(p.name)}'s channel list` : 'The channel list isn’t on the TV yet'}</div>
+          <p class="muted">${cat.refreshing ? 'Big lists take a minute. You can leave this page; the TV carries on.' : esc(s.error || 'Press Refresh channel list to download it.')}</p></div>
+        </section>` : `
+      <div class="f fw g12">
+        <div class="seg" role="tablist" aria-label="Kind">${[['live', 'Live TV'], ['film', 'Films'], ['series', 'Series']].map(([k, l]) => `<button role="tab" data-type="${k}" class="${cat.type === k ? 'on' : ''}" aria-selected="${cat.type === k}">${l} <span class="cap">${fmtN(counts[k] || 0)}</span></button>`).join('')}</div>
+        <label class="inp big grow" style="min-width:220px">${ico('search', 20)}<span class="sr">Search</span><input id="catQ" type="search" value="${esc(cat.q)}" placeholder="Search all ${fmtN(counts[cat.type] || 0)} ${unit()[1]}" autocomplete="off" dir="auto"></label>
+      </div>
+      ${cat.cats && cat.cats.length ? `<div class="catlayout">
+        <section class="card col g4 ${cat.q.trim() ? 'hide' : ''}" id="catPanel">
+          <div class="cap" style="padding:0 12px 4px">CATEGORIES</div>
+          <div class="catlist col g4">${catsShown.map((c) => `<button class="catitem ${c.id === cat.category ? 'on' : ''}" data-cat="${esc(c.id)}" aria-pressed="${c.id === cat.category}"><span dir="auto">${esc(c.name)}</span><span class="c">${fmtN(c.count)}</span></button>`).join('')}</div>
+          ${cat.cats.length > catsShown.length ? `<button class="btn ghost" id="moreCats" style="align-self:flex-start">…and ${fmtN(cat.cats.length - catsShown.length)} more categories</button>` : ''}
+        </section>
+        <section class="card col g8" id="itemsPanel"></section>
+      </div>` : `<section class="card"><p class="muted">This subscription has no ${unit()[1]}.</p></section>`}`}`;
+    const sel = $('#pidSel'); if (sel) sel.onchange = () => { reset(sel.value); loadCats(); };
+    $('#catRefresh').onclick = async () => {
+      try { state.providers = await POST(`/api/providers/${encodeURIComponent(cat.pid)}/refresh`); cat.refreshing = true; paintCatalog(); pollProviders(); clearTimeout(pollT); pollT = setTimeout(() => loadCats(), 4000); }
+      catch (e) { if (e.status !== 401) toast(e.message, null, 6000); }
+    };
+    $$('[data-type]').forEach((b) => b.onclick = () => { cat.type = b.dataset.type; cat.category = null; cat.q = ''; cat.catsAll = false; cat.selected.clear(); loadCats(); });
+    $$('[data-cat]').forEach((b) => b.onclick = () => { cat.category = b.dataset.cat; $$('[data-cat]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); loadItems(false); });
+    const mc = $('#moreCats'); if (mc) mc.onclick = () => { cat.catsAll = true; paintCatalog(); paintItems(); };
+    const q = $('#catQ');
+    if (q) q.oninput = () => { cat.q = q.value; $('#catPanel').classList.toggle('hide', !!cat.q.trim()); clearTimeout(searchT); searchT = setTimeout(() => loadItems(false), 250); };
+  }
+  function paintItems() {
+    const el = $('#itemsPanel'); if (!el) return;
+    const searching = !!cat.q.trim();
+    const c = cat.cats.find((x) => x.id === cat.category);
+    const [one, many] = unit();
+    const title = searching ? `Matches for “${cat.q.trim()}”` : (c ? c.name : '');
+    const sub = searching ? `${plural(cat.total, 'match', 'matches')} across every category` : `${fmtN(cat.total)} ${cat.total === 1 ? one : many} in this category`;
+    let list = '';
+    if (cat.type === 'live') {
+      list = cat.items.map((it) => `<label class="chk"><input type="checkbox" data-item="${esc(it.id)}" ${cat.selected.has(it.id) ? 'checked' : ''} ${it.inLineup ? 'disabled' : ''}>${logoBox(it.name, it.logo)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span><span class="cap" dir="auto">${esc(it.group || 'No category')}</span></span>${it.inLineup ? `<span class="pill ok"><span class="dot"></span>In your lineup as ${esc(it.lineupNumber)}</span>` : ''}<button class="ibtn bd" type="button" data-try="${esc(it.id)}" aria-label="Play ${esc(it.name)} on the TV" title="Play on TV">${ico('play', 18)}</button></label>`).join('');
+    } else {
+      list = `<div class="postergrid">${cat.items.map((it) => {
+        const img = it.logo ? ` img" style="background-image:url('${esc(it.logo).replace(/'/g, '%27')}')` : '"';
+        const inner = `<div class="poster${img}><span dir="auto">${esc(it.name)}</span></div><div class="cap">${esc([it.year, it.minutes ? (it.minutes >= 60 ? Math.floor(it.minutes / 60) + ' h ' + (it.minutes % 60) + ' min' : it.minutes + ' min') : ''].filter(Boolean).join(' · '))}</div>`;
+        return cat.type === 'series'
+          ? `<button type="button" data-series="${esc(it.id)}" data-name="${esc(it.name)}" aria-label="Make a channel of ${esc(it.name)}">${inner}</button>`
+          : `<div>${inner}</div>`;
+      }).join('')}</div>`;
     }
-  });
-
-  // ---- Category picker shown after "Import channels" ----
-  const groupLabel = (name) => name || 'No category';
-  const visibleGroups = (picker) => picker.preview.groups.filter((g) =>
-    groupLabel(g.name).toLowerCase().includes(picker.filter.toLowerCase()));
-  const selectedCount = (picker) => picker.preview.groups
-    .filter((g) => picker.selected.has(g.name)).reduce((n, g) => n + g.count, 0);
-
-  function renderPicker(p, box) {
-    const picker = pickers[p.id];
-    let el = box.querySelector('.picker');
-    if (!picker) { if (el) el.remove(); return; }
-    if (!el) { el = document.createElement('div'); el.className = 'picker'; el.style.marginTop = '12px'; box.appendChild(el); }
-    const groups = visibleGroups(picker);
-    const count = selectedCount(picker);
+    const callout = cat.type === 'film' && !searching && c ? `<div class="callout"><div class="grow" style="min-width:200px"><div class="sec" dir="auto">Turn ${esc(c.name)} into a film channel</div><div>The TV plays these films one after another. No library to browse.</div></div><a class="btn" href="#/film/new?mode=film&pid=${encodeURIComponent(cat.pid)}&cat=${encodeURIComponent(c.id)}">Make a film channel</a></div>`
+      : cat.type === 'series' ? `<div class="callout"><div class="grow" style="min-width:200px"><div class="sec">Pick a series to make a channel</div><div>The TV plays it episode by episode and remembers where it stopped.</div></div></div>` : '';
+    const allBtn = searching || !c ? '' : cat.type === 'live' ? `<button class="btn" id="addAll">Add all ${fmtN(c.count)} channels</button>`
+      : cat.type === 'film' ? `<a class="btn" href="#/film/new?mode=film&pid=${encodeURIComponent(cat.pid)}&cat=${encodeURIComponent(c.id)}&pick=1">Pick films by hand</a>` : '';
+    const n = cat.selected.size; const start = nextNumber();
     el.innerHTML = `
-      <p class="hint" style="margin:0 0 8px">Tick the categories to add. Each channel gets the next free number.</p>
-      <div class="row" style="margin-bottom:8px">
-        <input data-picker-filter value="${esc(picker.filter)}" placeholder="Search categories, e.g. news or UK" style="flex:1;min-width:180px">
-        <button data-act="pick-all">Tick shown</button>
-        <button data-act="pick-none">Clear</button>
+      <div class="f fw g12"><div class="grow" style="min-width:180px"><h2 class="sec" dir="auto">${esc(title)}</h2><div class="cap">${esc(sub)}</div></div>${allBtn}</div>
+      ${callout}
+      ${cat.items.length ? list : `<p class="muted" style="padding:12px 0">${searching ? 'Nothing matches. Try fewer letters.' : 'Nothing in this category.'}</p>`}
+      ${cat.total ? `<div class="f fw g12"><span class="cap grow">Showing 1–${fmtN(cat.items.length)} of ${fmtN(cat.total)}.${cat.items.length < cat.total ? ' Search or scroll to see more.' : ''}</span>${cat.items.length < cat.total ? '<button class="btn ghost" id="more50">Show 50 more</button>' : ''}</div>` : ''}
+      ${n ? `<div class="addbar"><div class="grow"><div style="font-weight:700">${fmtN(n)} selected</div><div class="cap">${numbersWords(start, n)} You can change them next.</div></div><button class="btn ghost" id="clearSel">Clear</button><button class="btn pri" id="addSel">Add ${plural(n, 'channel')}</button></div>` : ''}`;
+    $$('[data-item]', el).forEach((b) => b.onchange = () => { const it = cat.items.find((x) => x.id === b.dataset.item); if (b.checked) cat.selected.set(it.id, it); else cat.selected.delete(it.id); paintItems(); });
+    $$('[data-try]', el).forEach((b) => b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); const it = cat.items.find((x) => x.id === b.dataset.try); playOnTv({ providerId: cat.pid, itemId: it.id, name: it.name }, it.name); });
+    $$('[data-series]', el).forEach((b) => b.onclick = () => go(`#/film/new?mode=series&pid=${encodeURIComponent(cat.pid)}&series=${encodeURIComponent(b.dataset.series)}&name=${encodeURIComponent(b.dataset.name)}`));
+    const m = $('#more50', el); if (m) m.onclick = () => loadItems(true);
+    const cs = $('#clearSel', el); if (cs) cs.onclick = () => { cat.selected.clear(); paintItems(); };
+    const as = $('#addSel', el); if (as) as.onclick = () => addItems({ itemIds: [...cat.selected.keys()] }, n);
+    const aa = $('#addAll', el); if (aa) aa.onclick = () => addItems({ categories: [c.id] }, c.count);
+  }
+  async function addItems(sel, n) {
+    if (!(await confirmMany(n, nextNumber()))) return;
+    try {
+      const r = await saving(() => POST('/api/channels/catalog', { providerId: cat.pid, ...sel }), null);
+      state.lineup = r.lineup; snapshot(); cat.selected.clear();
+      toast(r.added ? `Added ${plural(r.added, 'channel')}${r.numbers.length ? ' as ' + ranges(r.numbers) : ''}.${r.skipped ? ' ' + fmtN(r.skipped) + ' were already there.' : ''}` : 'Those channels are already in your lineup.', { label: 'Open lineup', run: () => go('#/lineup') });
+      loadItems(false);
+    } catch (e) { /* toast shown */ }
+  }
+
+  /* --- From YouTube --- */
+  function paintYt() {
+    const body = $('#addBody'); const p = yt.preview; const hasKey = state.status && state.status.hasYoutubeKey;
+    if (!yt.number) yt.number = String(nextNumber());
+    const num = parseInt(yt.number, 10);
+    const clash = state.lineup.channels.find((c) => c.number === num);
+    const ready = p && !yt.busy && yt.name.trim() && num > 0 && !clash;
+    body.innerHTML = `<div class="g2">
+      <section class="card col g16">
+        <div><h2 class="sec">Paste a YouTube link</h2><p class="muted">A video link, a live link, or a channel ID that starts with UC. A channel ID always plays that channel's live stream.</p></div>
+        <label class="field"><span>YouTube link or channel ID</span><span class="inp big ${yt.problem ? 'bad' : ''}"><input id="ytIn" value="${esc(yt.input)}" autocomplete="off" spellcheck="false" inputmode="url" dir="ltr" placeholder="https://www.youtube.com/watch?v=…"></span>
+          <span class="hint ${yt.problem ? 'err' : ''}" id="ytHint">${yt.problem ? esc(yt.problem.message) : hasKey ? 'Links that start with @ work too.' : 'Links that start with @ aren’t supported yet.'}</span></label>
+        ${yt.problem && yt.problem.code === 'needs_key' ? `<div class="hint">You can turn them on with a YouTube key in <a href="#/settings">TV settings</a>.</div>` : ''}
+        ${yt.busy ? '<div class="f g8 muted"><span class="spin"></span>Looking it up…</div>' : p ? '<div><span class="pill ok">' + ico('check', 14, 2.4) + 'Found it</span></div>' : ''}
+      </section>
+      <section class="card col g16 ${p ? '' : 'hide'}">
+        ${p ? `<div class="thumb" style="${p.thumbnail ? `background-image:url('${esc(p.thumbnail).replace(/'/g, '%27')}')` : ''}">${p.live || p.kind === 'channel' ? `<span class="live">${p.live === false ? 'NOT LIVE NOW' : 'LIVE NOW'}</span>` : ''}${p.thumbnail ? '' : ico('yt', 48)}</div>
+        <div><div class="sec" dir="auto">${esc(p.title || 'YouTube channel')}</div><div class="cap">${p.kind === 'channel' ? (p.live === false ? 'Not live right now · it plays the channel’s live stream when there is one' : 'Live right now · plays whatever the channel is streaming') : esc([p.author, p.live ? 'Live now' : 'Video'].filter(Boolean).join(' · '))}</div></div>
+        <div class="f g12" style="align-items:flex-start">
+          <label class="field numfield"><span>Number</span><span class="inp ${clash ? 'bad' : ''}"><input id="ytNum" inputmode="numeric" maxlength="4" value="${esc(yt.number)}"></span></label>
+          <label class="field grow"><span>Name on the TV</span><span class="inp"><input id="ytName" value="${esc(yt.name)}" dir="auto" maxlength="80"></span></label>
+        </div>
+        <div class="hint ${clash ? 'err' : ''}">${clash ? `Number ${num} is already ${esc(clash.name)}. Pick another number.` : num === nextNumber() ? `${num} is the next free number.` : ''}</div>
+        <div class="f fw g8"><button class="btn pri" id="ytAdd" ${ready ? '' : 'disabled'}>Add as channel ${esc(num > 0 ? num : '')}</button><button class="btn" id="ytPlay">${ico('play', 18)}Play on TV</button></div>` : ''}
+      </section>
+    </div>`;
+    const inp = $('#ytIn');
+    inp.oninput = () => { yt.input = inp.value; clearTimeout(ytT); ytT = setTimeout(lookup, 500); };
+    inp.onpaste = () => { clearTimeout(ytT); ytT = setTimeout(lookup, 50); };
+    const n = $('#ytNum'); if (n) n.oninput = () => { n.value = n.value.replace(/\D/g, ''); yt.number = n.value; }; if (n) n.onchange = paintYt;
+    const nm = $('#ytName'); if (nm) nm.oninput = () => { yt.name = nm.value; $('#ytAdd').disabled = !(yt.name.trim() && parseInt(yt.number, 10) > 0); };
+    const add = $('#ytAdd'); if (add) add.onclick = async () => {
+      try {
+        const r = await saving(() => POST('/api/channels/youtube', { source: p.source, name: yt.name.trim(), number: parseInt(yt.number, 10) }), null);
+        state.lineup = r.lineup; snapshot();
+        toast(`${r.channel.name} is channel ${r.channel.number} now.`, { label: 'Open lineup', run: () => go('#/lineup') });
+        yt = { input: '', preview: null, problem: null, busy: false, number: '', name: '' }; paintYt();
+      } catch (e) { /* toast */ }
+    };
+    const pl = $('#ytPlay'); if (pl) pl.onclick = () => playOnTv({ youtube: p.source, name: yt.name.trim() || p.title }, yt.name.trim() || p.title);
+  }
+  async function lookup() {
+    const input = yt.input.trim();
+    if (!input) { yt.preview = null; yt.problem = null; paintYt(); return; }
+    yt.busy = true; yt.problem = null; paintYt(); const keep = $('#ytIn'); if (keep) { keep.focus(); keep.setSelectionRange(keep.value.length, keep.value.length); }
+    try {
+      const p = await POST('/api/youtube/preview', { input });
+      if (yt.input.trim() !== input) return;
+      yt.preview = p; yt.name = (p.title || '').slice(0, 60);
+    } catch (e) {
+      if (yt.input.trim() !== input) return;
+      yt.preview = null; yt.problem = { code: e.body && e.body.code, message: e.message };
+    } finally { if (yt.input.trim() === input) { yt.busy = false; paintYt(); const i = $('#ytIn'); if (i && !yt.preview) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } } }
+  }
+
+  /* --- From a link --- */
+  function paintLink() {
+    const body = $('#addBody');
+    if (!link.number) link.number = String(nextNumber());
+    const num = parseInt(link.number, 10);
+    const clash = state.lineup.channels.find((c) => c.number === num);
+    const urlOk = /^https?:\/\/\S+$/i.test(link.url.trim());
+    const ready = urlOk && link.name.trim() && num > 0 && !clash;
+    body.innerHTML = `<section class="card col g16 center" style="margin-inline:0">
+      <div class="f g8"><span class="pill info">Advanced</span></div>
+      <div><h2 class="sec">Add a single stream address</h2><p class="muted">Use this when a friend or a provider gave you one web address for one channel.</p></div>
+      <label class="field"><span>Stream address</span><span class="inp big ${link.url && !urlOk ? 'bad' : ''}"><input id="lkUrl" type="url" value="${esc(link.url)}" autocomplete="off" spellcheck="false" dir="ltr" placeholder="http://…"></span><span class="hint ${link.url && !urlOk ? 'err' : ''}">${link.url && !urlOk ? 'The address should start with http:// or https://.' : 'Addresses can contain a password. We never show them again after saving.'}</span></label>
+      <div class="f g12" style="align-items:flex-start"><label class="field numfield"><span>Number</span><span class="inp ${clash ? 'bad' : ''}"><input id="lkNum" inputmode="numeric" maxlength="4" value="${esc(link.number)}"></span></label><label class="field grow"><span>Name on the TV</span><span class="inp"><input id="lkName" value="${esc(link.name)}" dir="auto" maxlength="80"></span></label></div>
+      ${clash ? `<div class="hint err">Number ${num} is already ${esc(clash.name)}. Pick another number.</div>` : ''}
+      <details><summary>${ico('right', 18)}More options</summary><label class="field"><span>Icon address (optional)</span><span class="inp"><input id="lkLogo" type="url" value="${esc(link.logo)}" dir="ltr" autocomplete="off"></span></label></details>
+      <div class="f fw g8"><button class="btn pri" id="lkAdd" ${ready ? '' : 'disabled'}>Add channel</button><button class="btn" id="lkPlay" ${urlOk ? '' : 'disabled'}>${ico('play', 18)}Play on TV</button></div>
+    </section>`;
+    const sync = () => { link.url = $('#lkUrl').value; link.number = $('#lkNum').value.replace(/\D/g, ''); link.name = $('#lkName').value; link.logo = $('#lkLogo').value; };
+    $$('#lkUrl,#lkNum,#lkName,#lkLogo').forEach((i) => { i.addEventListener('change', () => { sync(); paintLink(); }); i.addEventListener('input', () => { sync(); const ok = /^https?:\/\/\S+$/i.test(link.url.trim()); $('#lkAdd').disabled = !(ok && link.name.trim() && parseInt(link.number, 10) > 0); $('#lkPlay').disabled = !ok; }); });
+    $('#lkAdd').onclick = async () => {
+      sync();
+      try {
+        const r = await saving(() => POST('/api/channels/link', { url: link.url.trim(), name: link.name.trim(), number: parseInt(link.number, 10), logoUrl: link.logo.trim() || null }), null);
+        state.lineup = r.lineup; snapshot();
+        toast(`${r.channel.name} is channel ${r.channel.number} now.`, { label: 'Open lineup', run: () => go('#/lineup') });
+        link = { url: '', number: '', name: '', logo: '' }; paintLink();
+      } catch (e) { /* toast */ }
+    };
+    $('#lkPlay').onclick = () => { sync(); playOnTv({ url: link.url.trim(), name: link.name.trim() || 'Preview' }, link.name.trim()); };
+  }
+  return { render, onProviders() { if (mode() === 'catalog' && cat.pid && provider()) { const p = provider(); if (!p.refreshing && cat.refreshing) loadCats(); } } };
+})();
+
+/* ---------- Subscriptions ---------- */
+screens.subs = (() => {
+  let edit = null;   // form state for the open editor
+  let test = null;   // { busy, ok, message }
+  const blank = () => ({ id: null, name: '', kind: 'XTREAM', url: '', username: '', password: '', logoUrl: '', userAgent: '', changeUrl: true, changePw: true });
+  function openEditor(id) {
+    test = null;
+    if (id === 'new') { edit = blank(); return; }
+    const p = state.providers.providers.find((x) => x.id === id);
+    edit = p ? { id: p.id, name: p.name, kind: p.kind, url: '', username: p.username || '', password: '', logoUrl: p.logoUrl || '', userAgent: p.userAgent || '', changeUrl: !p.hasUrl, changePw: !p.hasPassword, original: p } : null;
+  }
+  async function render(el, seq) {
+    if (!state.providers || !state.lineup) { el.innerHTML = loadingCard(3); await loadCore(); if (stale(seq)) return; }
+    else GET('/api/providers').then((p) => { state.providers = p; paint(); }).catch(() => {});
+    const want = route.parts[0] || null;
+    if (want && (!edit || (edit.id || 'new') !== want)) openEditor(want);
+    if (!want) edit = currentSize === 'phone' ? null : edit;
+    if (!want && !edit && state.providers.providers.length && currentSize !== 'phone') openEditor(state.providers.providers[0].id);
+    if (!state.providers.providers.length && !want) openEditor('new');
+    paint();
+    if (state.providers.providers.some((p) => p.refreshing)) pollProviders();
+  }
+  function card(p) {
+    const st = subState(p); const s = p.status || {}; const ch = changeLine(s);
+    const isOpen = edit && edit.id === p.id;
+    return `<section class="card col g12" style="${!s.ok && s.lastRefresh ? 'border-color:var(--errink)' : ''}">
+      <div class="f g12"><div class="icobox t">${ico('server', 22)}</div><div class="grow"><div class="sec ell" dir="auto">${esc(p.name)}</div><div class="cap">${esc(endsLine(p, false))}</div></div><span class="pill ${st.pc}"><span class="dot"></span>${esc(st.word)}</span></div>
+      <div class="cap">${esc(refreshLine(p))}${s.lastGood ? ` · ${fmtN(s.live)} live, ${fmtN(s.films)} films, ${fmtN(s.series)} series` : ''}</div>
+      ${s.ok && ch ? `<div class="f g8"><span class="pill info">${esc(ch)}</span></div>` : ''}
+      ${!s.ok && s.error ? `<div class="f g8" style="color:var(--errink);font-weight:600">${ico('alert', 18)}<span>${esc(s.error)} We’ll try again ${esc(whenNext(state.providers.nextRefresh))}, or you can try now.</span></div>` : ''}
+      <div class="f fw g8"><button class="btn" data-refresh="${esc(p.id)}" ${p.refreshing ? 'disabled' : ''}>${p.refreshing ? '<span class="spin"></span>' : ico('refresh', 18)}Refresh channel list</button><a class="btn ${isOpen ? 'pri' : ''}" href="#/subs/${encodeURIComponent(p.id)}">Edit</a><a class="btn ghost" href="#/add/catalog?pid=${encodeURIComponent(p.id)}">Browse channels</a></div>
+    </section>`;
+  }
+  function savedInput(id, label, value, saved, change, type = 'text', extra = '') {
+    if (saved && !change) {
+      return `<div class="field"><span>${label}</span><span class="inp"><input value="" placeholder="Saved on the TV" disabled aria-label="${esc(label)}: saved"><span class="pill ok">${ico('check', 14, 2.4)}Saved</span></span><button class="btn ghost" type="button" data-change="${id}" style="align-self:flex-start">Change ${label.toLowerCase()}</button></div>`;
+    }
+    return `<label class="field"><span>${label}</span><span class="inp"><input id="${id}" type="${type}" value="${esc(value)}" autocomplete="off" spellcheck="false" ${extra}></span></label>`;
+  }
+  function editor() {
+    if (!edit) return '';
+    const p = edit.original; const isNew = !p;
+    const lineup = (state.lineup && state.lineup.channels) || [];
+    const mine = p ? lineup.filter((c) => c.providerId === p.id || (c.playlist && c.playlist.providerId === p.id)) : [];
+    const xt = edit.kind === 'XTREAM';
+    const s = p && p.status;
+    return `<section class="card col g16" id="editor">
+      <div class="f g8"><h2 class="sec grow" dir="auto">${isNew ? 'Add a subscription' : 'Edit ' + esc(p.name)}</h2>${isNew ? '' : `<span class="pill info" id="dirtyPill">Not changed</span>`}</div>
+      ${isNew ? '<p class="muted">Use the details your provider gave you. They stay on the TV and are never shown again.</p>' : ''}
+      <label class="field"><span>Name</span><span class="inp"><input id="sName" value="${esc(edit.name)}" dir="auto" maxlength="60" placeholder="For example, Sunrise TV"></span></label>
+      <div class="field"><span>How you sign in</span><div class="seg full" role="radiogroup"><button type="button" data-kind="XTREAM" class="${xt ? 'on' : ''}" role="radio" aria-checked="${xt}">Server and login</button><button type="button" data-kind="M3U" class="${xt ? '' : 'on'}" role="radio" aria-checked="${!xt}">Channel list link</button></div></div>
+      ${savedInput('sUrl', xt ? 'Server address' : 'Channel list link', edit.url, p && p.hasUrl, edit.changeUrl, 'url', 'dir="ltr" placeholder="http://…"')}
+      <div class="g2">
+        <label class="field"><span>Username${xt ? '' : ' (if any)'}</span><span class="inp"><input id="sUser" value="${esc(edit.username)}" autocomplete="off" spellcheck="false" dir="ltr"></span></label>
+        ${savedInput('sPw', 'Password', edit.password, p && p.hasPassword, edit.changePw, 'password', 'dir="ltr" autocomplete="new-password"')}
       </div>
-      <div style="max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px">
-        ${groups.map((g) => `<label class="row" style="padding:4px 0;gap:10px">
-          <input type="checkbox" data-group="${esc(g.name)}" ${picker.selected.has(g.name) ? 'checked' : ''}>
-          <span style="flex:1">${esc(groupLabel(g.name))}</span><span class="badge">${g.count}</span></label>`).join('')
-          || '<p class="hint">No categories match.</p>'}
-      </div>
-      <div class="row" style="margin-top:8px">
-        <button class="primary" data-act="pick-import">Add ${count} channel${count === 1 ? '' : 's'}</button>
-        <button data-act="pick-cancel">Cancel</button>
+      <div class="f fw g12"><button class="btn" id="sTest" ${test && test.busy ? 'disabled' : ''}>${test && test.busy ? '<span class="spin"></span>Testing…' : 'Test connection'}</button>
+        ${test && !test.busy ? `<span class="pill ${test.ok ? 'ok' : 'err'} wrap"><span class="dot"></span>${esc(test.message)}</span>` : ''}</div>
+      <details ${edit.userAgent || edit.logoUrl ? 'open' : ''}><summary>${ico('right', 18)}Advanced</summary><div class="col g12">
+        <label class="field"><span>Icon address (optional)</span><span class="inp"><input id="sLogo" type="url" value="${esc(edit.logoUrl)}" dir="ltr" autocomplete="off"></span></label>
+        <label class="field"><span>Identify as (User-Agent)</span><span class="inp"><input id="sUa" value="${esc(edit.userAgent)}" dir="ltr" autocomplete="off" placeholder="Leave empty unless your provider asks"></span><span class="hint">Some providers only answer apps they know, such as VLC. Leave this empty to let the TV try the usual ones.</span></label>
+      </div></details>
+      <div class="hint err hide" id="sErr"></div>
+      <div class="f fw g8"><button class="btn pri" id="sSave">${isNew ? 'Save and get channels' : 'Save changes'}</button>${isNew && !state.providers.providers.length ? '' : '<button class="btn" id="sCancel">Cancel</button>'}</div>
+      ${p ? `<div class="divider"></div>
+      <div><h3 class="sec">Refresh history</h3></div>
+      ${s && s.history && s.history.length ? `<div class="list">${s.history.map((h) => `<div class="li"><span class="pill ${h.ok ? 'ok' : 'err'}"><span class="dot"></span>${h.ok ? 'Worked' : 'Failed'}</span><div class="grow"><div>${esc(cap1(whenPast(h.at)))}</div><div class="cap">${esc(h.ok ? (changeLine({ lastGood: 1, added: h.added, removed: h.removed })) : (h.message || 'It didn’t work'))}</div></div></div>`).join('')}</div>` : '<p class="muted">No refreshes yet.</p>'}
+      <div class="divider"></div>
+      <div class="col g8">
+        <h3 class="sec">Remove this subscription</h3>
+        <p>${mine.length ? `This also removes its ${plural(mine.length, 'channel')} from your lineup (${mine.length === 1 ? 'number' : 'numbers'} ${esc(ranges(mine.map((c) => c.number)))}). The TV will skip those numbers until you fill them. This can't be undone.` : 'None of its channels are in your lineup. This can’t be undone.'}</p>
+        <div><button class="btn dng" id="sRemove">Remove ${esc(p.name)}${mine.length ? ' and ' + plural(mine.length, 'channel') : ''}</button></div>
+      </div>` : ''}
+    </section>`;
+  }
+  function paint() {
+    const el = $('#content'); if (!el || route.name !== 'subs') return;
+    const subs = state.providers.providers;
+    const phoneEdit = currentSize === 'phone' && edit;
+    const keepFocus = document.activeElement && document.activeElement.id;
+    if (edit) syncForm();
+    el.innerHTML = `
+      <div class="f fw g8"><a class="btn pri" href="#/subs/new">${ico('plus', 18, 2)}Add subscription</a><button class="btn" id="refreshAll" ${subs.length ? '' : 'disabled'}>${ico('refresh', 18)}Refresh all</button></div>
+      <div class="cols">
+        <div class="col g16 ${phoneEdit ? 'hide' : ''}">${subs.map(card).join('') || '<section class="card"><p class="muted">No subscriptions yet.</p></section>'}</div>
+        ${editor()}
       </div>`;
-    const filter = el.querySelector('[data-picker-filter]');
-    if (picker.focusFilter) { filter.focus(); filter.setSelectionRange(filter.value.length, filter.value.length); picker.focusFilter = false; }
+    bind(el);
+    if (keepFocus && $('#' + keepFocus)) $('#' + keepFocus).focus();
   }
+  function syncForm() {
+    const v = (id) => { const i = $('#' + id); return i ? i.value : null; };
+    if (!$('#editor')) return;
+    edit.name = v('sName') ?? edit.name; edit.username = v('sUser') ?? edit.username;
+    if (v('sUrl') != null) edit.url = v('sUrl'); if (v('sPw') != null) edit.password = v('sPw');
+    edit.logoUrl = v('sLogo') ?? edit.logoUrl; edit.userAgent = v('sUa') ?? edit.userAgent;
+  }
+  function input() {
+    syncForm();
+    return { id: edit.id, name: edit.name.trim(), kind: edit.kind, url: edit.url.trim() || null, username: edit.username.trim() || null, password: edit.password || null, logoUrl: edit.logoUrl.trim() || null, userAgent: edit.userAgent.trim() || null };
+  }
+  function isDirty() {
+    const p = edit && edit.original; if (!p) return true;
+    syncForm();
+    return edit.name.trim() !== p.name || edit.kind !== p.kind || !!edit.url.trim() || !!edit.password || edit.username.trim() !== (p.username || '') || edit.logoUrl.trim() !== (p.logoUrl || '') || edit.userAgent.trim() !== (p.userAgent || '');
+  }
+  function bind(el) {
+    $('#refreshAll', el).onclick = async () => { try { state.providers = await POST('/api/providers/refresh-all'); paint(); pollProviders(); toast('Refreshing every channel list. This can take a minute.'); } catch (e) { if (e.status !== 401) toast(e.message, null, 6000); } };
+    $$('[data-refresh]', el).forEach((b) => b.onclick = async () => { try { state.providers = await POST(`/api/providers/${encodeURIComponent(b.dataset.refresh)}/refresh`); paint(); pollProviders(); } catch (e) { if (e.status !== 401) toast(e.message, null, 6000); } });
+    if (!edit) return;
+    const pill = () => { const d = $('#dirtyPill'); if (d) { const x = isDirty(); d.textContent = x ? 'Changed' : 'Not changed'; d.className = 'pill ' + (x ? 'warn' : 'info'); } };
+    $$('#editor input').forEach((i) => i.addEventListener('input', pill));
+    $$('[data-kind]', el).forEach((b) => b.onclick = () => { syncForm(); if (edit.kind !== b.dataset.kind) { edit.kind = b.dataset.kind; edit.changeUrl = true; } test = null; paint(); });
+    $$('[data-change]', el).forEach((b) => b.onclick = () => { syncForm(); if (b.dataset.change === 'sUrl') edit.changeUrl = true; else edit.changePw = true; paint(); const i = $('#' + b.dataset.change); if (i) i.focus(); });
+    $('#sTest', el).onclick = async () => {
+      const body = input(); test = { busy: true }; paint();
+      try {
+        const r = await POST('/api/providers/test', body);
+        const ex = expiry(r.expiresAt);
+        test = { ok: r.ok, message: r.ok ? (ex ? (ex.ended ? `It answers, but the subscription ended on ${longDate(ex.t)}.` : `It works. Your subscription ends on ${longDate(ex.t)}.`) : 'It works.') : r.message };
+      } catch (e) { test = { ok: false, message: e.message }; }
+      paint();
+    };
+    $('#sSave', el).onclick = async () => {
+      const body = input(); const err = $('#sErr');
+      try {
+        const r = await saving(() => POST('/api/providers', body), null);
+        state.providers = r.providers; openEditor(r.provider.id);
+        toast(edit && !body.id ? 'Saved. The TV is getting the channel list now.' : "Saved. It's on the TV now.");
+        pollProviders();
+        if (!body.id) { go('#/add/catalog?pid=' + encodeURIComponent(r.provider.id)); return; }
+        location.hash = '#/subs/' + encodeURIComponent(r.provider.id); paint();
+      } catch (e) { if (e.status === 400 && err) { err.textContent = e.message; err.classList.remove('hide'); } }
+    };
+    const c = $('#sCancel', el); if (c) c.onclick = () => { edit = null; test = null; go('#/subs'); };
+    const rm = $('#sRemove', el);
+    if (rm) rm.onclick = async () => {
+      const p = edit.original;
+      const mine = (state.lineup.channels || []).filter((x) => x.providerId === p.id || (x.playlist && x.playlist.providerId === p.id));
+      const ok = await dialog({ title: `Remove ${p.name}?`, text: mine.length ? `Its ${plural(mine.length, 'channel')} (${ranges(mine.map((x) => x.number))}) leave the lineup too. This can't be undone.` : "This can't be undone.", ok: 'Remove', danger: true });
+      if (!ok) return;
+      try {
+        state.providers = await saving(() => DEL(`/api/providers/${encodeURIComponent(p.id)}`), `Removed ${p.name}.`);
+        state.lineup = await GET('/api/channels'); snapshot(); edit = null; go('#/subs');
+      } catch (e) { /* toast */ }
+    };
+  }
+  return { render, paint };
+})();
 
-  provBox.addEventListener('change', (e) => {
-    const cb = e.target.closest('input[data-group]'); if (!cb) return;
-    const box = cb.closest('[data-index]'); const p = providers[+box.dataset.index]; const picker = pickers[p.id];
-    if (cb.checked) picker.selected.add(cb.dataset.group); else picker.selected.delete(cb.dataset.group);
-    renderPicker(p, box);
-  });
-  provBox.addEventListener('input', (e) => {
-    if (!e.target.hasAttribute('data-picker-filter')) return;
-    const box = e.target.closest('[data-index]'); const p = providers[+box.dataset.index]; const picker = pickers[p.id];
-    picker.filter = e.target.value; picker.focusFilter = true;
-    renderPicker(p, box);
-  });
-
-  $('#addProvider').onclick = () => {
-    providers.push({ id: '', name: '', kind: 'XTREAM', url: '', username: '', password: '', logoUrl: null, hasPassword: false, channelCount: 0 });
-    renderProviders(); provBox.lastElementChild.querySelector('[data-k=name]').focus();
-  };
-  $('#saveProviders').onclick = async () => {
-    const bad = providers.find((p) => !p.url.trim() || !p.name.trim());
-    if (bad) { setMsg('Every provider needs a name and a server or playlist URL', 'err'); return; }
+/* ---------- Film and series channels ---------- */
+screens.film = (() => {
+  let f = null; // { id, number, name, spec, source, cats, series, seriesInfo, queue, results, q, restartWanted }
+  let qT = null; let sT = null;
+  const subs = () => state.providers.providers;
+  async function render(el, seq) {
+    if (!state.providers || !state.lineup) { el.innerHTML = loadingCard(3); await loadCore(); if (stale(seq)) return; }
+    const id = route.parts[0];
+    if (!subs().length) { el.innerHTML = `<section class="card col g12"><h2 class="sec">Film and series channels need a TV subscription</h2><p class="muted">Add your subscription first. Its films and series then show up here.</p><div><a class="btn pri" href="#/subs/new">Add subscription</a></div></section>`; return; }
+    if (!f || f.key !== location.hash) {
+      if (id && id !== 'new') {
+        const ch = state.lineup.channels.find((c) => c.id === id && c.playlist);
+        if (!ch) { el.innerHTML = errorCard({ message: 'That channel isn’t on the TV any more.' }, "location.hash='#/lineup'"); return; }
+        f = { key: location.hash, id: ch.id, number: String(ch.number), name: ch.name, spec: JSON.parse(JSON.stringify(ch.playlist)), source: ch.playlist.titles && ch.playlist.titles.length ? 'pick' : 'cats', results: [], q: '' };
+      } else {
+        const q = route.q; const mode = q.get('mode') === 'series' ? 'SERIES' : 'FILM';
+        const pid = q.get('pid') && subs().some((p) => p.id === q.get('pid')) ? q.get('pid') : subs()[0].id;
+        const catId = q.get('cat');
+        f = { key: location.hash, id: null, number: String(nextNumber()), name: mode === 'SERIES' ? (q.get('name') || '') : (catId ? catId + ' films' : ''),
+          spec: { mode, providerId: pid, categories: catId != null && !q.get('pick') ? [catId] : [], titles: [], seriesId: q.get('series'), shuffle: mode === 'FILM' && !q.get('pick'), seed: 0, first: [], excluded: [] },
+          source: q.get('pick') ? 'pick' : 'cats', pickCat: q.get('pick') ? catId : null, results: [], q: '' };
+      }
+    }
+    paint();
+    await loadSide();
+  }
+  async function loadSide() {
+    const sp = f.spec;
     try {
-      const body = { version: 1, providers: providers.map((p) => ({
-        id: p.id || '', name: p.name, kind: p.kind, url: p.url, username: p.username || null,
-        password: p.password || null, logoUrl: p.logoUrl || null })) };
-      await api('/api/providers', { method: 'PUT', body: JSON.stringify(body) });
-      await loadProviders(); setMsg('Providers saved. Use "Import channels" to load their channel lists.', 'ok');
-    } catch (e) { setMsg('Save failed: ' + e.message, 'err'); }
-  };
-  async function loadProviders() {
-    try { providers = (await api('/api/providers')).providers; renderProviders(); } catch (e) { /* reported by status */ }
+      if (sp.mode === 'FILM' && !f.cats) { const r = await GET(`/api/catalog/${encodeURIComponent(sp.providerId)}/categories?type=film`); f.cats = r.categories; f.catLoaded = r.loaded; paint(); }
+      if (sp.mode === 'FILM' && f.source === 'pick' && !f.results.length) await search();
+      if (sp.mode === 'SERIES' && sp.seriesId && (!f.seriesInfo || f.seriesInfo.id !== sp.seriesId)) { const r = await GET(`/api/catalog/${encodeURIComponent(sp.providerId)}/series/${encodeURIComponent(sp.seriesId)}`); f.seriesInfo = { id: sp.seriesId, ...r }; paint(); }
+      if (sp.mode === 'SERIES' && !sp.seriesId) await search();
+    } catch (e) { if (e.status !== 401) toast(e.message, null, 6000); }
+    await loadQueue();
   }
-  loadProviders();
-
-  // ---- Home guard ----
-  let guard = null;
-  const fmtTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  function renderGuard() {
-    if (!guard) return;
-    const paused = guard.pausedUntil > guard.now;
-    let text;
-    if (!guard.guardEnabled) text = 'Off. Google TV behaves normally.';
-    else if (!guard.serviceEnabled) text = 'Wanted, but not active on this TV yet.';
-    else if (paused) text = `Paused until about ${fmtTime(Date.now() + (guard.pausedUntil - guard.now))}.`;
-    else text = 'On. Home and shortcut buttons stay inside Simple TV.';
-    $('#guardState').textContent = text;
-    $('#guardPause').disabled = !guard.guardEnabled;
-    $('#guardResume').disabled = !paused;
-    $('#guardToggle').textContent = guard.guardEnabled ? 'Turn guard off' : 'Turn guard on';
-    const hint = $('#guardSetupHint');
-    if (guard.guardEnabled && !guard.serviceEnabled) {
-      hint.hidden = false;
-      hint.innerHTML = guard.canSelfManage
-        ? 'The TV switched the guard off. Restart the TV, or turn the guard off and on again here.'
-        : 'One-time setup needed from a computer: <code>tools/tv-admin.sh guard-on</code> (see the deployment guide).';
-    } else hint.hidden = true;
-    const tvAt = (ms) => new Date(Date.now() + (ms - guard.now));
-    let pickerText;
-    if (!guard.youtubePickerSupported) pickerText = 'Not available: the TV needs Android 13 or newer.';
-    else if (!guard.youtubePickerLearnedAt) pickerText = 'Not learned yet.';
-    else pickerText = `Learned on ${tvAt(guard.youtubePickerLearnedAt).toLocaleDateString()}. ` +
-      (guard.youtubePickerAt ? `Last chose the first account at ${fmtTime(Date.now() + (guard.youtubePickerAt - guard.now))}.` : 'Not needed since.');
-    $('#pickerLine').textContent = pickerText;
-    $('#pickerRemember').disabled = !guard.youtubePickerSupported;
-    $('#pickerForget').disabled = !guard.youtubePickerLearnedAt;
-    $('#blockedList').textContent = guard.blockedKeys.length
-      ? guard.blockedKeys.map((k) => `${k.name.replace('KEYCODE_', '')} (${k.code})`).join(', ') : 'none';
-  }
-  async function loadGuard() { try { guard = await api('/api/guard'); renderGuard(); } catch (e) { /* status line reports */ } }
-  $('#guardPause').onclick = async () => { guard = await api('/api/guard/pause', { method: 'POST', body: JSON.stringify({ minutes: 15 }) }); renderGuard(); setMsg('Guard paused for 15 minutes.', 'ok'); };
-  $('#guardResume').onclick = async () => { guard = await api('/api/guard/resume', { method: 'POST', body: '{}' }); renderGuard(); setMsg('Guard resumed.', 'ok'); };
-  $('#pickerRemember').onclick = async () => {
+  async function loadQueue() {
+    const sp = f.spec; const my = (loadQueue.seq = (loadQueue.seq || 0) + 1);
+    const empty = sp.mode === 'SERIES' ? !sp.seriesId : !(sp.categories.length || sp.titles.length);
+    if (empty) { f.queue = null; paintQueue(); return; }
+    f.queueBusy = true; paintQueue();
     try {
-      guard = await api('/api/guard/youtube-picker/remember', { method: 'POST', body: '{}' }); renderGuard();
-      setMsg('Learned. From now on Simple TV chooses the first account on that screen.', 'ok');
-    } catch (e) { setMsg(e.message, 'err'); }
-  };
-  $('#pickerForget').onclick = async () => {
-    if (!confirm('Forget the YouTube account screen? Simple TV will stop answering it.')) return;
-    guard = await api('/api/guard/youtube-picker', { method: 'DELETE' }); renderGuard();
-    setMsg('Forgotten.', 'ok');
-  };
-  $('#guardToggle').onclick = async () => {
-    try {
-      await api('/api/settings', { method: 'PUT', body: JSON.stringify({ guardEnabled: !guard.guardEnabled }) });
-      await loadGuard(); setMsg(guard.guardEnabled ? 'Guard turned on.' : 'Guard turned off.', 'ok');
-    } catch (e) { setMsg('Could not change the guard: ' + e.message, 'err'); }
-  };
-
-  // ---- Remote buttons ----
-  async function setBlocked(code, block) {
-    const settings = await api('/api/settings');
-    const keys = new Set(settings.guardBlockedKeys || []);
-    if (block) keys.add(code); else keys.delete(code);
-    await api('/api/settings', { method: 'PUT', body: JSON.stringify({ guardBlockedKeys: [...keys] }) });
-    await loadGuard(); await loadKeys();
+      const saved = f.id && state.lineup.channels.find((c) => c.id === f.id);
+      const same = saved && JSON.stringify(saved.playlist) === JSON.stringify(sp);
+      const r = same ? await GET(`/api/channels/${encodeURIComponent(f.id)}/queue`) : await POST('/api/films/queue-preview', { playlist: sp });
+      if (my !== loadQueue.seq) return;
+      const hadProgress = !!f.progress;
+      f.queue = r; if (same) f.progress = r.resumeItemId ? r : null;
+      if (hadProgress !== !!f.progress) { f.queueBusy = false; paint(); return; }
+    } catch (e) { if (my === loadQueue.seq) f.queue = { error: e.message }; }
+    f.queueBusy = false; paintQueue();
   }
-  const RESULT_LABELS = {
-    ROUTE: 'channel control', GO_HOME: 'back to the TV', SWALLOW: 'blocked',
-    PASS: 'passed on', HANDLED: 'used by Simple TV', SYSTEM: 'passed on',
-  };
-  async function loadKeys() {
-    let rows = [];
-    try { rows = await api('/api/keys'); } catch (e) { return; }
-    const body = $('#keyRows');
-    body.innerHTML = rows.length ? '' : '<tr><td colspan="6" class="hint">No buttons pressed yet.</td></tr>';
-    rows.forEach((k) => {
-      const tr = document.createElement('tr');
-      let action = '';
-      if (k.returnsHome) action = '<span class="hint">Returns to the TV</span>';
-      else if (k.needed) action = '<span class="hint">Needed</span>';
-      else if (k.blockedByDefault) action = '<span class="hint">Blocked by default</span>';
-      else if (k.blocked) action = `<button data-unblock="${k.keyCode}">Unblock</button>`;
-      else if (k.blockable) action = `<button data-block="${k.keyCode}">Block</button>`;
-      tr.innerHTML = `<td data-label="Time">${fmtTime(k.atMillis)}</td><td data-label="Button">${esc(k.name.replace('KEYCODE_', ''))}</td>
-        <td data-label="Code">${k.keyCode}</td><td data-label="Seen by">${k.source === 'guard' ? 'Guard' : 'Simple TV'}</td>
-        <td data-label="Result">${esc(RESULT_LABELS[k.action] || k.action.toLowerCase())}</td><td>${action}</td>`;
-      body.appendChild(tr);
-    });
+  async function search() {
+    const sp = f.spec; const type = sp.mode === 'SERIES' ? 'series' : 'film';
+    const qs = new URLSearchParams({ type, limit: 30 });
+    if (f.q.trim()) qs.set('q', f.q.trim()); else if (f.pickCat != null && type === 'film') qs.set('category', f.pickCat);
+    const my = (search.seq = (search.seq || 0) + 1);
+    const r = await GET(`/api/catalog/${encodeURIComponent(sp.providerId)}/items?${qs}`);
+    if (my !== search.seq) return;
+    f.results = r.page.items; f.resultsTotal = r.page.total; f.loaded = r.loaded; paintResults();
   }
-  $('#keyRows').addEventListener('click', async (e) => {
-    const b = e.target.closest('button'); if (!b) return;
+  const titleOf = () => f.spec.mode === 'SERIES' ? (f.id ? 'Edit series channel' : 'New series channel') : (f.id ? 'Edit film channel' : 'New film channel');
+  function paint() {
+    const el = $('#content'); if (!el || route.name !== 'film') return;
+    const sp = f.spec; const isFilm = sp.mode === 'FILM';
+    setTitle(titleOf(), isFilm ? 'A numbered channel that plays films one after another.' : 'Plays one series, episode by episode, and remembers where it stopped.');
+    const num = parseInt(f.number, 10);
+    const clash = state.lineup.channels.find((c) => c.number === num && c.id !== f.id);
+    const catsShown = f.cats ? (f.catsAll ? f.cats : f.cats.slice(0, 8).concat(f.cats.filter((c, i) => i >= 8 && sp.categories.includes(c.id)))) : [];
+    el.innerHTML = `
+      ${f.id ? '' : `<div class="seg" role="radiogroup"><button data-mode="FILM" class="${isFilm ? 'on' : ''}" role="radio" aria-checked="${isFilm}">Film channel</button><button data-mode="SERIES" class="${isFilm ? '' : 'on'}" role="radio" aria-checked="${!isFilm}">Series channel</button></div>`}
+      <div class="cols">
+        <div class="col g16">
+          <section class="card col g16">
+            ${subs().length > 1 ? `<label class="field"><span>Subscription</span><span class="inp"><select id="fPid">${subs().map((p) => `<option value="${esc(p.id)}" ${p.id === sp.providerId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></span></label>` : ''}
+            <div class="f g12" style="align-items:flex-start"><label class="field numfield"><span>Number</span><span class="inp ${clash ? 'bad' : ''}"><input id="fNum" inputmode="numeric" maxlength="4" value="${esc(f.number)}"></span></label><label class="field grow"><span>Name on the TV</span><span class="inp"><input id="fName" value="${esc(f.name)}" dir="auto" maxlength="60" placeholder="${isFilm ? 'For example, Saturday Films' : 'The series name'}"></span></label></div>
+            ${clash ? `<div class="hint err">Number ${num} is already ${esc(clash.name)}. Pick another number.</div>` : ''}
+            ${isFilm ? `
+              <div class="field"><span>Where the films come from</span><div class="seg full" role="radiogroup"><button data-src="cats" class="${f.source === 'cats' ? 'on' : ''}" role="radio" aria-checked="${f.source === 'cats'}">Categories</button><button data-src="pick" class="${f.source === 'pick' ? 'on' : ''}" role="radio" aria-checked="${f.source === 'pick'}">Hand-picked</button></div></div>
+              ${f.source === 'cats' ? (f.cats ? (f.cats.length ? `<div class="chips">${catsShown.map((c) => `<button class="chip ${sp.categories.includes(c.id) ? 'on' : ''}" data-fcat="${esc(c.id)}" aria-pressed="${sp.categories.includes(c.id)}"><span dir="auto">${esc(c.name)}</span> <span class="c">${fmtN(c.count)}</span></button>`).join('')}${!f.catsAll && f.cats.length > 8 ? '<button class="chip" id="moreFCats">+ More categories</button>' : ''}</div>` : `<p class="muted">${f.catLoaded ? 'This subscription has no films.' : 'The film list isn’t on the TV yet. Refresh the subscription first.'}</p>`) : '<div class="skel" style="height:44px"></div>')
+                : `<label class="inp big">${ico('search', 20)}<span class="sr">Search films</span><input id="fQ" type="search" value="${esc(f.q)}" placeholder="Search films to add" autocomplete="off" dir="auto"></label><div id="fResults" class="col g4"></div>`}
+              ${f.source === 'cats' ? `<div class="field"><span>Order</span><div class="seg full" role="radiogroup"><button data-shuffle="0" class="${sp.shuffle ? '' : 'on'}" role="radio" aria-checked="${!sp.shuffle}">In order</button><button data-shuffle="1" class="${sp.shuffle ? 'on' : ''}" role="radio" aria-checked="${sp.shuffle}">Shuffled</button></div><span class="hint">Shuffled mixes the films once. The TV then plays them one after another.</span></div>` : ''}`
+            : `
+              ${sp.seriesId && f.seriesInfo ? `<div class="f g12 card" style="padding:12px"><div class="poster sm"><span dir="auto">${esc(f.name)}</span></div><div class="grow"><div style="font-weight:700" dir="auto">${esc(f.seriesName || f.name)}</div><div class="cap">${plural(f.seriesInfo.seasons, 'season')} · ${plural(f.seriesInfo.episodes, 'episode')}</div></div>${f.id ? '<span class="pill ok">Selected</span>' : '<button class="btn ghost" id="otherSeries">Choose another</button>'}</div>`
+                : sp.seriesId ? '<div class="skel" style="height:80px"></div>' : `<label class="field"><span>Series</span><span class="inp big">${ico('search', 20)}<input id="fQ" type="search" value="${esc(f.q)}" placeholder="Search series" autocomplete="off" dir="auto"></span></label><div id="fResults" class="col g4"></div>`}
+              ${f.progress ? `<div class="f fw g12 card" style="padding:12px"><span class="icobox ok">${ico('check', 20, 2.2)}</span><div class="grow" style="min-width:160px"><div style="font-weight:600">Stopped at ${esc(f.progress.resume.split(' · ')[0].replace(/^S/, 's'))}</div><div class="cap">The TV picks up from here next time.</div></div><button class="btn" id="restart">Start again</button></div>` : ''}`}
+          </section>
+          <div class="f fw g8">
+            <button class="btn pri" id="fSave" ${clash ? 'disabled' : ''}>${f.id ? 'Save changes' : 'Add as channel ' + esc(num > 0 ? num : '')}</button>
+            <button class="btn" id="fPlay">${ico('play', 18)}Play first on TV</button>
+            <a class="btn ghost" href="${f.id ? '#/lineup' : '#/add/catalog?type=' + (isFilm ? 'film' : 'series')}">Cancel</a>
+          </div>
+          <div class="hint err hide" id="fErr"></div>
+        </div>
+        <section class="card col g8" id="queuePanel"></section>
+      </div>`;
+    bind(el); paintResults(); paintQueue();
+  }
+  function paintResults() {
+    const box = $('#fResults'); if (!box) return;
+    const sp = f.spec;
+    if (!f.results.length) { box.innerHTML = `<p class="cap">${f.q.trim() ? 'Nothing matches. Try fewer letters.' : f.loaded === false ? 'The list isn’t on the TV yet. Refresh the subscription first.' : ''}</p>`; return; }
+    box.innerHTML = f.results.map((it) => sp.mode === 'SERIES'
+      ? `<button class="chk" style="border:0;background:none;width:100%;text-align:start" data-pick-series="${esc(it.id)}" data-name="${esc(it.name)}">${logoBox(it.name, it.logo)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span><span class="cap">${esc([it.year, it.group].filter(Boolean).join(' · '))}</span></span>${ico('right', 18)}</button>`
+      : `<label class="chk"><input type="checkbox" data-title="${esc(it.id)}" ${sp.titles.includes(it.id) ? 'checked' : ''}>${logoBox(it.name, it.logo)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span><span class="cap">${esc([it.year, it.group].filter(Boolean).join(' · '))}</span></span></label>`).join('')
+      + (f.resultsTotal > f.results.length ? `<div class="cap" style="padding:4px 8px">Showing ${fmtN(f.results.length)} of ${fmtN(f.resultsTotal)}. Search to find more.</div>` : '');
+    $$('[data-title]', box).forEach((c) => c.onchange = () => { const id = c.dataset.title; const t = f.spec.titles; if (c.checked) { if (!t.includes(id)) t.push(id); } else t.splice(t.indexOf(id), 1); loadQueue(); });
+    $$('[data-pick-series]', box).forEach((b) => b.onclick = () => { f.spec.seriesId = b.dataset.pickSeries; f.seriesName = b.dataset.name; if (!f.name.trim()) f.name = b.dataset.name.slice(0, 60); f.seriesInfo = null; paint(); loadSide(); });
+  }
+  const SHOW = 12;
+  function paintQueue() {
+    const el = $('#queuePanel'); if (!el) return;
+    const sp = f.spec; const q = f.queue; const isFilm = sp.mode === 'FILM';
+    let sub = ''; let more = '';
+    if (q && !q.error) {
+      if (isFilm) {
+        const from = sp.titles.length ? 'your hand-picked list' : listWords(sp.categories.map((id) => (f.cats || []).find((c) => c.id === id)?.name || id));
+        sub = `${plural(q.total, 'film')} from ${from}${sp.shuffle && !sp.titles.length ? ' · shuffled' : ''}`;
+        more = q.total > SHOW ? `…and ${fmtN(q.total - SHOW)} more. Use the arrows to change what plays first.` : 'Use the arrows to change what plays first.';
+      } else {
+        const at = q.resumeItemId ? q.entries.findIndex((e) => e.id === q.resumeItemId) : 0;
+        const left = q.total - Math.max(0, at);
+        sub = `${plural(left, 'episode')} left · then it starts again`;
+        more = (entries => entries > SHOW ? `…and ${fmtN(entries - SHOW)} more. ` : '')(q.entries.length - Math.max(0, at)) + 'Episodes you’ve seen are left out of the queue.';
+      }
+    }
+    const startAt = q && q.resumeItemId ? Math.max(0, q.entries.findIndex((e) => e.id === q.resumeItemId)) : 0;
+    const entries = q && q.entries ? (isFilm ? q.entries : q.entries.slice(startAt)) : [];
+    el.innerHTML = `<div class="f g8"><div class="grow"><h2 class="sec">What will play</h2><div class="cap">${esc(sub)}</div></div>${f.queueBusy ? '<span class="spin"></span>' : ''}</div>
+      ${q && q.error ? `<p class="hint err">${esc(q.error)}</p>` : !q ? `<p class="muted">${isFilm ? 'Pick a category or some films to see the queue.' : 'Pick a series to see its episodes.'}</p>`
+        : !entries.length ? '<p class="muted">Nothing to play yet.</p>'
+        : `<div class="list">${entries.slice(0, SHOW).map((e, i) => `<div class="qitem"><span class="cap i">${i + 1}</span><div class="grow"><div dir="auto" class="ell" style="font-weight:600">${esc(e.title)}</div><div class="cap">${esc(i === 0 && !isFilm && q.resumeItemId ? 'Plays next · ' + (e.detail || '') : (e.detail || ''))}</div></div>${isFilm ? `<button class="ibtn" data-first="${esc(e.id)}" aria-label="Play ${esc(e.title)} first" title="Play first" ${i === 0 ? 'disabled' : ''}>${ico('up', 18)}</button><button class="ibtn" data-skip="${esc(e.id)}" aria-label="Leave out ${esc(e.title)}" title="Leave out">${ico('close', 18)}</button>` : ''}</div>`).join('')}</div>`}
+      <div class="cap">${esc(more)}</div>
+      ${isFilm && sp.excluded.length ? `<button class="btn ghost" id="unskip" style="align-self:flex-start">Put back ${plural(sp.excluded.length, 'left-out film')}</button>` : ''}`;
+    $$('[data-first]', el).forEach((b) => b.onclick = () => { const id = b.dataset.first; if (sp.titles.length) { sp.titles.splice(sp.titles.indexOf(id), 1); sp.titles.unshift(id); } else { sp.first = [id].concat(sp.first.filter((x) => x !== id)); } loadQueue(); });
+    $$('[data-skip]', el).forEach((b) => b.onclick = () => { const id = b.dataset.skip; if (sp.titles.includes(id)) sp.titles.splice(sp.titles.indexOf(id), 1); else sp.excluded.push(id); sp.first = sp.first.filter((x) => x !== id); paintResults(); loadQueue(); });
+    const u = $('#unskip', el); if (u) u.onclick = () => { sp.excluded = []; loadQueue(); };
+  }
+  function bind(el) {
+    const sp = f.spec;
+    $$('[data-mode]', el).forEach((b) => b.onclick = () => { if (sp.mode === b.dataset.mode) return; sp.mode = b.dataset.mode; sp.categories = []; sp.titles = []; sp.seriesId = null; sp.first = []; sp.excluded = []; sp.shuffle = sp.mode === 'FILM'; f.name = ''; f.q = ''; f.results = []; f.seriesInfo = null; f.queue = null; f.progress = null; paint(); loadSide(); });
+    const pid = $('#fPid', el); if (pid) pid.onchange = () => { sp.providerId = pid.value; sp.categories = []; sp.titles = []; sp.seriesId = null; f.cats = null; f.results = []; f.queue = null; paint(); loadSide(); };
+    const n = $('#fNum', el); n.oninput = () => { n.value = n.value.replace(/\D/g, ''); f.number = n.value; }; n.onchange = paint;
+    $('#fName', el).oninput = (e) => { f.name = e.target.value; };
+    $$('[data-src]', el).forEach((b) => b.onclick = () => { if (f.source === b.dataset.src) return; f.source = b.dataset.src; if (f.source === 'pick') { sp.categories = []; } else { sp.titles = []; } paint(); loadSide(); });
+    $$('[data-fcat]', el).forEach((b) => b.onclick = () => { const id = b.dataset.fcat; const c = sp.categories; if (c.includes(id)) c.splice(c.indexOf(id), 1); else c.push(id); paint(); loadQueue(); });
+    const mf = $('#moreFCats', el); if (mf) mf.onclick = () => { f.catsAll = true; paint(); };
+    $$('[data-shuffle]', el).forEach((b) => b.onclick = () => { sp.shuffle = b.dataset.shuffle === '1'; if (!sp.shuffle) sp.seed = 0; paint(); loadQueue(); });
+    const q = $('#fQ', el); if (q) q.oninput = () => { f.q = q.value; clearTimeout(sT); sT = setTimeout(search, 250); };
+    const os = $('#otherSeries', el); if (os) os.onclick = () => { sp.seriesId = null; f.seriesInfo = null; f.queue = null; paint(); loadSide(); };
+    const rs = $('#restart', el); if (rs) rs.onclick = async () => { try { f.queue = await saving(() => POST(`/api/channels/${encodeURIComponent(f.id)}/restart`), 'It starts from the first episode next time.'); f.progress = null; paint(); } catch (e) { /* toast */ } };
+    $('#fPlay', el).onclick = () => playOnTv(f.id && !changed() ? { channelId: f.id } : { playlist: sp, name: f.name.trim() || (sp.mode === 'SERIES' ? 'Series' : 'Films') }, f.name.trim());
+    $('#fSave', el).onclick = save;
+  }
+  function changed() { const saved = f.id && state.lineup.channels.find((c) => c.id === f.id); return !saved || JSON.stringify(saved.playlist) !== JSON.stringify(f.spec); }
+  async function save() {
+    const err = $('#fErr'); const num = parseInt(f.number, 10);
+    const body = { id: f.id, number: num > 0 ? num : null, name: f.name.trim(), playlist: f.spec };
     try {
-      if (b.dataset.block) { await setBlocked(+b.dataset.block, true); setMsg('Button blocked.', 'ok'); }
-      if (b.dataset.unblock) { await setBlocked(+b.dataset.unblock, false); setMsg('Button unblocked.', 'ok'); }
-    } catch (err) { setMsg('Could not update blocked buttons: ' + err.message, 'err'); }
-  });
-  $('#keysRefresh').onclick = loadKeys;
-  $('#keysClear').onclick = async () => { await api('/api/keys/clear', { method: 'POST', body: '{}' }); loadKeys(); };
-  loadGuard(); loadKeys();
+      const r = await saving(() => POST('/api/channels/film', body), null);
+      state.lineup = r.lineup; snapshot(); f = null;
+      toast(body.id ? "Saved. It's on the TV now." : `${r.channel.name} is channel ${r.channel.number} now.`);
+      go('#/lineup');
+    } catch (e) { if ((e.status === 400 || e.status === 409) && err) { err.textContent = e.message; err.classList.remove('hide'); } }
+  }
+  return { render };
+})();
 
-  window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
-  load();
+/* ---------- TV settings ---------- */
+const KEY_NAMES = { HOME: 'Home', BACK: 'Back', ASSIST: 'Assistant', VOICE_ASSIST: 'Assistant', SEARCH: 'Assistant', MENU: 'Menu', SETTINGS: 'Settings', GUIDE: 'Guide', TV: 'TV', ALL_APPS: 'Apps', BUTTON_1: 'App button', DPAD_UP: 'Up', DPAD_DOWN: 'Down', DPAD_LEFT: 'Left', DPAD_RIGHT: 'Right', DPAD_CENTER: 'OK', CHANNEL_UP: 'Channel up', CHANNEL_DOWN: 'Channel down', VOLUME_UP: 'Volume up', VOLUME_DOWN: 'Volume down', VOLUME_MUTE: 'Mute', POWER: 'Power', INFO: 'Info' };
+const keyName = (raw) => { const k = String(raw || '').replace(/^KEYCODE_/, ''); return KEY_NAMES[k] || cap1(k.toLowerCase().replace(/_/g, ' ')); };
+screens.settings = (() => {
+  let pinMode = null; // null | 'set'
+  let pinDraft = '';
+  let pauseTick = null;
+  async function render(el, seq) {
+    if (!state.settings || !state.status) { el.innerHTML = loadingCard(4); await loadCore(); if (stale(seq)) return; }
+    else GET('/api/settings').then((s) => { state.settings = s; }).catch(() => {});
+    paint();
+    const [guard, keys, qr] = await Promise.all([GET('/api/guard').catch(() => null), GET('/api/keys').catch(() => []), state.qr ? state.qr : GET('/api/qr').catch(() => null)]);
+    if (stale(seq)) return;
+    state.guard = guard; state.keys = keys; state.qr = qr; paint();
+  }
+  const S = () => state.settings;
+  async function setSetting(patch, done) {
+    try { state.settings = await saving(() => PUT('/api/settings', patch), done); paint(); } catch (e) { paint(); }
+  }
+  function qrSvg() {
+    const q = state.qr; if (!q) return '';
+    let d = ''; q.rows.forEach((row, y) => { for (let x = 0; x < row.length; x++) if (row[x] === '1') d += `M${x} ${y}h1v1h-1z`; });
+    return `<svg viewBox="-1 -1 ${q.size + 2} ${q.size + 2}" shape-rendering="crispEdges" role="img" aria-label="QR code for this page"><path d="${d}" fill="currentColor"/></svg>`;
+  }
+  function guardCard() {
+    const g = state.guard;
+    if (!g) return `<section class="card col g12"><h2 class="sec">Home guard</h2><div class="skel"></div></section>`;
+    const paused = g.pausedUntil > g.now; const left = Math.max(0, g.pausedUntil - g.now - (Date.now() - (g.fetchedAt || Date.now())));
+    const word = !g.guardEnabled ? 'Off' : !g.serviceEnabled ? 'Not active' : paused ? 'Paused' : 'On';
+    const pc = !g.guardEnabled ? 'info' : !g.serviceEnabled ? 'err' : paused ? 'warn' : 'ok';
+    const mm = Math.floor(left / 60000), ss = Math.floor((left % 60000) / 1000);
+    return `<section class="card col g12">
+      <div class="f g12"><h2 class="sec grow">Home guard</h2><span class="pill ${pc}"><span class="dot"></span>${word}</span></div>
+      <p class="muted">Keeps the TV on Simple TV. The Home button comes back here, and the assistant and app buttons do nothing.</p>
+      ${g.guardEnabled && !g.serviceEnabled ? `<p class="hint err">${g.canSelfManage ? 'The TV switched the guard off. Restart the TV, or turn the guard off and on again here.' : 'It needs a one-time setup from a computer (tools/tv-admin.sh guard-on).'}</p>` : ''}
+      ${paused ? `<div class="f fw g12 card" style="padding:12px"><div class="grow" style="min-width:160px"><div style="font-weight:600" id="pauseLeft">Paused. ${mm} min ${String(ss).padStart(2, '0')} s left</div><div class="cap">You can use the TV's own settings, like Wi-Fi, until then.</div></div><button class="btn pri" id="gResume">Resume now</button></div>` : ''}
+      <div class="f fw g8">${g.guardEnabled && !paused ? '<button class="btn" id="gPause">Pause for 15 minutes</button>' : ''}<button class="btn" id="gToggle">${g.guardEnabled ? 'Turn off' : 'Turn on'}</button></div>
+      <details><summary>${ico('right', 18)}YouTube account screen</summary><div class="col g8">
+        <p class="muted">When YouTube asks who is watching, Simple TV can choose the first account. Show that screen on the TV, then press Remember.</p>
+        <p class="cap">${!g.youtubePickerSupported ? 'Needs Android 13 or newer on the TV.' : g.youtubePickerLearnedAt ? `Remembered ${esc(whenPast(Date.now() - (g.now - g.youtubePickerLearnedAt)))}.${g.youtubePickerAt ? ' Last chose the first account ' + esc(whenPast(Date.now() - (g.now - g.youtubePickerAt))) + '.' : ''}` : 'Not remembered yet.'}</p>
+        <div class="f fw g8"><button class="btn" id="pkRemember" ${g.youtubePickerSupported ? '' : 'disabled'}>Remember this screen</button><button class="btn ghost" id="pkForget" ${g.youtubePickerLearnedAt ? '' : 'disabled'}>Forget it</button></div>
+      </div></details>
+    </section>`;
+  }
+  function keysCard() {
+    const rows = state.keys || [];
+    const seen = new Set(); const latest = rows.filter((k) => !seen.has(k.keyCode) && seen.add(k.keyCode)).slice(0, 8);
+    const result = (k) => k.returnsHome ? ['ok', 'Back to Simple TV'] : (k.blocked || k.blockedByDefault || k.action === 'SWALLOW') ? ['ok', 'Blocked'] : k.needed || k.action === 'ROUTE' || k.action === 'HANDLED' ? ['info', 'Used by Simple TV'] : null;
+    return `<section class="card col g8">
+      <div class="f g12"><div class="grow"><h2 class="sec">Remote buttons</h2><p class="cap">Press a button on the remote, then refresh.</p></div><button class="btn" id="kRefresh">${ico('refresh', 18)}Refresh</button></div>
+      ${latest.length ? `<div class="list">${latest.map((k) => { const r = result(k);
+        const extra = k.action === 'PASS' || k.action === 'SYSTEM' ? ' · opened another app' : '';
+        return `<div class="li"><div class="grow"><div style="font-weight:600">${esc(keyName(k.name))}</div><div class="cap">${esc(cap1(ago(k.atMillis)))}${extra}</div></div>${k.blocked ? `<button class="btn" data-unblock="${k.keyCode}">Unblock</button>` : r ? `<span class="pill ${r[0]}"><span class="dot"></span>${r[1]}</span>` : k.blockable ? `<button class="btn" data-block="${k.keyCode}">Block this button</button>` : '<span class="pill info">Passed on</span>'}</div>`; }).join('')}</div>`
+        : '<p class="muted">No buttons pressed yet.</p>'}
+      ${latest.length ? '<button class="btn ghost" id="kClear" style="align-self:flex-start">Clear list</button>' : ''}
+    </section>`;
+  }
+  function paint() {
+    const el = $('#content'); if (!el || route.name !== 'settings') return;
+    const s = S(); const st = state.status; const theme = store.get('stv.theme', 'system');
+    const lang = s.language || '';
+    const host = st.configUrl;
+    el.innerHTML = `<div class="g2">
+      <div class="col g24">
+        <section class="card col g12"><h2 class="sec">TV language</h2>
+          <div class="seg full" role="radiogroup">${[['', 'Same as the TV'], ['en', 'English'], ['ar', 'العربية']].map(([k, l]) => `<button data-lang="${k}" class="${lang === k ? 'on' : ''}" role="radio" aria-checked="${lang === k}" ${k === 'ar' ? 'lang="ar" dir="rtl"' : ''}>${l}</button>`).join('')}</div>
+          <p class="hint">Changes the words on the TV screen, like the channel banner. This page stays in English.</p></section>
+        <section class="card col g12"><h2 class="sec">Appearance of this page</h2>
+          <div class="seg full" role="radiogroup">${[['system', 'Same as my device'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-theme="${k}" class="${theme === k ? 'on' : ''}" role="radio" aria-checked="${theme === k}">${l}</button>`).join('')}</div>
+          <p class="hint">Applies on this phone or computer only.</p></section>
+        <section class="card col g12"><h2 class="sec">Daily channel list update</h2>
+          <p class="muted">The TV refreshes your subscriptions' channel lists once a day.</p>
+          <label class="field"><span>Update at</span><span class="inp" style="max-width:200px"><input id="rTime" type="time" value="${esc(s.catalogRefreshTime || '21:00')}" step="300"></span></label>
+          <p class="hint">Pick a time when nobody is watching. You can also refresh any subscription now.${st.nextRefresh ? ' Next update ' + esc(whenNext(st.nextRefresh)) + '.' : ''}</p></section>
+        <section class="card col g12"><h2 class="sec">How YouTube plays</h2>
+          ${[['EMBEDDED', 'Inside Simple TV', 'Simplest. Shows ads, and doesn’t use any account.'], ['YOUTUBE_APP', 'In the YouTube app', 'Uses the account signed in on the TV. With Premium there are no ads. Up and down still change channel.']].map(([k, t, d]) => `<button class="opt ${s.youtubePlayback === k ? 'on' : ''}" data-yt="${k}" role="radio" aria-checked="${s.youtubePlayback === k}"><span class="radio"></span><div><div style="font-weight:600">${t}</div><div class="muted">${d}</div></div></button>`).join('')}
+          <details ${st.hasYoutubeKey ? '' : ''}><summary>${ico('right', 18)}YouTube key (optional)</summary><div class="col g8">
+            <p class="muted">With your own free YouTube Data API key, links that start with @ work and the page can tell whether a channel is live. It stays on the TV and is never shown again.</p>
+            ${st.hasYoutubeKey ? `<div class="f fw g8"><span class="pill ok">${ico('check', 14, 2.4)}Saved</span><button class="btn ghost" id="keyRemove">Remove key</button></div>` : ''}
+            <div class="f fw g8"><label class="inp grow" style="min-width:200px"><span class="sr">YouTube key</span><input id="ytKey" type="password" autocomplete="off" spellcheck="false" dir="ltr" placeholder="${st.hasYoutubeKey ? 'Paste a new key to replace it' : 'Paste your key'}"></label><button class="btn" id="keySave">Save key</button></div>
+          </div></details></section>
+        <section class="card col g12">
+          <div class="f g12"><h2 class="sec grow" id="pinH">Lock this page with a PIN</h2><button class="sw ${st.pinSet ? 'on' : ''}" id="pinSw" role="switch" aria-checked="${st.pinSet}" aria-labelledby="pinH"></button></div>
+          <p class="muted">${st.pinSet ? 'This page asks for the PIN. It also shows on the TV’s settings screen (press MENU on the remote).' : 'Anyone on your Wi-Fi can open this page today. A PIN of 4 to 6 digits keeps it to you. It also shows on the TV’s settings screen.'}</p>
+          ${pinMode ? `<label class="field"><span>${st.pinSet ? 'New PIN' : 'Choose a PIN'}</span>
+              <div class="pin" aria-hidden="true">${Array.from({ length: 6 }, (_, i) => `<span class="${i === pinDraft.length ? 'cur' : ''}">${i < pinDraft.length ? '•' : ''}</span>`).join('')}</div>
+              <input id="pinIn" class="sr" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" value="${esc(pinDraft)}" aria-label="PIN, 4 to 6 digits"></label>
+            <div class="f fw g8"><button class="btn pri" id="pinSave" ${pinDraft.length >= 4 ? '' : 'disabled'}>Save PIN</button><button class="btn" id="pinCancel">Cancel</button></div>`
+            : st.pinSet ? '<div><button class="btn" id="pinChange">Change PIN</button></div>' : ''}
+        </section>
+      </div>
+      <div class="col g24">
+        ${guardCard()}
+        ${keysCard()}
+        <section class="card f g16 fw">
+          <div class="qr">${qrSvg()}</div>
+          <div class="grow col g8" style="min-width:180px"><h2 class="sec">This TV</h2><div>Open this page on any phone on the same Wi-Fi:</div><div style="font-weight:700" dir="ltr">${esc(host)}</div><div class="cap">Simple TV version ${esc(st.appVersion)}</div>
+          ${st.pinSet && state.token ? '<div><button class="btn ghost" id="signOut" style="padding:0">Sign out on this device</button></div>' : ''}</div>
+        </section>
+      </div>
+    </div>`;
+    bind(el);
+  }
+  function bind(el) {
+    $$('[data-lang]', el).forEach((b) => b.onclick = () => setSetting({ language: b.dataset.lang }, 'Saved. The TV uses it now.'));
+    $$('[data-theme]', el).forEach((b) => b.onclick = () => { store.set('stv.theme', b.dataset.theme === 'system' ? null : b.dataset.theme); applyTheme(); paint(); });
+    const t = $('#rTime', el); t.onchange = () => { if (t.value) setSetting({ catalogRefreshTime: t.value }, `Saved. The lists update at ${clock(new Date('2000-01-01T' + t.value).getTime())} each day.`).then(() => GET('/api/status').then((s) => { state.status = s; paint(); })); };
+    $$('[data-yt]', el).forEach((b) => b.onclick = () => setSetting({ youtubePlayback: b.dataset.yt }));
+    $('#keySave', el).onclick = async () => { const v = $('#ytKey').value.trim(); if (!v) return; try { await saving(() => PUT('/api/youtube/key', { key: v }), 'Saved. @ links work now.'); state.status = await GET('/api/status'); paint(); } catch (e) { /* toast */ } };
+    const kr = $('#keyRemove', el); if (kr) kr.onclick = async () => { try { await saving(() => PUT('/api/youtube/key', { key: '' }), 'Removed.'); state.status = await GET('/api/status'); paint(); } catch (e) { /* toast */ } };
+    $('#pinSw', el).onclick = async () => {
+      if (!state.status.pinSet) { pinMode = 'set'; pinDraft = ''; paint(); $('#pinIn').focus(); return; }
+      const ok = await dialog({ title: 'Remove the PIN?', text: 'Anyone on your Wi-Fi will be able to change the TV from this page.', ok: 'Remove PIN', danger: true });
+      if (!ok) return;
+      try { await saving(() => PUT('/api/auth/pin', { pin: '' }), 'PIN removed.'); state.token = null; store.sset('stv.token', null); state.status = await GET('/api/status'); paint(); } catch (e) { /* toast */ }
+    };
+    const pc = $('#pinChange', el); if (pc) pc.onclick = () => { pinMode = 'set'; pinDraft = ''; paint(); $('#pinIn').focus(); };
+    const pi = $('#pinIn', el);
+    if (pi) {
+      pi.closest('label').onclick = () => pi.focus();
+      pi.oninput = () => { pinDraft = pi.value.replace(/\D/g, '').slice(0, 6); paint(); const again = $('#pinIn'); again.focus(); again.setSelectionRange(pinDraft.length, pinDraft.length); };
+      pi.onkeydown = (e) => { if (e.key === 'Enter' && pinDraft.length >= 4) $('#pinSave').click(); };
+      $('#pinCancel', el).onclick = () => { pinMode = null; pinDraft = ''; paint(); };
+      $('#pinSave', el).onclick = async () => {
+        try {
+          const r = await saving(() => PUT('/api/auth/pin', { pin: pinDraft }), 'PIN saved. It also shows on the TV\u2019s settings screen.');
+          state.token = r.token; store.sset('stv.token', r.token); pinMode = null; pinDraft = ''; state.status = await GET('/api/status'); paint();
+        } catch (e) { /* toast */ }
+      };
+    }
+    const so = $('#signOut', el); if (so) so.onclick = async () => { try { await POST('/api/auth/logout'); } catch (e) { /* ignore */ } state.token = null; store.sset('stv.token', null); showLogin(); };
+    const g = state.guard;
+    const gp = $('#gPause', el); if (gp) gp.onclick = async () => { try { state.guard = await saving(() => POST('/api/guard/pause', { minutes: 15 }), 'Paused for 15 minutes.'); state.guard.fetchedAt = Date.now(); paint(); } catch (e) { /* toast */ } };
+    const gr = $('#gResume', el); if (gr) gr.onclick = async () => { try { state.guard = await saving(() => POST('/api/guard/resume'), 'The guard is on again.'); state.guard.fetchedAt = Date.now(); paint(); } catch (e) { /* toast */ } };
+    const gt = $('#gToggle', el); if (gt) gt.onclick = async () => {
+      if (g.guardEnabled && !(await dialog({ title: 'Turn the home guard off?', text: 'The Home and app buttons will leave Simple TV again, and your viewer may get lost in Google TV.', ok: 'Turn off', danger: true }))) return;
+      await setSetting({ guardEnabled: !g.guardEnabled }, g.guardEnabled ? 'The guard is off.' : 'The guard is on.');
+      state.guard = await GET('/api/guard'); state.guard.fetchedAt = Date.now(); paint();
+    };
+    const pr = $('#pkRemember', el); if (pr) pr.onclick = async () => { try { state.guard = await saving(() => POST('/api/guard/youtube-picker/remember'), 'Remembered. Simple TV now chooses the first account on that screen.'); paint(); } catch (e) { /* toast */ } };
+    const pf = $('#pkForget', el); if (pf) pf.onclick = async () => { if (!(await dialog({ title: 'Forget the account screen?', text: 'Simple TV will stop answering YouTube’s account screen.', ok: 'Forget it', danger: true }))) return; try { state.guard = await saving(() => DEL('/api/guard/youtube-picker'), 'Forgotten.'); paint(); } catch (e) { /* toast */ } };
+    $('#kRefresh', el).onclick = async () => { try { state.keys = await GET('/api/keys'); paint(); } catch (e) { /* offline */ } };
+    const kc = $('#kClear', el); if (kc) kc.onclick = async () => { try { state.keys = await POST('/api/keys/clear'); paint(); } catch (e) { /* offline */ } };
+    const setBlocked = async (code, block) => {
+      const keys = new Set(state.settings.guardBlockedKeys || []); if (block) keys.add(code); else keys.delete(code);
+      await setSetting({ guardBlockedKeys: [...keys] }, block ? 'Blocked. That button does nothing now.' : 'Unblocked.');
+      state.keys = await GET('/api/keys'); paint();
+    };
+    $$('[data-block]', el).forEach((b) => b.onclick = () => setBlocked(+b.dataset.block, true));
+    $$('[data-unblock]', el).forEach((b) => b.onclick = () => setBlocked(+b.dataset.unblock, false));
+    clearInterval(pauseTick);
+    if (g && g.pausedUntil > g.now) {
+      g.fetchedAt = g.fetchedAt || Date.now();
+      pauseTick = setInterval(() => {
+        const el2 = $('#pauseLeft'); if (!el2 || route.name !== 'settings') { clearInterval(pauseTick); return; }
+        const left = g.pausedUntil - g.now - (Date.now() - g.fetchedAt);
+        if (left <= 0) { clearInterval(pauseTick); GET('/api/guard').then((x) => { state.guard = x; paint(); }); return; }
+        el2.textContent = `Paused. ${Math.floor(left / 60000)} min ${String(Math.floor((left % 60000) / 1000)).padStart(2, '0')} s left`;
+      }, 1000);
+    }
+  }
+  return { render };
+})();
+
+/* ---------- First run ---------- */
+screens.first = (() => {
+  let form = { name: '', kind: 'XTREAM', url: '', username: '', password: '' };
+  let picked = new Set(); let pollT = null; let err = '';
+  function frame(step, inner) {
+    const st = (n) => n === step ? 'on' : n < step ? 'done' : '';
+    $('#app').className = 'app ' + currentSize;
+    $('#app').innerHTML = `<div class="solo grow"><div class="center col g24" style="padding-inline:${currentSize === 'desktop' ? '40px' : '8px'}">
+      <div class="f g12"><div class="logo-mark">TV</div><div class="sec grow">Set up Simple TV</div><a class="btn ghost" href="#/home">Skip</a></div>
+      <div class="f fw g16" aria-label="Steps">${['Connect', 'Pick channels', 'Watch'].map((l, i) => `<div class="step ${st(i + 1)}" ${i + 1 === step ? 'aria-current="step"' : ''}><span class="b">${i + 1 < step ? ico('check', 14, 2.4) : i + 1}</span>${l}</div>`).join('')}</div>
+      ${inner}</div></div>`;
+    document.title = 'Set up · Simple TV';
+  }
+  async function render(seq) {
+    clearTimeout(pollT);
+    if (!state.status) { try { await loadCore(); } catch (e) { /* shown below */ } }
+    if (stale(seq)) return;
+    const sub = route.parts[0];
+    if (sub === 'sub') return step1Form();
+    if (sub === '2') return step2(seq);
+    if (sub === '3') return step3();
+    frame(1, `<div><h1 class="h1">Let's get some channels on the TV</h1><p class="muted">It takes about five minutes. Where do the channels come from?</p></div>
+      <div class="col g12">
+        <a class="opt" href="#/first/sub" style="color:inherit;text-decoration:none"><span class="icobox pr">${ico('server', 22)}</span><div class="grow"><div class="sec">I have a TV subscription</div><div class="muted">Add the details your provider gave you.</div></div>${ico('right')}</a>
+        <a class="opt" href="#/add/youtube" style="color:inherit;text-decoration:none"><span class="icobox pr">${ico('yt', 22)}</span><div class="grow"><div class="sec">I want YouTube channels</div><div class="muted">Paste a link to a live channel.</div></div>${ico('right')}</a>
+      </div>
+      <div class="hint">Both can be added later too.</div>`);
+  }
+  function step1Form() {
+    const xt = form.kind === 'XTREAM';
+    frame(1, `<div><h1 class="h1">Your TV subscription</h1><p class="muted">Copy these from your provider's email or app. They stay on the TV and are never shown again.</p></div>
+      <section class="card col g16">
+        <label class="field"><span>Name</span><span class="inp"><input id="fsName" value="${esc(form.name)}" dir="auto" placeholder="For example, Sunrise TV"></span></label>
+        <div class="field"><span>How you sign in</span><div class="seg full"><button data-kind="XTREAM" class="${xt ? 'on' : ''}">Server and login</button><button data-kind="M3U" class="${xt ? '' : 'on'}">Channel list link</button></div></div>
+        <label class="field"><span>${xt ? 'Server address' : 'Channel list link'}</span><span class="inp"><input id="fsUrl" type="url" value="${esc(form.url)}" dir="ltr" autocomplete="off" spellcheck="false" placeholder="http://…"></span></label>
+        <div class="g2"><label class="field"><span>Username${xt ? '' : ' (if any)'}</span><span class="inp"><input id="fsUser" value="${esc(form.username)}" dir="ltr" autocomplete="off" spellcheck="false"></span></label>
+        <label class="field"><span>Password${xt ? '' : ' (if any)'}</span><span class="inp"><input id="fsPw" type="password" value="${esc(form.password)}" dir="ltr" autocomplete="new-password"></span></label></div>
+        ${err ? `<div class="pill err wrap"><span class="dot"></span>${esc(err)}</div>` : ''}
+        <div class="f fw g8"><button class="btn pri" id="fsGo">Connect</button><a class="btn" href="#/first">Back</a></div>
+      </section>`);
+    const sync = () => { form = { name: $('#fsName').value, kind: form.kind, url: $('#fsUrl').value, username: $('#fsUser').value, password: $('#fsPw').value }; };
+    $$('[data-kind]').forEach((b) => b.onclick = () => { sync(); form.kind = b.dataset.kind; step1Form(); });
+    $('#fsGo').onclick = async () => {
+      sync(); const b = $('#fsGo'); b.disabled = true; b.innerHTML = '<span class="spin"></span>Checking…';
+      const body = { name: form.name.trim() || 'My TV subscription', kind: form.kind, url: form.url.trim(), username: form.username.trim() || null, password: form.password || null };
+      try {
+        const t = await POST('/api/providers/test', body);
+        if (!t.ok) { err = t.message; step1Form(); return; }
+        const r = await POST('/api/providers', body);
+        state.providers = r.providers; err = ''; form.password = '';
+        go('#/first/2?pid=' + encodeURIComponent(r.provider.id));
+      } catch (e) { if (e.status !== 401) { err = e.message; step1Form(); } }
+    };
+  }
+  async function step2(seq) {
+    const pid = route.q.get('pid') || (state.providers && state.providers.providers[0] && state.providers.providers[0].id);
+    if (!pid) { go('#/first'); return; }
+    let r;
+    try { r = await GET(`/api/catalog/${encodeURIComponent(pid)}/categories?type=live`); } catch (e) { return; }
+    if (stale(seq)) return;
+    const p = (state.providers.providers || []).find((x) => x.id === pid);
+    if (!r.loaded) {
+      frame(2, `<div><h1 class="h1">Getting your channel list</h1><p class="muted">${r.refreshing ? 'Big lists take a minute. Keep this page open.' : esc(r.status.error || 'Waiting for the provider…')}</p></div>
+        <section class="card f g16"><span class="spin" style="width:28px;height:28px"></span><div class="grow"><div class="sec" dir="auto">${esc(p ? p.name : '')}</div><div class="cap">Downloading on the TV</div></div></section>`);
+      pollT = setTimeout(() => { if (route.name === 'first' && route.parts[0] === '2') render(renderSeq); }, 4000);
+      return;
+    }
+    const cats = r.categories;
+    const total = cats.filter((c) => picked.has(c.id)).reduce((n, c) => n + c.count, 0);
+    frame(2, `<div><h1 class="h1">Add a few channels</h1><p class="muted">Start small. Six to ten is plenty. You can add more any time.</p></div>
+      <section class="card col g4">
+        <div class="cap" style="padding:0 8px 4px">FROM ${esc((p ? p.name : '').toUpperCase())} · ${fmtN(r.status.live)} CHANNELS</div>
+        ${cats.slice(0, 40).map((c) => `<label class="chk"><input type="checkbox" data-c="${esc(c.id)}" ${picked.has(c.id) ? 'checked' : ''}><span class="grow"><span class="nm" dir="auto">${esc(c.name)}</span><span class="cap">${plural(c.count, 'channel')}</span></span></label>`).join('')}
+        ${cats.length > 40 ? `<div class="cap" style="padding:8px">…and ${fmtN(cats.length - 40)} more categories. Find them later under Add channel.</div>` : ''}
+      </section>
+      <div class="hint">Choosing a whole category adds all its channels. You'll tidy the list next.</div>
+      <button class="btn pri block" id="fsAdd" ${total ? '' : 'disabled'}>${total ? 'Add ' + plural(total, 'channel') : 'Pick a category'}</button>`);
+    $$('[data-c]').forEach((c) => c.onchange = () => { if (c.checked) picked.add(c.dataset.c); else picked.delete(c.dataset.c); const y = window.scrollY; step2(renderSeq).then(() => window.scrollTo(0, y)); });
+    $('#fsAdd').onclick = async () => {
+      if (!(await confirmMany(total, nextNumber()))) return;
+      try { const a = await saving(() => POST('/api/channels/catalog', { providerId: pid, categories: [...picked] }), null); state.lineup = a.lineup; snapshot(); picked.clear(); go('#/first/3'); } catch (e) { /* toast */ }
+    };
+  }
+  function step3() {
+    const first = state.lineup && state.lineup.channels[0];
+    frame(3, `<div><h1 class="h1">Now take a look at the TV</h1><p class="muted">Your channels are saved. Press up or down on the remote to change channel.</p></div>
+      ${first ? `<div class="tvcard"><div class="tvnum">${esc(first.number)}</div><div style="font-size:24px;line-height:30px;font-weight:700" dir="auto">${esc(first.name)}</div></div>` : ''}
+      <div class="f fw g8">${first ? `<button class="btn pri" id="fsPlay">${ico('play', 18)}Play channel ${esc(first.number)} on TV</button>` : ''}<a class="btn" href="#/lineup">Go to my lineup</a></div>`);
+    const b = $('#fsPlay'); if (b) b.onclick = () => playOnTv({ channelId: first.id }, first.name);
+  }
+  return { render };
+})();
+
+/* ---------- Sign in with the PIN ---------- */
+let loginShown = false;
+async function showLogin() {
+  if (loginShown) return; loginShown = true;
+  let pin = ''; let msg = null; let lockedUntil = 0; let busy = false;
+  try { const a = await GET('/api/auth'); if (!a.pinSet || a.signedIn) { loginShown = false; render(); return; } lockedUntil = a.lockedUntil ? Date.now() + (a.lockedUntil - a.now) : 0; } catch (e) { /* show the form anyway */ }
+  let tick = null;
+  const locked = () => lockedUntil > Date.now();
+  function paint() {
+    const isLocked = locked();
+    if (isLocked && !msg) msg = { k: 'warn', t: `Too many tries. You can try again in ${Math.max(1, Math.ceil((lockedUntil - Date.now()) / 60000))} minutes.` };
+    $('#app').className = 'app ' + currentSize;
+    $('#app').innerHTML = `<div class="solo grow"><div class="center col g24" style="max-width:420px">
+      <div class="logo-mark">TV</div>
+      <div><h1 class="h1">Enter your PIN</h1><p class="muted">This keeps the TV settings to you. Your lineup is safe until you unlock.</p></div>
+      <label class="col g8"><span class="sr">PIN</span>
+        <div class="pin ${msg && msg.k === 'err' ? 'bad' : ''} ${isLocked ? 'locked' : ''}" aria-hidden="true">${Array.from({ length: 6 }, (_, i) => `<span class="${i === pin.length && !isLocked ? 'cur' : ''}">${i < pin.length ? '•' : ''}</span>`).join('')}</div>
+        <input id="pinIn" class="sr" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" value="${esc(pin)}" ${isLocked ? 'disabled' : ''} aria-label="PIN">
+      </label>
+      ${msg ? `<div class="pill ${msg.k} wrap" role="alert">${esc(msg.t)}</div>` : ''}
+      <div class="keypad">${['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'].map((k) => k === '' ? '<span></span>' : `<button class="ibtn bd ${isLocked ? 'dis' : ''}" data-k="${k}" aria-label="${k === 'del' ? 'Delete' : 'Digit ' + k}">${k === 'del' ? '⌫' : k}</button>`).join('')}</div>
+      <button class="btn pri block ${isLocked || pin.length < 4 || busy ? 'dis' : ''}" id="unlock">${busy ? '<span class="spin"></span>' : ''}Unlock</button>
+      <details><summary>${ico('right', 18)}Forgot your PIN?</summary><p class="muted">The PIN is shown on the TV's settings screen. Press MENU on the remote, look there, then come back.</p></details>
+    </div></div>`;
+    document.title = 'Enter your PIN · Simple TV';
+    const inp = $('#pinIn');
+    if (!isLocked && currentSize !== 'phone') inp.focus();
+    inp.oninput = () => { pin = inp.value.replace(/\D/g, '').slice(0, 6); if (msg && msg.k === 'err') msg = null; paint(); };
+    inp.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+    $$('[data-k]').forEach((b) => b.onclick = () => { if (b.dataset.k === 'del') pin = pin.slice(0, -1); else if (pin.length < 6) pin += b.dataset.k; if (msg && msg.k === 'err') msg = null; paint(); });
+    $('#unlock').onclick = submit;
+  }
+  async function submit() {
+    if (locked() || pin.length < 4 || busy) return;
+    busy = true; paint();
+    try {
+      const r = await POST('/api/auth/login', { pin });
+      state.token = r.token || null; store.sset('stv.token', state.token);
+      loginShown = false; clearInterval(tick); render();
+    } catch (e) {
+      busy = false; pin = '';
+      const b = e.body || {};
+      if (b.code === 'locked') { lockedUntil = Date.now() + (b.retryAfterSeconds || 300) * 1000; msg = { k: 'warn', t: e.message }; }
+      else if (b.code === 'wrong') msg = { k: 'err', t: e.message };
+      else msg = { k: 'err', t: e.status === 0 ? "Couldn't reach the TV. Check it's on." : e.message };
+      paint();
+    }
+  }
+  tick = setInterval(() => { if (lockedUntil && !locked()) { lockedUntil = 0; msg = null; paint(); } }, 5000);
+  paint();
+}
+
+/* ---------- Start ---------- */
+applyTheme();
+$('#app').className = 'app ' + currentSize;
+(async () => {
+  restoreSnapshot(); state.online = true;
+  try {
+    const a = await GET('/api/auth');
+    if (a.pinSet && !a.signedIn) { state.token = null; store.sset('stv.token', null); showLogin(); }
+    else render();
+  } catch (e) { if (e.status !== 401) render(); }
+  setInterval(() => { if (!document.hidden && !loginShown && route.name !== 'first') refreshNow(); }, 15000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !loginShown) refreshNow(); });
 })();
 </script>
 </body>

@@ -32,6 +32,9 @@ object ApiViews {
         val playlist: PlaylistSpec? = null,
         /** "missing" (the provider dropped it) or "failed" (would not play lately). */
         val flag: String? = null,
+        /** Film and series channels: how many items the queue holds, and where it stopped. */
+        val queueSize: Int? = null,
+        val resume: String? = null,
     )
 
     @Serializable
@@ -128,7 +131,9 @@ object ApiViews {
     }
 
     fun upsert(existing: Provider?, input: ProviderInput, newId: () -> String): Upsert {
-        val url = input.url?.trim().orEmpty().ifEmpty { existing?.url.orEmpty() }
+        // Switching between "server and login" and "channel list link" needs the new address.
+        val keepUrl = existing != null && existing.kind == input.kind
+        val url = input.url?.trim().orEmpty().ifEmpty { if (keepUrl) existing?.url.orEmpty() else "" }
         val password = input.password?.takeIf { it.isNotEmpty() } ?: existing?.password
         val name = input.name.trim()
         if (name.isEmpty()) return Upsert.Invalid("Give the subscription a name.")

@@ -95,7 +95,14 @@ class ContentRoutes(private val app: SimpleTvApp) {
 
     private suspend fun lineup(): ApiViews.Lineup {
         val list = channels.current().channels
-        return ApiViews.lineup(list, app.catalog.flags(list))
+        val base = ApiViews.lineup(list, app.catalog.flags(list))
+        // Film and series rows say how big the queue is and where it stopped (from the cached catalog).
+        return base.copy(channels = base.channels.map { v ->
+            val spec = v.playlist ?: return@map v
+            val q = runCatching { app.queue.queueCached(spec) }.getOrDefault(emptyList())
+            val at = app.queue.progress(v.id).itemId?.let { id -> q.firstOrNull { it.id == id } }
+            v.copy(queueSize = q.size, resume = at?.title)
+        })
     }
 
     private fun providersResponse(): ProvidersResponse {

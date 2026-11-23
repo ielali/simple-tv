@@ -213,3 +213,50 @@ Decision:
 Consequences: @handle support costs the caregiver a one-time Google Cloud setup; everything else in
 the YouTube path works with no key. Until HTTPS exists (backlog), entering the key crosses the LAN
 once in plain text, the same as provider passwords.
+
+## ADR-015 Caregiver API that never returns secrets, with an optional PIN
+
+Context: The redesigned caregiver page (docs/design/handoff) is served over plain HTTP on the home
+network. IPTV stream addresses and M3U links embed the account password, and the old API returned
+whole channel lists, so any device on the Wi-Fi could read them.
+
+Decision:
+- The page only ever sees views built in `config/ApiViews.kt`: lineup rows without stream addresses
+  or headers (YouTube sources stay, they are not secret), subscriptions with `hasUrl`/`hasPassword`
+  instead of the address or password, catalog items without addresses. New channels arrive only
+  through add endpoints; `PUT /api/channels` takes ids, numbers and names, so the page cannot inject
+  or read an address. A blank address or password on save keeps the stored one.
+- Optional PIN (`config/PinAuth.kt`): 4 to 6 digits, 5 wrong tries lock sign-in for 5 minutes, random
+  session tokens kept in memory (signed out when the TV restarts) and sent as `Authorization: Bearer`.
+  With a PIN set every `/api/*` route except `GET /api/auth` and `POST /api/auth/login` needs a token.
+  The PIN shows on the TV's own settings overlay (MENU), so whoever is in the room can sign in.
+- Error messages are plain words and never contain an address.
+
+Consequences: The PIN guards against casual access only; without HTTPS (backlog) it crosses the LAN
+in plain text, as do passwords entered once. The page stores the token in session storage and the
+appearance choice in local storage; nothing else is kept in the browser.
+
+## ADR-016 Cached catalogs and film or series channels
+
+Context: Caregivers want to pick channels from categories without waiting for a 10,000-channel
+download each time, and to offer films and series as numbered channels without a library to browse.
+
+Decision:
+- Each subscription's catalog (live, films, series) is cached on the TV (`data/CatalogRepository`,
+  one JSON file per provider, written atomically) and refreshed by `CatalogService` once a day at
+  `catalogRefreshTime` (default 21:00, catching up after the TV was off) and on demand. A failed
+  refresh keeps the last good copy and is recorded in a 10-entry history. A good refresh gives lineup
+  channels fresh addresses by the provider's stream id and flags channels the provider dropped
+  ("missing"); channels that fail to play for 20 s are flagged "failed" until they play.
+- Film and series channels (`SourceType.FILMS`/`SERIES`) store a `PlaylistSpec`, not addresses. The
+  queue is rebuilt from the cached catalog (`PlaylistQueue`), shuffled with a stored seed, with
+  caregiver-pinned first items and left-out items. `QueuePlayback` builds the film or episode
+  address from the provider's credentials at play time, moves on when an item ends and saves the
+  position every 15 s and on channel change, so a series resumes at the right episode.
+- "Play on TV now" plays a lineup channel, or a preview that is not in the lineup (number 0, never
+  stored as the last channel).
+
+Consequences: Very large providers mean a large catalog file and a slow first download (watch this
+on the Kogan, backlog item 0). Film and series channels need the Xtream API; plain M3U providers
+offer live channels only.
+

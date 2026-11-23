@@ -104,6 +104,10 @@ class ConfigServer(
     @Serializable
     data class PinResponse(val pinSet: Boolean, val token: String? = null)
 
+    /** The config address as QR modules ("1" dark), drawn by the page as SVG. */
+    @Serializable
+    data class Qr(val text: String, val size: Int, val rows: List<String>)
+
     @Serializable
     data class ImportRequest(val url: String? = null, val text: String? = null)
 
@@ -226,6 +230,11 @@ class ConfigServer(
                 }
                 authRoutes()
                 get("/api/status") { call.respond(status()) }
+                get("/api/qr") {
+                    val url = NetworkAddress.configUrl(appContext, port)
+                    val m = QrCode.encode(url)
+                    call.respond(Qr(url, m.size, (0 until m.size).map { y -> (0 until m.size).joinToString("") { x -> if (m[x, y]) "1" else "0" } }))
+                }
                 get("/api/settings") { call.respond(settingsRepo.current()) }
                 put("/api/settings") {
                     val before = settingsRepo.current()

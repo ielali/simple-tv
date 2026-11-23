@@ -4,17 +4,12 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 ## Next
 
-0. **Caregiver web app redesign.** Brief for Claude Design in `docs/design/claude-design-prompt.md`.
-   Build from the resulting design. Related engine work below:
-   - Catalog cache per provider (live, films, series, with categories) on the TV; automatic daily
-     refresh at a quiet hour plus "Refresh now"; change summary; flag lineup channels the provider
-     dropped instead of deleting them.
-   - Unified "Add channel" API: catalog search across categories, YouTube link preview (oEmbed, no
-     key) and optional YouTube Data API key for @handle resolution and "Live now" (ADR-014).
-   - Film and series channels from Xtream VOD (`get_vod_streams`, `get_series`, `get_series_info`):
-     a numbered channel that plays a queue of films, or a series in order with resume.
-   - "Play on TV now" and a "now playing" status endpoint.
-
+0. **Check the new caregiver page and film channels on the Kogan.** Install over adb, then from a
+   phone: sign in with a PIN, refresh a subscription and check the counts, add channels from a
+   category, make a film channel and a series channel, press Play on TV, and confirm a series resumes
+   at the right episode after switching channel and after a TV restart. Note how long the first
+   catalog download takes and how big `files/catalog/` gets; if a big provider makes it slow or
+   large, page the catalog file or move it to SQLite.
 1. **First device run.** Build `assembleDebug`, sideload on an Android TV box, confirm: app opens
    fullscreen, empty state shows the config URL, config page loads from a phone, adding an HLS
    channel plays. Record device, Android version and remote model in DEPLOYMENT.md.
@@ -37,8 +32,6 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    SHA-1), supplied by the operator. Sign in with the device account through Credential Manager,
    request `youtube.readonly`, then let the caregiver pick channels from "My subscriptions" and
    "Live now" instead of pasting links. Quota: search costs 100 units of the 10,000/day default.
-6. **Config page PIN.** Optional 4–6 digit PIN stored on the device, shown on the TV settings
-   overlay, required by the API (header or cookie). Off by default for the first install.
 7. **Channel logos in the banner.** Load `logoUrl` with Coil, fall back to the number when missing.
 8. **Clock in the banner.** Elderly viewers use the TV as a clock; show HH:MM in the banner corner.
 9. **Stream health check in the web UI.** "Test" button per channel that has the TV try the URL for
@@ -89,6 +82,13 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- Caregiver web app rebuilt from the Claude Design handoff (docs/design/handoff, ADR-015, ADR-016):
+  five-section page with first run and PIN sign-in, cached catalogs with a daily refresh at 9 pm by
+  default, one Add channel flow (subscription catalog, YouTube, link), film and series channels with
+  resume, Play on TV now and now playing, lineup flags, refresh history, light and dark.
+
+- Config page PIN: 4 to 6 digits, 5 tries then a 5-minute lock, shown on the TV settings screen.
 
 - YouTube "Who's watching?" handled automatically after a hand-off (ADR-013 and addendum): teach the
   screen once on the config page; check `/api/debug/youtube-screen` (lastMatch) if it does not fire.

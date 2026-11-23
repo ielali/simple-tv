@@ -99,4 +99,11 @@ class ApiViewsTest {
         assertNull(ApiViews.checkPlaylist(PlaylistSpec(PlaylistMode.SERIES, "p", seriesId = "9"), true))
         assertEquals(SourceType.SERIES, ApiViews.filmChannelType(PlaylistSpec(PlaylistMode.SERIES, "p")))
     }
+
+    @Test
+    fun `switching how you sign in needs the new address`() {
+        val stored = Provider("p1", "Sunrise", ProviderKind.XTREAM, "http://panel.example:8080", "alice", "s3cret")
+        val r = ApiViews.upsert(stored, ApiViews.ProviderInput(id = "p1", name = "Sunrise", kind = ProviderKind.M3U)) { "x" }
+        assertTrue(r is ApiViews.Upsert.Invalid)
+    }
 }

@@ -65,7 +65,14 @@ app/src/main/kotlin/com/ielali/simpletv/
   data/JsonStore.kt       Generic one-file JSON persistence with a StateFlow
   data/SettingsRepository.kt settings.json persistence
   data/M3uParser.kt       IPTV playlist import
-  config/ConfigServer.kt  Ktor CIO server on :8080, serves web UI and JSON API
+  config/ConfigServer.kt  Ktor CIO server on :8080: web UI, PIN sign-in, status, settings, guard
+  config/ContentRoutes.kt Lineup, subscriptions, catalog, film channels, YouTube, Play on TV routes
+  config/ApiViews.kt      What the page may see: no stream addresses, no passwords (pure, tested)
+  config/PinAuth.kt       PIN rules: 4-6 digits, 5 tries then 5-minute lock, in-memory sessions
+  data/Catalog*.kt        Cached catalogs, refresh service and schedule, queries, lineup flags
+  data/PlaylistQueue.kt   Film/series queue rules (pure); data/QueuePlayback.kt plays and resumes
+  data/SecretsStore.kt    Page PIN and YouTube key, never returned by the API
+  youtube/YouTubeLookup.kt YouTube link preview (oEmbed, optional Data API key)
   config/NetworkAddress.kt LAN IP discovery
   config/QrCode.kt        ZXing wrapper: URL -> module matrix (pure JVM)
   tv/QrCodeView.kt        Compose canvas renderer for the QR matrix
@@ -78,7 +85,8 @@ app/src/main/kotlin/com/ielali/simpletv/
   guard/BannerOverlay.kt  Channel banner drawn over the YouTube app (accessibility overlay window)
   guard/AccountPicker.kt  Pure detector for YouTube's "Who's watching?" + throttle + screen log
   data/SettingsMerge.kt   Partial PUT /api/settings; also sanitizes blocked keys
-app/src/main/assets/config/index.html   Caregiver web UI (vanilla JS, no build step)
+app/src/main/assets/config/index.html   Caregiver web UI (vanilla JS, one file, no build step);
+                                        built from docs/design/handoff/Main.dc.html
 tools/tv-admin.sh                       adb admin: status, install, guard-on/off, stock, debloat, restore
 tools/debloat/*.txt                     Reversible debloat lists (disable, never uninstall)
 tools/test/tv-admin.test.sh             Runs tv-admin.sh against a fake adb (CI runs it)

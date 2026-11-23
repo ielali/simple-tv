@@ -42,6 +42,13 @@ class QueuePlayback(
         }
     }
 
+    /** The queue from what is already on the TV, never downloading (for listing the lineup). */
+    suspend fun queueCached(spec: PlaylistSpec): List<QueueEntry> = when (spec.mode) {
+        PlaylistMode.FILM -> PlaylistQueue.films(catalogRepo.catalog(spec.providerId), spec)
+        PlaylistMode.SERIES -> spec.seriesId?.let { catalogRepo.episodes(spec.providerId, it) }
+            ?.let { PlaylistQueue.episodes(it, spec) }.orEmpty()
+    }
+
     fun progress(channelId: String): Progress = store.current().byChannel[channelId] ?: Progress()
 
     suspend fun current(channel: Channel): Playable? {
