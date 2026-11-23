@@ -84,7 +84,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        vm.engine.player.playWhenReady = true
+        vm.onScreenResumed()
     }
 
     override fun onPause() {

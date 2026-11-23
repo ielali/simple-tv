@@ -50,6 +50,7 @@ app/src/main/kotlin/com/ielali/simpletv/
   data/TvLanguage.kt      Supported TV languages (English, Arabic) and RTL detection
   tv/PlayerScreen.kt      Compose UI: video surface, YouTube WebView, banner, overlays
   player/PlaybackEngine.kt Media3 ExoPlayer wrapper tuned for live TV; never stops retrying
+  player/QueueKeys.kt     Pure: Right/Left/OK on film and series channels (next, start or previous, pause)
   player/TrackPicker.kt   Pure: which subtitle and soundtrack to show for a film channel's wishes
   player/TuneTracker.kt   Pure: tuning / rebuffering / no-signal state and retry backoff
   youtube/YouTubeEmbed.kt Parses YouTube links/ids and builds the iframe page

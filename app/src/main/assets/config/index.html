@@ -632,16 +632,25 @@ async function playOnTv(body, name) {
     toast((name ? name + ' is' : "It's") + ' on the TV now.');
   } catch (e) { if (e.status !== 401) toast(e.status === 0 ? "Couldn't reach the TV." : e.message, null, 6000); }
 }
+/** Next, back to the start, previous, pause or carry on, for the film or series channel on the TV. */
+async function controlTv(action) {
+  try {
+    await POST('/api/nowplaying/control', { action });
+    setTimeout(refreshNow, 700);
+  } catch (e) { if (e.status !== 401) toast(e.status === 0 ? "Couldn't reach the TV." : e.message, null, 6000); }
+}
 function patchNowPlaying() {
-  const el = $('#tvNow'); if (el) el.outerHTML = tvCard();
+  const el = $('#tvNow'); if (el) { el.outerHTML = tvCard(); bindTvCard(); }
   $$('.num[data-id]').forEach((n) => n.classList.toggle('playing', !!(state.now && state.now.channel && state.now.channel.id === n.dataset.id)));
 }
+function bindTvCard() { $$('#tvNow [data-ctl]').forEach((b) => b.onclick = () => { b.disabled = true; controlTv(b.dataset.ctl); }); }
 function tvCard() {
   const n = state.now;
   if (!state.online || !n || !n.channel) return '<div id="tvNow" class="hide"></div>';
   const ch = n.channel;
   const kind = TYPE_LABEL[ch.type] || 'Live';
-  const how = n.startedFromApp ? 'started from this app ' + ago(n.since, n.now) : (n.since ? 'on since ' + clock(n.since) : '');
+  const how = n.paused ? 'paused' : n.startedFromApp ? 'started from this app ' + ago(n.since, n.now) : (n.since ? 'on since ' + clock(n.since) : '');
+  const queue = !!ch.playlist;
   return `<section class="tvcard" id="tvNow">
     <div class="tvnum">${ch.number > 0 ? esc(ch.number) : ico('play', 56, 2)}</div>
     <div class="grow col g8">
@@ -650,7 +659,8 @@ function tvCard() {
       ${n.title ? `<div dir="auto">${esc(n.title)}</div>` : ''}
       <div class="cap">${esc([n.preview ? 'Preview, not in your lineup' : kind, how].filter(Boolean).join(' · '))}</div>
       ${trackNote(n) ? `<div class="cap" style="color:#FFC857">${esc(trackNote(n))}</div>` : ''}
-      <div class="f fw g8" style="margin-top:6px"><a class="btn pri" href="#/lineup">Open lineup</a></div>
+      <div class="f fw g8" style="margin-top:6px">${queue ? `<button class="btn" data-ctl="restart" title="Back to the start">${ico('refresh', 18)}Start of this one</button><button class="btn pri" data-ctl="${n.paused ? 'resume' : 'pause'}">${n.paused ? ico('play', 18) + 'Carry on' : '❚❚ Pause'}</button><button class="btn" data-ctl="next">Next${ico('right', 18)}</button>` : '<a class="btn pri" href="#/lineup">Open lineup</a>'}</div>
+      ${queue && !n.preview ? `<div class="cap">On the remote: Right for the next one, Left for the start, OK to pause.</div>` : ''}
     </div>
   </section>`;
 }
@@ -722,6 +732,7 @@ screens.home = {
           <a class="btn ghost" href="#/subs" style="align-self:flex-start">${subs.length ? 'Manage subscriptions' : 'Add subscription'}</a>
         </section>
       </div>`;
+    bindTvCard();
     const r = $('#retry', el); if (r) r.onclick = () => { state.status = null; render(); };
     const ra = $('#refreshAll', el);
     if (ra) ra.onclick = async () => {
@@ -1410,6 +1421,7 @@ screens.film = (() => {
     }
     await loadRatings();
     paint();
+    refreshNow().then(() => paintQueue());
     await loadSide();
   }
   async function loadSide() {
@@ -1525,6 +1537,9 @@ screens.film = (() => {
     return `<div class="f fw g8" style="align-items:center">${i.rating ? rbadge(i.rating) + `<span class="cap">${esc(i.ratingMeaning || 'Rated ' + i.rating)}</span>` : '<span class="cap">No official rating</span>'}${i.score ? `<span class="cap">· ${esc(scoreText(i.score))}</span>` : ''}<button class="btn ghost" id="seriesAbout">About this series</button></div>`;
   }
   const SHOW = 12;
+  /** "Play this now" needs the saved channel (an edited one is saved first). */
+  const canPick = () => !!(f && f.id && !changed());
+  const onTv = (e) => !!(state.now && state.now.channel && f && state.now.channel.id === f.id && state.now.itemId === e.id);
   function paintQueue() {
     const el = $('#queuePanel'); if (!el) return;
     const sp = f.spec; const q = f.queue; const isFilm = sp.mode === 'FILM';
@@ -1546,10 +1561,15 @@ screens.film = (() => {
     el.innerHTML = `<div class="f g8"><div class="grow"><h2 class="sec">What will play</h2><div class="cap">${esc(sub)}</div></div>${f.queueBusy ? '<span class="spin"></span>' : ''}</div>
       ${q && q.error ? `<p class="hint err">${esc(q.error)}</p>` : !q ? `<p class="muted">${isFilm ? 'Pick a category or some films to see the queue.' : 'Pick a series to see its episodes.'}</p>`
         : !entries.length ? '<p class="muted">Nothing to play yet.</p>'
-        : `<div class="list">${entries.slice(0, SHOW).map((e, i) => `<div class="qitem"><span class="cap i">${i + 1}</span><div class="grow"><div dir="auto" class="ell" style="font-weight:600">${esc(e.title)}</div><div class="cap">${esc(i === 0 && !isFilm && q.resumeItemId ? 'Plays next · ' + (e.detail || '') : (e.detail || ''))}</div></div>${isFilm ? `<button class="ibtn" data-first="${esc(e.id)}" aria-label="Play ${esc(e.title)} first" title="Play first" ${i === 0 ? 'disabled' : ''}>${ico('up', 18)}</button><button class="ibtn" data-skip="${esc(e.id)}" aria-label="Leave out ${esc(e.title)}" title="Leave out">${ico('close', 18)}</button>` : ''}</div>`).join('')}</div>`}
+        : `<div class="list">${entries.slice(0, SHOW).map((e, i) => `<div class="qitem"><span class="cap i">${i + 1}</span><div class="grow"><div dir="auto" class="ell" style="font-weight:600">${esc(e.title)}</div><div class="cap">${esc(onTv(e) ? 'On the TV now' + (state.now.paused ? ', paused' : '') : i === 0 && !isFilm && q.resumeItemId ? 'Plays next · ' + (e.detail || '') : (e.detail || ''))}</div></div>${canPick() && !onTv(e) ? `<button class="ibtn bd" data-pick="${esc(e.id)}" aria-label="Play ${esc(e.title)} now" title="Play this now">${ico('play', 16)}</button>` : ''}${isFilm ? `<button class="ibtn" data-first="${esc(e.id)}" aria-label="Play ${esc(e.title)} first" title="Play first" ${i === 0 ? 'disabled' : ''}>${ico('up', 18)}</button><button class="ibtn" data-skip="${esc(e.id)}" aria-label="Leave out ${esc(e.title)}" title="Leave out">${ico('close', 18)}</button>` : ''}</div>`).join('')}</div>`}
       ${q && q.toCheck ? `<div class="f g8 cap" role="status">${q.checked < q.toCheck ? '<span class="spin" style="width:14px;height:14px"></span>' : ico('check', 14, 2.4)}<span>${q.checked < q.toCheck ? `Checking ratings: ${fmtN(q.checked)} of ${fmtN(q.toCheck)} films so far. Films wait until they’re checked.` : `All ${fmtN(q.toCheck)} films checked; ${fmtN(q.total)} fit the rules.`}</span></div>` : ''}
       <div class="cap">${esc(more)}</div>
       ${isFilm && sp.excluded.length ? `<button class="btn ghost" id="unskip" style="align-self:flex-start">Put back ${plural(sp.excluded.length, 'left-out film')}</button>` : ''}`;
+    $$('[data-pick]', el).forEach((b) => b.onclick = async () => {
+      b.disabled = true;
+      try { await POST(`/api/channels/${encodeURIComponent(f.id)}/play-item`, { itemId: b.dataset.pick }); toast('Playing it on the TV. The channel carries on from there.'); setTimeout(() => refreshNow().then(() => { loadQueue(); }), 900); }
+      catch (e) { b.disabled = false; if (e.status !== 401) toast(e.message, null, 6000); }
+    });
     $$('[data-first]', el).forEach((b) => b.onclick = () => { const id = b.dataset.first; if (sp.titles.length) { sp.titles.splice(sp.titles.indexOf(id), 1); sp.titles.unshift(id); } else { sp.first = [id].concat(sp.first.filter((x) => x !== id)); } loadQueue(); });
     $$('[data-skip]', el).forEach((b) => b.onclick = () => { const id = b.dataset.skip; if (sp.titles.includes(id)) sp.titles.splice(sp.titles.indexOf(id), 1); else sp.excluded.push(id); sp.first = sp.first.filter((x) => x !== id); paintResults(); loadQueue(); });
     const u = $('#unskip', el); if (u) u.onclick = () => { sp.excluded = []; loadQueue(); };

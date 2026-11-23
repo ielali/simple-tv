@@ -22,6 +22,21 @@ class QueuePlayback(
     @Serializable
     data class Progress(val itemId: String? = null, val positionMs: Long = 0L, val updatedAt: Long = 0L)
 
+    /** What a film or series channel is doing on screen, for the config page. */
+    @Serializable
+    data class State(val channelId: String, val itemId: String? = null, val paused: Boolean = false)
+
+    /** A move asked for on the page, carried out by the TV screen. */
+    data class Command(val channelId: String, val action: com.ielali.simpletv.player.QueueKeys.Action?, val reload: Boolean = false)
+
+    private val _state = MutableStateFlow<State?>(null)
+    val state: StateFlow<State?> = _state.asStateFlow()
+    fun report(s: State?) { _state.value = s }
+
+    private val _commands = kotlinx.coroutines.flow.MutableSharedFlow<Command>(extraBufferCapacity = 8)
+    val commands: kotlinx.coroutines.flow.SharedFlow<Command> = _commands
+    fun send(c: Command): Boolean = _commands.tryEmit(c)
+
     @Serializable
     data class ProgressFile(val byChannel: Map<String, Progress> = emptyMap())
 
@@ -69,6 +84,17 @@ class QueuePlayback(
         save(channel.id, q[next].id, 0L)
         return playable(channel, spec, q[next], 0L)
     }
+
+    suspend fun back(channel: Channel): Playable? {
+        val spec = channel.playlist ?: return null
+        val q = queue(spec).ifEmpty { return null }
+        val prev = PlaylistQueue.previousIndex(q, PlaylistQueue.resumeIndex(q, progress(channel.id).itemId))
+        save(channel.id, q[prev].id, 0L)
+        return playable(channel, spec, q[prev], 0L)
+    }
+
+    /** "Play this one now" from the page: the channel carries on from [itemId]. */
+    suspend fun choose(channelId: String, itemId: String) = save(channelId, itemId, 0L)
 
     suspend fun save(channelId: String, itemId: String, positionMs: Long) {
         val f = store.current()

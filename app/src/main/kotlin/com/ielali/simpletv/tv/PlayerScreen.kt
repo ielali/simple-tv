@@ -85,6 +85,7 @@ fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
             ChannelBanner(current = current, pendingDigits = state.pendingDigits, nowTitle = state.nowTitle)
         }
 
+        if (state.paused && current != null) PausedCard(current, state.nowTitle)
         if (state.settingsVisible) SettingsOverlay(state.configUrl, state.pin)
     }
 }
@@ -191,6 +192,23 @@ private fun ChannelBanner(current: Channel?, pendingDigits: String, nowTitle: St
             if (pendingDigits.isEmpty() && !nowTitle.isNullOrBlank()) {
                 Text(nowTitle, color = Fg.copy(alpha = 0.8f), fontSize = 32.sp)
             }
+        }
+    }
+}
+
+/** OK paused a film or episode: say so in large letters, and how to carry on. */
+@Composable
+private fun PausedCard(channel: Channel, title: String?) {
+    Box(Modifier.fillMaxSize().background(Color(0x990B1220)), contentAlignment = Alignment.Center) {
+        Column(
+            modifier = Modifier.background(BannerBg, RoundedCornerShape(24.dp)).padding(horizontal = 64.dp, vertical = 40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(stringResource(R.string.paused), color = Accent, fontSize = 72.sp, fontWeight = FontWeight.Black)
+            Spacer(Modifier.height(12.dp))
+            Text(title ?: channel.name, color = Fg, fontSize = 40.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(24.dp))
+            Text(stringResource(R.string.paused_hint), color = Fg.copy(alpha = 0.8f), fontSize = 32.sp)
         }
     }
 }

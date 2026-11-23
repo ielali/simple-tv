@@ -55,6 +55,9 @@ object PlaylistQueue {
     /** After the last item the channel starts again from the top. */
     fun nextIndex(queue: List<QueueEntry>, current: Int): Int = if (queue.isEmpty()) 0 else (current + 1) % queue.size
 
+    /** The one before, wrapping to the last item from the first. */
+    fun previousIndex(queue: List<QueueEntry>, current: Int): Int = if (queue.isEmpty()) 0 else (current - 1 + queue.size) % queue.size
+
     private fun finish(entries: List<QueueEntry>, spec: PlaylistSpec): List<QueueEntry> {
         val byId = entries.associateBy { it.id }
         val pinned = spec.first.mapNotNull(byId::get)

@@ -13,6 +13,7 @@ import com.ielali.simpletv.data.ProviderImport
 import com.ielali.simpletv.data.ProviderList
 import com.ielali.simpletv.data.ProviderLoader
 import com.ielali.simpletv.data.QueueEntry
+import com.ielali.simpletv.data.QueuePlayback
 import com.ielali.simpletv.data.SourceType
 import com.ielali.simpletv.data.HttpFetcher
 import com.ielali.simpletv.youtube.YouTubeEmbed
@@ -76,6 +77,8 @@ class ContentRoutes(private val app: SimpleTvApp) {
         val countries: List<String>, val film: List<com.ielali.simpletv.data.Cert>, val series: List<com.ielali.simpletv.data.Cert>,
     )
     @Serializable data class TmdbKey(val key: String = "")
+    @Serializable data class Control(val action: String = "")
+    @Serializable data class PlayItem(val itemId: String = "")
     @Serializable data class TmdbKeyState(val hasTmdbKey: Boolean)
     @Serializable data class QueuePreview(val playlist: PlaylistSpec)
 
@@ -107,6 +110,9 @@ class ContentRoutes(private val app: SimpleTvApp) {
         val startedFromApp: Boolean = false,
         /** Played from the page without being in the lineup. */
         val preview: Boolean = false,
+        /** Film and series channels: the item on screen and whether it is paused. */
+        val itemId: String? = null,
+        val paused: Boolean = false,
         /** Film and series channels: the subtitles and soundtracks the item on screen has. */
         val tracks: com.ielali.simpletv.player.TrackPicker.Report? = null,
         val now: Long,
@@ -455,9 +461,32 @@ class ContentRoutes(private val app: SimpleTvApp) {
                     channel = ch?.let { ApiViews.channel(it) }, title = title, since = tv.since,
                     startedFromApp = tv.startedFromApp, preview = ch != null && ch.number == 0,
                     tracks = app.nowTracks.value?.takeIf { it.first == ch?.id && ch?.playlist != null }?.second,
+                    itemId = app.queue.state.value?.takeIf { it.channelId == ch?.id }?.itemId,
+                    paused = app.queue.state.value?.takeIf { it.channelId == ch?.id }?.paused ?: false,
                     now = System.currentTimeMillis(),
                 )
             )
+        }
+        // Next, back to the start, previous, pause or carry on, on the film or series channel on screen.
+        post("/api/nowplaying/control") {
+            val action = com.ielali.simpletv.player.QueueKeys.fromName(call.receive<Control>().action)
+                ?: return@post call.fail(HttpStatusCode.BadRequest, "Choose next, restart, previous, pause or resume.")
+            val ch = app.tv.current.value
+            if (ch?.playlist == null) return@post call.fail(HttpStatusCode.Conflict, "The TV isn't on a film or series channel right now.")
+            if (!app.queue.send(QueuePlayback.Command(ch.id, action))) return@post call.fail(HttpStatusCode.ServiceUnavailable, "The TV is busy. Try again.")
+            call.respond(HttpStatusCode.Accepted, Control(action.name.lowercase()))
+        }
+        // "Play this one now": the channel carries on from the chosen film or episode.
+        post("/api/channels/{id}/play-item") {
+            val id = call.parameters["id"].orEmpty()
+            val ch = channels.current().channels.firstOrNull { it.id == id && it.playlist != null }
+                ?: return@post call.fail(HttpStatusCode.NotFound, "That channel isn't on the TV any more.")
+            val itemId = call.receive<PlayItem>().itemId
+            if (app.queue.queue(ch.playlist!!).none { it.id == itemId }) return@post call.fail(HttpStatusCode.NotFound, "That one isn't in the channel any more.")
+            app.queue.choose(ch.id, itemId)
+            if (app.tv.current.value?.id == ch.id) app.queue.send(QueuePlayback.Command(ch.id, null, reload = true))
+            else onTv { app.tv.playFromApp(ch) }
+            call.respond(HttpStatusCode.Accepted, PlayItem(itemId))
         }
         post("/api/play") {
             val req = call.receive<PlayRequest>()

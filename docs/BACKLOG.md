@@ -13,6 +13,7 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    and an .mkv that has them; check the size and that "No Arabic subtitles" shows when it lacks them.
    Add a TMDB key, make a PG film channel and check how long the first rating check takes, how
    many films the provider's details call covers, and that the banner shows the rating.
+   On a series channel press Right, Left (early and late in an episode) and OK on the Kogan remote.
 1. **First device run.** Build `assembleDebug`, sideload on an Android TV box, confirm: app opens
    fullscreen, empty state shows the config URL, config page loads from a phone, adding an HLS
    channel plays. Record device, Android version and remote model in DEPLOYMENT.md.
@@ -92,6 +93,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- Right, Left and OK move within film and series channels (next, start or previous, pause), with the
+  same controls and "Play this now" on the config page (ADR-019).
 
 - Film and series details (posters, trailers, plot, cast, score) and official ratings by country
   from the provider and an optional TMDB key; per-channel highest rating, lowest score and unrated

@@ -308,3 +308,24 @@ Consequences: Rating rules need a TMDB key. Older and foreign films often lack a
 country, hence the per-channel choice for them. Big film channels take minutes to check the first
 time. TMDB is free for non-commercial use with attribution.
 
+## ADR-019 Moving within film and series channels with the remote
+
+Context: Film and series channels played their queue with no way to skip, go back or pause. The
+household's remote (Kogan, Google TV style) has a D-pad with OK, Back, Home, Live TV, a channel
+rocker beside the volume buttons, and app buttons; no number or media keys. Left and Right were free.
+
+Decision:
+- On a film or series channel playing on Simple TV's screen: Right plays the next film or episode,
+  Left goes back to the start of this one (or to the previous one within its first 10 seconds), and
+  OK pauses with a large "Paused" card and carries on. Media keys do the same where a remote has them
+  (`player/QueueKeys`, pure). Up/down and the channel rocker still change channel; live and YouTube
+  channels are unchanged, and pending digits still take OK first.
+- The banner shows the new title after a skip. A pause saves the position and survives the screen
+  going to standby; changing channel ends it.
+- The config page can do the same: Start of this one, Pause / Carry on and Next on the "On the TV
+  now" card (`POST /api/nowplaying/control`), and "Play this now" on any film or episode in the
+  editor's queue (`POST /api/channels/{id}/play-item`); the channel then carries on from there.
+
+Consequences: A viewer can no longer wander through the D-pad's Left and Right on these channels,
+which did nothing before. Nothing is shown that needs a cursor.
+

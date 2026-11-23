@@ -187,6 +187,8 @@ class PlaybackEngine(context: Context) {
         player.play()
     }
 
+    fun seekTo(positionMs: Long) = player.seekTo(positionMs.coerceAtLeast(0L))
+
     /** Current position, for remembering where a film or episode stopped. */
     fun positionMs(): Long = player.currentPosition
 
