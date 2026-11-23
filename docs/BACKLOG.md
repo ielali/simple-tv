@@ -51,6 +51,16 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 ## Later
 
+- HTTPS for the config page with a trusted certificate (parked; goal: provider passwords and the
+  future PIN never cross the LAN in plain text). Plan: a subdomain the household owns, e.g.
+  `tv.<domain>`, pointing to the TV's LAN address; the TV obtains a Let's Encrypt certificate itself
+  via the DNS-01 challenge through the DNS provider's API (Cloudflare token scoped to one zone),
+  renews it, and updates the record when the LAN address changes. Serve on :8443, redirect :8080.
+  Caveats: router DNS-rebinding protection may need an exception for the name; the API token's
+  first entry crosses the LAN once before HTTPS exists; check whether the Ktor CIO server engine
+  supports TLS or the server must move to Netty. Alternatives considered: self-signed certificate
+  (browser warnings), Tailscale (also gives remote access, no domain needed).
+
 - Native-speaker review of `values-ar/strings.xml`; check right-to-left layouts on the device.
 - Config page in Arabic (follow the TV language setting or the phone's browser language).
 
