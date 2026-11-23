@@ -92,6 +92,9 @@ object YouTubeScreenLog {
         val pickerDetected: Boolean = false,
         val lastActionAt: Long = 0L,
         val lastAction: String = "",
+        /** Last comparison with the remembered account screen, e.g. "difference 3.1, similarity 0.97". */
+        val lastMatch: String = "",
+        val lastMatchAt: Long = 0L,
     )
 
     @Volatile var snapshot = Snapshot()
@@ -99,6 +102,10 @@ object YouTubeScreenLog {
 
     fun recordScreen(at: Long, nodes: List<ScreenNode>, picker: Boolean) {
         snapshot = snapshot.copy(seenAt = at, nodeCount = nodes.size, nodes = nodes.take(80), pickerDetected = picker)
+    }
+
+    fun recordMatch(at: Long, description: String) {
+        snapshot = snapshot.copy(lastMatchAt = at, lastMatch = description)
     }
 
     fun recordAction(at: Long, description: String) {

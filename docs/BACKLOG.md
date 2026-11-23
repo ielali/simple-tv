@@ -79,8 +79,8 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 ## Done
 
-- YouTube "Who's watching?" handled automatically after a hand-off (ADR-013). Verify on the Kogan;
-  if it does not trigger, read `/api/debug/youtube-screen` right after the picker appears.
+- YouTube "Who's watching?" handled automatically after a hand-off (ADR-013 and addendum): teach the
+  screen once on the config page; check `/api/debug/youtube-screen` (lastMatch) if it does not fire.
 
 - TV screen in English and Arabic with right-to-left layout, chosen on the config page (ADR-012).
 

@@ -139,7 +139,13 @@
       <button id="guardToggle"></button>
     </div>
     <p id="guardSetupHint" class="hint" style="margin-top:10px" hidden></p>
-    <p id="pickerLine" class="hint" style="margin-top:6px"></p>
+    <h3 style="font-size:15px;margin:14px 0 6px">YouTube "Who's watching?" screen</h3>
+    <p class="hint">YouTube sometimes asks who is watching. Simple TV can answer for you by choosing the first account, but it has to learn what that screen looks like once. The next time it appears on the TV, press <b>Remember this screen</b> while it is still showing.</p>
+    <p id="pickerLine" style="font-weight:600;margin:8px 0"></p>
+    <div class="row">
+      <button id="pickerRemember">Remember this screen</button>
+      <button id="pickerForget">Forget it</button>
+    </div>
   </section>
 
   <section class="card">
@@ -469,15 +475,32 @@
         ? 'The TV switched the guard off. Restart the TV, or turn the guard off and on again here.'
         : 'One-time setup needed from a computer: <code>tools/tv-admin.sh guard-on</code> (see the deployment guide).';
     } else hint.hidden = true;
-    $('#pickerLine').textContent = guard.youtubePickerAt
-      ? `YouTube account screen: ${guard.youtubePickerAction} at ${fmtTime(Date.now() + (guard.youtubePickerAt - guard.now))}.`
-      : 'YouTube account screen: not needed so far.';
+    const tvAt = (ms) => new Date(Date.now() + (ms - guard.now));
+    let pickerText;
+    if (!guard.youtubePickerSupported) pickerText = 'Not available: the TV needs Android 13 or newer.';
+    else if (!guard.youtubePickerLearnedAt) pickerText = 'Not learned yet.';
+    else pickerText = `Learned on ${tvAt(guard.youtubePickerLearnedAt).toLocaleDateString()}. ` +
+      (guard.youtubePickerAt ? `Last chose the first account at ${fmtTime(Date.now() + (guard.youtubePickerAt - guard.now))}.` : 'Not needed since.');
+    $('#pickerLine').textContent = pickerText;
+    $('#pickerRemember').disabled = !guard.youtubePickerSupported;
+    $('#pickerForget').disabled = !guard.youtubePickerLearnedAt;
     $('#blockedList').textContent = guard.blockedKeys.length
       ? guard.blockedKeys.map((k) => `${k.name.replace('KEYCODE_', '')} (${k.code})`).join(', ') : 'none';
   }
   async function loadGuard() { try { guard = await api('/api/guard'); renderGuard(); } catch (e) { /* status line reports */ } }
   $('#guardPause').onclick = async () => { guard = await api('/api/guard/pause', { method: 'POST', body: JSON.stringify({ minutes: 15 }) }); renderGuard(); setMsg('Guard paused for 15 minutes.', 'ok'); };
   $('#guardResume').onclick = async () => { guard = await api('/api/guard/resume', { method: 'POST', body: '{}' }); renderGuard(); setMsg('Guard resumed.', 'ok'); };
+  $('#pickerRemember').onclick = async () => {
+    try {
+      guard = await api('/api/guard/youtube-picker/remember', { method: 'POST', body: '{}' }); renderGuard();
+      setMsg('Learned. From now on Simple TV chooses the first account on that screen.', 'ok');
+    } catch (e) { setMsg(e.message, 'err'); }
+  };
+  $('#pickerForget').onclick = async () => {
+    if (!confirm('Forget the YouTube account screen? Simple TV will stop answering it.')) return;
+    guard = await api('/api/guard/youtube-picker', { method: 'DELETE' }); renderGuard();
+    setMsg('Forgotten.', 'ok');
+  };
   $('#guardToggle').onclick = async () => {
     try {
       await api('/api/settings', { method: 'PUT', body: JSON.stringify({ guardEnabled: !guard.guardEnabled }) });

@@ -6,6 +6,7 @@ import com.ielali.simpletv.data.ChannelRepository
 import com.ielali.simpletv.data.ProviderRepository
 import com.ielali.simpletv.data.SettingsRepository
 import com.ielali.simpletv.guard.GuardSetup
+import com.ielali.simpletv.guard.PickerReferenceStore
 import com.ielali.simpletv.tv.ExternalPlayer
 import com.ielali.simpletv.tv.PrefsLastChannelStore
 import com.ielali.simpletv.tv.TvController
@@ -24,6 +25,9 @@ class SimpleTvApp : Application() {
     lateinit var providers: ProviderRepository
         private set
 
+    lateinit var pickerReference: PickerReferenceStore
+        private set
+
     /** The TV's channel state; app-scoped so it keeps working while the YouTube app is in front. */
     lateinit var tv: TvController
         private set
@@ -37,6 +41,7 @@ class SimpleTvApp : Application() {
         channels = ChannelRepository(this)
         settings = SettingsRepository(this)
         providers = ProviderRepository(this)
+        pickerReference = PickerReferenceStore(this)
         GuardSetup.ensureEnabledIfWanted(this, settings.current().guardEnabled)
         tv = TvController(appScope, channels.channels, settings.settings, ExternalPlayer(this), PrefsLastChannelStore(this))
         configServer = ConfigServer(this, channels, settings, providers, CONFIG_PORT).also { it.start() }

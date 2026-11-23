@@ -176,3 +176,16 @@ Consequences: depends on YouTube exposing its screen to accessibility services a
 If YouTube changes either, the guard does nothing rather than press the wrong thing. The debug
 endpoint shows what it saw so the detector can be tuned. Reading window content is a broader
 accessibility capability; it is used only for this, inside the 30-second window.
+
+### ADR-013 addendum: recognise the account screen by its look
+
+Device result: YouTube on TV (its own rendering engine) exposes 14 empty placeholder nodes and no
+text, so the word-based detector can never fire there. A forced cold start also did not show the
+picker; YouTube most likely asks after a period of inactivity, so it cannot be summoned on demand.
+
+Decision: the caregiver teaches the screen once from the config page while it is showing. The guard
+stores only a 48x27 greyscale thumbnail (`ScreenFingerprint`; too small to read names). For 30 s after
+each hand-off it takes a screenshot every 1.5 s (`canTakeScreenshot`, Android 11+), compares it
+(mean difference <= 12 and correlation >= 0.85, blank frames never match) and presses OK (Android 13+)
+on a match, which chooses the highlighted first account. The word-based detector stays for other
+YouTube builds. Screenshots are never stored or sent; only the taught thumbnail is kept on the TV.

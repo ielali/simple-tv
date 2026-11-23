@@ -18,7 +18,10 @@ import com.ielali.simpletv.guard.GuardKeys
 import com.ielali.simpletv.guard.GuardSetup
 import com.ielali.simpletv.guard.HomeGuardPolicy
 import com.ielali.simpletv.guard.KeyLog
+import com.ielali.simpletv.guard.GuardBridge
+import com.ielali.simpletv.guard.ScreenFingerprint
 import com.ielali.simpletv.guard.YouTubeScreenLog
+import io.ktor.server.routing.delete
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -56,6 +59,8 @@ import kotlinx.serialization.json.JsonObject
  *  POST /api/guard/pause       <- { minutes }  lets the caregiver use Google TV for a while
  *  POST /api/guard/resume
  *  GET  /api/debug/youtube-screen -> what the guard last saw on YouTube's screen after a hand-off
+ *  POST /api/guard/youtube-picker/remember  captures the TV screen as YouTube's account screen
+ *  DELETE /api/guard/youtube-picker         forgets it
  *  GET  /api/keys              -> recent remote key presses, newest first
  *  POST /api/keys/clear
  *  GET  /api/providers         -> ProviderList with passwords blanked (hasPassword flags instead)
@@ -148,6 +153,10 @@ class ConfigServer(
         /** Last automatic choice on YouTube's account screen; 0 if it never happened. */
         val youtubePickerAt: Long = 0L,
         val youtubePickerAction: String = "",
+        /** When the account screen's look was remembered; 0 if never. */
+        val youtubePickerLearnedAt: Long = 0L,
+        /** Recognising it needs screenshots (Android 11) and pressing OK (Android 13). */
+        val youtubePickerSupported: Boolean = false,
     )
 
     @Serializable
@@ -173,6 +182,8 @@ class ConfigServer(
             blockedKeys = s.guardBlockedKeys.map { keyName(it) },
             youtubePickerAt = YouTubeScreenLog.snapshot.lastActionAt,
             youtubePickerAction = YouTubeScreenLog.snapshot.lastAction,
+            youtubePickerLearnedAt = (appContext as SimpleTvApp).pickerReference.current().savedAt,
+            youtubePickerSupported = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU,
         )
     }
 
@@ -236,6 +247,33 @@ class ConfigServer(
                     call.respond(guardStatus())
                 }
                 get("/api/debug/youtube-screen") { call.respond(YouTubeScreenLog.snapshot) }
+                post("/api/guard/youtube-picker/remember") {
+                    val service = GuardBridge.service
+                    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) {
+                        call.respond(HttpStatusCode.Conflict, ErrorBody("This needs Android 13 or newer on the TV."))
+                        return@post
+                    }
+                    if (service == null) {
+                        call.respond(HttpStatusCode.Conflict, ErrorBody("The home guard is not running on the TV. Turn it on first."))
+                        return@post
+                    }
+                    val shot = withContext(Dispatchers.Main) { service.captureFingerprint() }
+                    when {
+                        shot == null -> call.respond(HttpStatusCode.BadGateway, ErrorBody("The TV did not allow a screen capture. Try again in a moment."))
+                        ScreenFingerprint.isBlank(shot) -> call.respond(
+                            HttpStatusCode.Conflict,
+                            ErrorBody("The TV screen looks blank. Press this while YouTube's account screen is showing."),
+                        )
+                        else -> {
+                            (appContext as SimpleTvApp).pickerReference.save(shot, System.currentTimeMillis())
+                            call.respond(guardStatus())
+                        }
+                    }
+                }
+                delete("/api/guard/youtube-picker") {
+                    (appContext as SimpleTvApp).pickerReference.clear()
+                    call.respond(guardStatus())
+                }
                 get("/api/keys") { call.respond(keyRows()) }
                 post("/api/keys/clear") {
                     KeyLog.shared.clear()

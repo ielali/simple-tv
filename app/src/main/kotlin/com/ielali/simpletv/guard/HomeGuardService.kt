@@ -2,7 +2,10 @@ package com.ielali.simpletv.guard
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Build
+import android.view.Display
+import androidx.annotation.RequiresApi
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import android.util.Log
@@ -12,6 +15,11 @@ import com.ielali.simpletv.MainActivity
 import com.ielali.simpletv.SimpleTvApp
 import com.ielali.simpletv.tv.TvController
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -41,6 +49,7 @@ class HomeGuardService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        GuardBridge.service = this
         val banner = BannerOverlay(this) {
             com.ielali.simpletv.data.TvLanguage.isRightToLeft((application as SimpleTvApp).settings.current().language)
         }.also { overlay = it }
@@ -54,6 +63,7 @@ class HomeGuardService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        if (GuardBridge.service === this) GuardBridge.service = null
         scope.cancel()
         overlay?.hide()
         super.onDestroy()
@@ -93,6 +103,7 @@ class HomeGuardService : AccessibilityService() {
         val cfg = config()
         if (!HomeGuardPolicy.isActive(cfg, now) || pkg !in cfg.allowedExternalPackages) return
         if (now - GuardState.externalLaunchedAt > PICKER_WINDOW_MS) return
+        ensurePickerSampler()
         if (now - lastPickerCheck < 500) return
         lastPickerCheck = now
 
@@ -117,6 +128,73 @@ class HomeGuardService : AccessibilityService() {
         }
         YouTubeScreenLog.recordAction(now, done)
         Log.i(TAG, "YouTube account picker: $done")
+    }
+
+    private var samplerJob: Job? = null
+    private var samplerLaunch = 0L
+
+    /**
+     * YouTube on TV exposes no words, so the account screen is recognised by its look: for 30 s after
+     * Simple TV opens YouTube, compare the screen with the remembered thumbnail and press OK on a match.
+     */
+    private fun ensurePickerSampler() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return // pressing OK needs Android 13
+        val launchAt = GuardState.externalLaunchedAt
+        if (launchAt == samplerLaunch && samplerJob?.isActive == true) return
+        val reference = (application as SimpleTvApp).pickerReference.current().fingerprint ?: return
+        samplerLaunch = launchAt
+        samplerJob?.cancel()
+        samplerJob = scope.launch {
+            while (isActive && System.currentTimeMillis() - launchAt <= PICKER_WINDOW_MS) {
+                val now = System.currentTimeMillis()
+                if (HomeGuardPolicy.isActive(config(), now) && tv.isExternalFront()) {
+                    val shot = captureFingerprint()
+                    if (shot != null) {
+                        val match = ScreenFingerprint.compare(reference, shot)
+                        YouTubeScreenLog.recordMatch(now, match.toString())
+                        if (match.matches && pickerThrottle.tryAcquire(now)) {
+                            val done = if (pressOk()) "Recognised the account screen and pressed OK" else "Recognised the account screen but could not press OK"
+                            YouTubeScreenLog.recordAction(now, done)
+                            Log.i(TAG, "YouTube account picker: $done ($match)")
+                        }
+                    }
+                }
+                delay(SAMPLE_INTERVAL_MS)
+            }
+        }
+    }
+
+    /** A 48x27 greyscale thumbnail of the screen, or null if Android refused the screenshot. */
+    @RequiresApi(Build.VERSION_CODES.R)
+    suspend fun captureFingerprint(): Fingerprint? = suspendCancellableCoroutine { cont ->
+        takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
+            override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
+                cont.resume(runCatching { toFingerprint(result) }.getOrNull())
+            }
+
+            override fun onFailure(errorCode: Int) {
+                Log.w(TAG, "Screenshot failed: $errorCode")
+                cont.resume(null)
+            }
+        })
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun toFingerprint(result: AccessibilityService.ScreenshotResult): Fingerprint? {
+        val buffer = result.hardwareBuffer
+        try {
+            val hardware = Bitmap.wrapHardwareBuffer(buffer, result.colorSpace) ?: return null
+            val software = hardware.copy(Bitmap.Config.ARGB_8888, false)
+            hardware.recycle()
+            val small = Bitmap.createScaledBitmap(software, ScreenFingerprint.WIDTH, ScreenFingerprint.HEIGHT, true)
+            if (small !== software) software.recycle()
+            val pixels = IntArray(ScreenFingerprint.WIDTH * ScreenFingerprint.HEIGHT)
+            small.getPixels(pixels, 0, ScreenFingerprint.WIDTH, 0, 0, ScreenFingerprint.WIDTH, ScreenFingerprint.HEIGHT)
+            small.recycle()
+            return ScreenFingerprint.fromArgb(ScreenFingerprint.WIDTH, ScreenFingerprint.HEIGHT, pixels)
+        } finally {
+            buffer.close()
+        }
     }
 
     private fun pressOk(): Boolean =
@@ -198,6 +276,7 @@ class HomeGuardService : AccessibilityService() {
     private companion object {
         const val TAG = "HomeGuard"
         const val PICKER_WINDOW_MS = 30_000L
+        const val SAMPLE_INTERVAL_MS = 1_500L
         const val MAX_NODES = 300
     }
 }

@@ -6,6 +6,7 @@
     android:accessibilityFlags="flagRequestFilterKeyEvents|flagReportViewIds|flagIncludeNotImportantViews"
     android:canRequestFilterKeyEvents="true"
     android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
     android:description="@string/guard_service_description"
     android:notificationTimeout="200"
     android:packageNames="com.google.android.apps.tv.launcherx,com.netflix.ninja,com.amazon.amazonvideo.livingroom,com.disney.disneyplus,com.google.android.youtube.tv" />
