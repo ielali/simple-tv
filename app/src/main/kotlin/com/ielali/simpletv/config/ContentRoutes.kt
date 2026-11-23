@@ -28,6 +28,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import java.util.UUID
@@ -56,7 +57,26 @@ class ContentRoutes(private val app: SimpleTvApp) {
     @Serializable data class ItemsResponse(val loaded: Boolean, val refreshing: Boolean, val page: CatalogQuery.Page)
     @Serializable data class EntryView(val id: String, val title: String, val detail: String? = null)
     @Serializable data class SeriesInfo(val seasons: Int, val episodes: Int, val entries: List<EntryView>)
-    @Serializable data class QueueView(val total: Int, val entries: List<EntryView>, val resume: String? = null, val resumeItemId: String? = null)
+    @Serializable data class QueueView(
+        val total: Int, val entries: List<EntryView>, val resume: String? = null, val resumeItemId: String? = null,
+        /** Film channels with rating rules: how many of their films have been checked so far. */
+        val checked: Int? = null, val toCheck: Int? = null,
+    )
+    @Serializable data class DetailsView(
+        val itemId: String, val type: CatalogType, val title: String,
+        val poster: String? = null, val backdrop: String? = null, val plot: String? = null,
+        val cast: List<String> = emptyList(), val director: String? = null, val genres: List<String> = emptyList(),
+        val year: String? = null, val score: Double? = null, val trailer: String? = null,
+        /** Official rating in the household's country, and what it means. */
+        val rating: String? = null, val ratingMeaning: String? = null, val providerRating: String? = null,
+        val country: String, val fromTmdb: Boolean = false, val matchedByTitle: Boolean = false,
+    )
+    @Serializable data class RatingsView(
+        val country: String, val tvRegion: String, val chosen: String, val hasTmdbKey: Boolean,
+        val countries: List<String>, val film: List<com.ielali.simpletv.data.Cert>, val series: List<com.ielali.simpletv.data.Cert>,
+    )
+    @Serializable data class TmdbKey(val key: String = "")
+    @Serializable data class TmdbKeyState(val hasTmdbKey: Boolean)
     @Serializable data class QueuePreview(val playlist: PlaylistSpec)
 
     @Serializable data class YouTubeInput(val input: String = "")
@@ -152,7 +172,11 @@ class ContentRoutes(private val app: SimpleTvApp) {
         val q = app.queue.queue(spec)
         val progress = channelId?.let { app.queue.progress(it) }
         val resume = progress?.itemId?.let { id -> q.firstOrNull { it.id == id } }
-        return QueueView(q.size, q.take(QUEUE_PAGE).map(::entryView), resume?.title, resume?.id)
+        val check = if (spec.mode == PlaylistMode.FILM && com.ielali.simpletv.data.RatingRules.hasRules(spec)) {
+            app.appScope.launch { app.meta.checkSpec(spec) }
+            app.meta.progress(spec)
+        } else null
+        return QueueView(q.size, q.take(QUEUE_PAGE).map(::entryView), resume?.title, resume?.id, check?.first, check?.second)
     }
 
     private fun withSeed(spec: PlaylistSpec) =
@@ -164,6 +188,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
         catalogRoutes()
         filmRoutes()
         youtubeRoutes()
+        detailsRoutes()
         playRoutes()
     }
 
@@ -272,6 +297,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
             channels.replaceAll(current.copy(channels = current.channels.filterNot { it.providerId == id || it.playlist?.providerId == id }))
             providers.replaceAll(ProviderList(providers = providers.current().providers.filterNot { it.id == id }))
             app.catalog.forget(id)
+            app.meta.forget(id)
             call.respond(providersResponse())
         }
     }
@@ -300,6 +326,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
                 catalog, parseType(qp["type"]), qp["category"], qp["q"],
                 qp["offset"]?.toIntOrNull() ?: 0, qp["limit"]?.toIntOrNull() ?: 50,
                 channels.current().channels, pid,
+                details = { app.meta.cached(pid, it.type, it.id) }, country = app.meta.country(),
             )
             call.respond(ItemsResponse(catalog != null, app.catalog.isRunning(pid), page))
         }
@@ -330,6 +357,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
                 channels.replaceAll(current.copy(channels = current.channels.map { if (it.id == existing.id) updated else it }))
                 // A different series or film list starts from the top.
                 if (existing.playlist?.seriesId != spec.seriesId || existing.playlist?.mode != spec.mode) app.queue.restart(existing.id)
+                if (spec.mode == PlaylistMode.FILM) app.appScope.launch { app.meta.checkSpec(spec) }
                 return@post call.respond(Added(ApiViews.channel(updated), lineup()))
             }
             val ch = Channel(
@@ -337,6 +365,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
                 url = "", providerId = null, playlist = spec,
             )
             val added = call.addChannel(ch, req.number) ?: return@post
+            if (spec.mode == PlaylistMode.FILM) app.appScope.launch { app.meta.checkSpec(spec) }
             call.respond(Added(ApiViews.channel(added), lineup()))
         }
         get("/api/channels/{id}/queue") {
@@ -356,6 +385,49 @@ class ContentRoutes(private val app: SimpleTvApp) {
                 ?: return@post call.fail(HttpStatusCode.NotFound, "That channel isn't on the TV any more.")
             app.queue.restart(ch.id)
             call.respond(queueView(ch.playlist!!, ch.id))
+        }
+    }
+
+    private fun Route.detailsRoutes() {
+        get("/api/details/{pid}/{type}/{itemId}") {
+            val pid = call.parameters["pid"].orEmpty()
+            if (providers.find(pid) == null) return@get call.fail(HttpStatusCode.NotFound, "That subscription isn't on the TV any more.")
+            val type = parseType(call.parameters["type"])
+            val itemId = call.parameters["itemId"].orEmpty()
+            val item = app.catalogs.catalog(pid)?.items?.firstOrNull { it.type == type && it.id == itemId }
+                ?: return@get call.fail(HttpStatusCode.NotFound, "That title isn't in the list any more.")
+            val m = app.meta.details(pid, item)
+            val country = app.meta.country()
+            val cert = com.ielali.simpletv.data.RatingRules.certOf(m, country)
+            val meaning = cert?.let { c -> app.meta.lists()?.of(type, country)?.firstOrNull { it.certification.equals(c, true) }?.meaning }
+            call.respond(
+                DetailsView(
+                    itemId = item.id, type = type, title = item.name,
+                    poster = m?.poster ?: item.logo, backdrop = m?.backdrop, plot = m?.plot, cast = m?.cast.orEmpty(),
+                    director = m?.director, genres = m?.genres.orEmpty(), year = m?.year ?: item.year, score = m?.score,
+                    trailer = m?.trailer, rating = cert, ratingMeaning = meaning?.takeIf { it.isNotBlank() },
+                    providerRating = m?.providerRating, country = country,
+                    fromTmdb = (m?.tmdbAt ?: 0L) > 0 && m?.tmdbId != null, matchedByTitle = m?.matched == "title",
+                )
+            )
+        }
+        get("/api/ratings") {
+            val lists = app.meta.lists()
+            val country = app.meta.country()
+            call.respond(
+                RatingsView(
+                    country = country, tvRegion = app.meta.tvRegion(), chosen = app.settings.current().ratingCountry,
+                    hasTmdbKey = app.meta.hasKey(),
+                    countries = ((lists?.movie?.keys.orEmpty()) + (lists?.tv?.keys.orEmpty())).toSortedSet().toList(),
+                    film = lists?.of(CatalogType.FILM, country).orEmpty(), series = lists?.of(CatalogType.SERIES, country).orEmpty(),
+                )
+            )
+        }
+        put("/api/tmdb/key") {
+            when (val r = app.meta.setKey(call.receive<TmdbKey>().key)) {
+                is com.ielali.simpletv.data.TmdbClient.Check.Ok -> call.respond(TmdbKeyState(app.meta.hasKey()))
+                is com.ielali.simpletv.data.TmdbClient.Check.Problem -> call.fail(HttpStatusCode.UnprocessableEntity, r.message, "tmdb_key")
+            }
         }
     }
 

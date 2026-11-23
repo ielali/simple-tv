@@ -280,3 +280,31 @@ Decision:
 Consequences: Subtitles only appear when the file carries them; separate subtitle files offered by
 some providers are not used yet (backlog). Live channels are unchanged.
 
+## ADR-018 Film details and official ratings from the provider and TMDB
+
+Context: Caregivers want posters, trailers, descriptions and family ratings for films and series,
+and film channels that only play what suits the household (grandchildren visiting, for example).
+
+Decision:
+- Details come first from the provider's own Xtream details call (`get_vod_info`,
+  `get_series_info`: poster, plot, cast, genre, year, score, YouTube trailer, often a TMDB id), which
+  needs no key. With the household's optional free TMDB key, TMDB adds official ratings for every
+  country, better posters, trailers and cast. The provider's TMDB id is used when present; otherwise
+  the film is matched by its cleaned title and year (shown as "matched by title").
+- The key is stored only on the TV (SecretsStore), never returned (`hasTmdbKey`). A read access
+  token travels in the Authorization header; an older v3 key has to be a query parameter, which only
+  goes from the TV to TMDB over HTTPS and is redacted from logs. The page shows TMDB's required credit.
+- Rating country: chosen on the page (`ratingCountry`), defaulting to the TV's own region. Each
+  country's rating scale comes from TMDB's certification lists, ordered mildest to strongest.
+- Options for the whole TV: show the rating in the banner (`ratingOnBanner`), never play adult titles
+  (`hideAdult`, on by default). Per film channel: highest rating (`maxRating`), lowest score
+  (`minScore`), and whether films without a rating or score play (`skipUnrated`).
+- `MetadataService` caches details per subscription for 30 days and checks every film of a
+  rule-based film channel in the background, about two titles a second, so the provider is never
+  flooded. Unchecked films never play on a channel with rules, so a family channel only shows what it
+  has checked; the editor shows "Checking ratings: 340 of 1,172".
+
+Consequences: Rating rules need a TMDB key. Older and foreign films often lack a rating in a given
+country, hence the per-channel choice for them. Big film channels take minutes to check the first
+time. TMDB is free for non-commercial use with attribution.
+

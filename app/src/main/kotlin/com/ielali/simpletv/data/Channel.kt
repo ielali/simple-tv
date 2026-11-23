@@ -45,6 +45,12 @@ data class PlaylistSpec(
     val subtitles: String? = null,
     /** Soundtrack language; null = as the film comes. Missing = the film's own soundtrack. */
     val audio: String? = null,
+    /** Highest official rating allowed (in the household's rating country), e.g. "PG"; null = any. */
+    val maxRating: String? = null,
+    /** Lowest score out of 10, e.g. 6.0; null = any. */
+    val minScore: Double? = null,
+    /** With rating rules: leave out films that have no rating (or no score). */
+    val skipUnrated: Boolean = false,
 )
 
 /**

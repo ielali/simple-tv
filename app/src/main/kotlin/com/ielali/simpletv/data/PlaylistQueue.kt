@@ -15,16 +15,25 @@ data class QueueEntry(
 /** Builds film and series queues from the cached catalog. Pure, so order rules are unit tested. */
 object PlaylistQueue {
 
-    fun films(catalog: Catalog?, spec: PlaylistSpec): List<QueueEntry> {
+    /** The films a film channel draws from, before rating rules (for checking their details). */
+    fun candidates(catalog: Catalog?, spec: PlaylistSpec): List<CatalogItem> {
         val all = catalog?.of(CatalogType.FILM).orEmpty()
-        val base = if (spec.titles.isNotEmpty()) {
+        return if (spec.titles.isNotEmpty()) {
             val byId = all.associateBy { it.id }
             spec.titles.mapNotNull(byId::get)
         } else {
             all.filter { it.group.orEmpty() in spec.categories }.sortedBy { it.name.lowercase() }
         }
+    }
+
+    /**
+     * [allow] applies the channel's rating rules. It runs after shuffling, so the order stays the
+     * same while more films get checked.
+     */
+    fun films(catalog: Catalog?, spec: PlaylistSpec, allow: (CatalogItem) -> Boolean = { true }): List<QueueEntry> {
+        val base = candidates(catalog, spec)
         val ordered = if (spec.shuffle && spec.titles.isEmpty()) base.shuffled(Random(spec.seed)) else base
-        return finish(ordered.map { it.toEntry() }, spec)
+        return finish(ordered.filter(allow).map { it.toEntry() }, spec)
     }
 
     fun episodes(all: List<Episode>, spec: PlaylistSpec, headers: Map<String, String> = emptyMap()): List<QueueEntry> =

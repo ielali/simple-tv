@@ -220,6 +220,14 @@ details[open] summary svg{transform:rotate(90deg)}
 @keyframes rot{to{transform:rotate(360deg)}}
 .qitem{display:flex;align-items:center;gap:12px;padding:10px 4px;min-height:56px}
 .qitem .i{width:28px;text-align:center;flex:none}
+.rbadge{display:inline-flex;align-items:center;min-height:22px;padding:0 7px;border:1.5px solid currentColor;border-radius:6px;font-weight:800;font-size:12px;line-height:1;white-space:nowrap}
+.poster{position:relative}
+.poster .rb{position:absolute;top:8px;inset-inline-start:8px;background:var(--card);color:var(--ink);border-radius:6px;padding:2px 6px;font-size:11px;font-weight:800;text-shadow:none;border:1px solid var(--line)}
+.poster.md{width:120px;flex:none}
+.sheet{max-width:640px;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow:auto}
+.detailtop{display:flex;gap:16px;align-items:flex-start}
+.selrow{display:flex;flex-wrap:wrap;gap:8px}
+.selrow .chip{min-height:40px}
 .empty{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
 </style>
 </head>
@@ -1035,15 +1043,12 @@ screens.add = (() => {
       list = cat.items.map((it) => `<label class="chk"><input type="checkbox" data-item="${esc(it.id)}" ${cat.selected.has(it.id) ? 'checked' : ''} ${it.inLineup ? 'disabled' : ''}>${logoBox(it.name, it.logo)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span><span class="cap" dir="auto">${esc(it.group || 'No category')}</span></span>${it.inLineup ? `<span class="pill ok"><span class="dot"></span>In your lineup as ${esc(it.lineupNumber)}</span>` : ''}<button class="ibtn bd" type="button" data-try="${esc(it.id)}" aria-label="Play ${esc(it.name)} on the TV" title="Play on TV">${ico('play', 18)}</button></label>`).join('');
     } else {
       list = `<div class="postergrid">${cat.items.map((it) => {
-        const img = it.logo ? ` img" style="background-image:url('${esc(it.logo).replace(/'/g, '%27')}')` : '"';
-        const inner = `<div class="poster${img}><span dir="auto">${esc(it.name)}</span></div><div class="cap">${esc([it.year, it.minutes ? (it.minutes >= 60 ? Math.floor(it.minutes / 60) + ' h ' + (it.minutes % 60) + ' min' : it.minutes + ' min') : ''].filter(Boolean).join(' · '))}</div>`;
-        return cat.type === 'series'
-          ? `<button type="button" data-series="${esc(it.id)}" data-name="${esc(it.name)}" aria-label="Make a channel of ${esc(it.name)}">${inner}</button>`
-          : `<div>${inner}</div>`;
+        const inner = `${posterHtml(it)}<div class="cap">${esc([it.year, minutesText(it.minutes), scoreText(it.score)].filter(Boolean).join(' · '))}</div>`;
+        return `<button type="button" data-details="${esc(it.id)}" data-name="${esc(it.name)}" aria-label="About ${esc(it.name)}">${inner}</button>`;
       }).join('')}</div>`;
     }
     const callout = cat.type === 'film' && !searching && c ? `<div class="callout"><div class="grow" style="min-width:200px"><div class="sec" dir="auto">Turn ${esc(c.name)} into a film channel</div><div>The TV plays these films one after another. No library to browse.</div></div><a class="btn" href="#/film/new?mode=film&pid=${encodeURIComponent(cat.pid)}&cat=${encodeURIComponent(c.id)}">Make a film channel</a></div>`
-      : cat.type === 'series' ? `<div class="callout"><div class="grow" style="min-width:200px"><div class="sec">Pick a series to make a channel</div><div>The TV plays it episode by episode and remembers where it stopped.</div></div></div>` : '';
+      : cat.type === 'series' ? `<div class="callout"><div class="grow" style="min-width:200px"><div class="sec">Pick a series to make a channel</div><div>Tap one to see what it’s about. The TV plays it episode by episode and remembers where it stopped.</div></div></div>` : '';
     const allBtn = searching || !c ? '' : cat.type === 'live' ? `<button class="btn" id="addAll">Add all ${fmtN(c.count)} channels</button>`
       : cat.type === 'film' ? `<a class="btn" href="#/film/new?mode=film&pid=${encodeURIComponent(cat.pid)}&cat=${encodeURIComponent(c.id)}&pick=1">Pick films by hand</a>` : '';
     const n = cat.selected.size; const start = nextNumber();
@@ -1055,7 +1060,13 @@ screens.add = (() => {
       ${n ? `<div class="addbar"><div class="grow"><div style="font-weight:700">${fmtN(n)} selected</div><div class="cap">${numbersWords(start, n)} You can change them next.</div></div><button class="btn ghost" id="clearSel">Clear</button><button class="btn pri" id="addSel">Add ${plural(n, 'channel')}</button></div>` : ''}`;
     $$('[data-item]', el).forEach((b) => b.onchange = () => { const it = cat.items.find((x) => x.id === b.dataset.item); if (b.checked) cat.selected.set(it.id, it); else cat.selected.delete(it.id); paintItems(); });
     $$('[data-try]', el).forEach((b) => b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); const it = cat.items.find((x) => x.id === b.dataset.try); playOnTv({ providerId: cat.pid, itemId: it.id, name: it.name }, it.name); });
-    $$('[data-series]', el).forEach((b) => b.onclick = () => go(`#/film/new?mode=series&pid=${encodeURIComponent(cat.pid)}&series=${encodeURIComponent(b.dataset.series)}&name=${encodeURIComponent(b.dataset.name)}`));
+    $$('[data-details]', el).forEach((b) => b.onclick = () => {
+      const id = b.dataset.details; const name = b.dataset.name; const pid = cat.pid;
+      const action = cat.type === 'series'
+        ? { label: 'Make a series channel', run: () => go(`#/film/new?mode=series&pid=${encodeURIComponent(pid)}&series=${encodeURIComponent(id)}&name=${encodeURIComponent(name)}`) }
+        : null;
+      showDetails(pid, cat.type === 'series' ? 'SERIES' : 'FILM', id, name, action);
+    });
     const m = $('#more50', el); if (m) m.onclick = () => loadItems(true);
     const cs = $('#clearSel', el); if (cs) cs.onclick = () => { cat.selected.clear(); paintItems(); };
     const as = $('#addSel', el); if (as) as.onclick = () => addItems({ itemIds: [...cat.selected.keys()] }, n);
@@ -1309,6 +1320,67 @@ screens.subs = (() => {
   return { render, paint };
 })();
 
+/* ---------- Film details, official ratings (TMDB, ADR-018) ---------- */
+const countryName = (() => {
+  let dn = null; try { dn = new Intl.DisplayNames(['en'], { type: 'region' }); } catch (e) { /* old browser */ }
+  return (code) => { if (!code) return ''; try { return (dn && dn.of(code)) || code; } catch (e) { return code; } };
+})();
+async function loadRatings(force) {
+  if (state.ratings && !force) return state.ratings;
+  try { state.ratings = await GET('/api/ratings'); } catch (e) { state.ratings = state.ratings || null; }
+  return state.ratings;
+}
+const rbadge = (code, extra = '') => code ? `<span class="rbadge" ${extra}>${esc(code)}</span>` : '';
+const scoreText = (s) => s ? `${(Math.round(s * 10) / 10).toFixed(1)}/10` : '';
+const minutesText = (m) => m ? (m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min') : '';
+function posterHtml(it, cls = '') {
+  const img = it.poster || it.logo;
+  return `<div class="poster ${cls}${img ? ' img' : ''}" ${img ? `style="background-image:url('${esc(img).replace(/'/g, '%27')}')"` : ''}>${it.rating ? `<span class="rb">${esc(it.rating)}</span>` : ''}<span dir="auto">${esc(it.name)}</span></div>`;
+}
+/**
+ * A sheet with a film's or series' details: poster, rating and what it means, score, plot, cast and
+ * the trailer (on this phone, or on the TV). [action] adds a main button, e.g. "Make a series channel".
+ */
+async function showDetails(pid, type, itemId, name, action) {
+  const back = document.createElement('div');
+  back.className = 'dialogback';
+  back.innerHTML = `<div class="dialog sheet col g16" role="dialog" aria-modal="true" aria-label="${esc(name)}"><div class="f g12"><h3 class="grow" dir="auto">${esc(name)}</h3><button class="ibtn" data-close aria-label="Close">${ico('close', 20)}</button></div><div class="col g12" aria-busy="true"><div class="skel" style="height:180px"></div><div class="skel"></div><div class="skel" style="width:60%"></div></div></div>`;
+  const close = () => { back.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  back.addEventListener('click', (e) => { if (e.target === back || e.target.closest('[data-close]')) close(); });
+  document.addEventListener('keydown', onKey);
+  $('#dialogs').appendChild(back);
+  let d;
+  try { d = await GET(`/api/details/${encodeURIComponent(pid)}/${type === 'SERIES' ? 'series' : 'film'}/${encodeURIComponent(itemId)}`); }
+  catch (e) { if (e.status !== 401) back.querySelector('[aria-busy]').outerHTML = `<p class="hint err">${esc(e.message)}</p>`; return; }
+  const meta = [d.year, d.genres.slice(0, 3).join(', ')].filter(Boolean).join(' · ');
+  back.querySelector('.sheet').innerHTML = `
+    <div class="f g12"><h3 class="grow" dir="auto">${esc(d.title)}</h3><button class="ibtn" data-close aria-label="Close">${ico('close', 20)}</button></div>
+    <div class="detailtop">
+      ${posterHtml({ name: d.title, poster: d.poster }, 'md')}
+      <div class="col g8 grow">
+        ${meta ? `<div class="muted">${esc(meta)}</div>` : ''}
+        <div class="f fw g8">
+          ${d.rating ? `${rbadge(d.rating)}<span class="cap">${esc(d.ratingMeaning || 'Rated ' + d.rating + ' in ' + countryName(d.country))}</span>` : d.providerRating ? `${rbadge(d.providerRating)}<span class="cap">From your provider</span>` : `<span class="cap">No official rating${state.status && state.status.hasTmdbKey ? ' for ' + esc(countryName(d.country)) : ''}</span>`}
+        </div>
+        ${d.score ? `<div><span style="font-weight:700">${esc(scoreText(d.score))}</span> <span class="cap">score</span></div>` : ''}
+        ${d.director ? `<div class="cap">${d.type === 'SERIES' ? 'Created by' : 'Directed by'} ${esc(d.director)}</div>` : ''}
+      </div>
+    </div>
+    ${d.plot ? `<p dir="auto">${esc(d.plot)}</p>` : '<p class="muted">No description for this one.</p>'}
+    ${d.cast.length ? `<div class="cap">With ${esc(listWords(d.cast.slice(0, 5)))}</div>` : ''}
+    <div id="trailerBox"></div>
+    <div class="f fw g8">
+      ${action ? `<button class="btn pri" data-main>${esc(action.label)}</button>` : ''}
+      ${d.trailer ? `<button class="btn" data-watch>${ico('play', 18)}Watch the trailer here</button><button class="btn" data-tv>${ico('tv', 18)}Trailer on the TV</button>` : ''}
+    </div>
+    ${d.fromTmdb ? `<p class="cap">Details from TMDB${d.matchedByTitle ? ', matched by title and year' : ''}. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>` : ''}`;
+  const m = back.querySelector('[data-main]'); if (m) m.onclick = () => { close(); action.run(d); };
+  const w = back.querySelector('[data-watch]');
+  if (w) w.onclick = () => { $('#trailerBox').innerHTML = `<div class="thumb"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(d.trailer)}?autoplay=1&rel=0" title="Trailer" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen style="border:0;width:100%;height:100%;position:absolute;inset:0"></iframe></div>`; w.remove(); };
+  const t = back.querySelector('[data-tv]'); if (t) t.onclick = () => playOnTv({ youtube: 'https://www.youtube.com/watch?v=' + d.trailer, name: d.title + ' (trailer)' }, 'The trailer');
+}
+
 /* ---------- Film and series channels ---------- */
 const SUB_CHOICES = [['', 'Off'], ['ar', 'العربية'], ['en', 'English'], ['any', 'Any language']];
 const AUDIO_CHOICES = [['', 'As it comes'], ['ar', 'العربية'], ['en', 'English']];
@@ -1336,6 +1408,7 @@ screens.film = (() => {
           source: q.get('pick') ? 'pick' : 'cats', pickCat: q.get('pick') ? catId : null, results: [], q: '' };
       }
     }
+    await loadRatings();
     paint();
     await loadSide();
   }
@@ -1345,6 +1418,7 @@ screens.film = (() => {
       if (sp.mode === 'FILM' && !f.cats) { const r = await GET(`/api/catalog/${encodeURIComponent(sp.providerId)}/categories?type=film`); f.cats = r.categories; f.catLoaded = r.loaded; paint(); }
       if (sp.mode === 'FILM' && f.source === 'pick' && !f.results.length) await search();
       if (sp.mode === 'SERIES' && sp.seriesId && (!f.seriesInfo || f.seriesInfo.id !== sp.seriesId)) { const r = await GET(`/api/catalog/${encodeURIComponent(sp.providerId)}/series/${encodeURIComponent(sp.seriesId)}`); f.seriesInfo = { id: sp.seriesId, ...r }; paint(); }
+      if (sp.mode === 'SERIES' && sp.seriesId && (!f.seriesDetails || f.seriesDetails.itemId !== sp.seriesId)) { GET(`/api/details/${encodeURIComponent(sp.providerId)}/series/${encodeURIComponent(sp.seriesId)}`).then((d) => { f.seriesDetails = d; if (!f.seriesName) f.seriesName = d.title; paint(); }).catch(() => {}); }
       if (sp.mode === 'SERIES' && !sp.seriesId) await search();
     } catch (e) { if (e.status !== 401) toast(e.message, null, 6000); }
     await loadQueue();
@@ -1364,6 +1438,9 @@ screens.film = (() => {
       if (hadProgress !== !!f.progress) { f.queueBusy = false; paint(); return; }
     } catch (e) { if (my === loadQueue.seq) f.queue = { error: e.message }; }
     f.queueBusy = false; paintQueue();
+    // While ratings are being checked on the TV, look again every few seconds.
+    clearTimeout(f.checkT);
+    if (f.queue && f.queue.toCheck && f.queue.checked < f.queue.toCheck && route.name === 'film') f.checkT = setTimeout(loadQueue, 5000);
   }
   async function search() {
     const sp = f.spec; const type = sp.mode === 'SERIES' ? 'series' : 'film';
@@ -1396,9 +1473,10 @@ screens.film = (() => {
                 : `<label class="inp big">${ico('search', 20)}<span class="sr">Search films</span><input id="fQ" type="search" value="${esc(f.q)}" placeholder="Search films to add" autocomplete="off" dir="auto"></label><div id="fResults" class="col g4"></div>`}
               ${f.source === 'cats' ? `<div class="field"><span>Order</span><div class="seg full" role="radiogroup"><button data-shuffle="0" class="${sp.shuffle ? '' : 'on'}" role="radio" aria-checked="${!sp.shuffle}">In order</button><button data-shuffle="1" class="${sp.shuffle ? 'on' : ''}" role="radio" aria-checked="${sp.shuffle}">Shuffled</button></div><span class="hint">Shuffled mixes the films once. The TV then plays them one after another.</span></div>` : ''}`
             : `
-              ${sp.seriesId && f.seriesInfo ? `<div class="f g12 card" style="padding:12px"><div class="poster sm"><span dir="auto">${esc(f.name)}</span></div><div class="grow"><div style="font-weight:700" dir="auto">${esc(f.seriesName || f.name)}</div><div class="cap">${plural(f.seriesInfo.seasons, 'season')} · ${plural(f.seriesInfo.episodes, 'episode')}</div></div>${f.id ? '<span class="pill ok">Selected</span>' : '<button class="btn ghost" id="otherSeries">Choose another</button>'}</div>`
+              ${sp.seriesId && f.seriesInfo ? `<div class="f g12 card" style="padding:12px">${posterHtml({ name: f.seriesName || f.name, poster: f.seriesDetails && f.seriesDetails.poster }, 'sm')}<div class="grow"><div style="font-weight:700" dir="auto">${esc(f.seriesName || f.name)}</div><div class="cap">${plural(f.seriesInfo.seasons, 'season')} · ${plural(f.seriesInfo.episodes, 'episode')}</div></div>${f.id ? '<span class="pill ok">Selected</span>' : '<button class="btn ghost" id="otherSeries">Choose another</button>'}</div>`
                 : sp.seriesId ? '<div class="skel" style="height:80px"></div>' : `<label class="field"><span>Series</span><span class="inp big">${ico('search', 20)}<input id="fQ" type="search" value="${esc(f.q)}" placeholder="Search series" autocomplete="off" dir="auto"></span></label><div id="fResults" class="col g4"></div>`}
               ${f.progress ? `<div class="f fw g12 card" style="padding:12px"><span class="icobox ok">${ico('check', 20, 2.2)}</span><div class="grow" style="min-width:160px"><div style="font-weight:600">Stopped at ${esc(f.progress.resume.split(' · ')[0].replace(/^S/, 's'))}</div><div class="cap">The TV picks up from here next time.</div></div><button class="btn" id="restart">Start again</button></div>` : ''}`}
+            ${isFilm ? ratingRules(sp) : seriesRating()}
             <div class="field"><span>Subtitles</span><div class="seg full" role="radiogroup">${SUB_CHOICES.map(([k, l]) => `<button data-sub="${k}" class="${(sp.subtitles || '') === k ? 'on' : ''}" role="radio" aria-checked="${(sp.subtitles || '') === k}" ${k === 'ar' ? 'lang="ar"' : ''}>${l}</button>`).join('')}</div>
               <span class="hint">Shown large on the TV. If ${isFilm ? 'a film doesn’t' : 'an episode doesn’t'} have them, it plays without.</span></div>
             <div class="field"><span>Soundtrack</span><div class="seg full" role="radiogroup">${AUDIO_CHOICES.map(([k, l]) => `<button data-audio="${k}" class="${(sp.audio || '') === k ? 'on' : ''}" role="radio" aria-checked="${(sp.audio || '') === k}" ${k === 'ar' ? 'lang="ar"' : ''}>${l}</button>`).join('')}</div>
@@ -1426,6 +1504,26 @@ screens.film = (() => {
     $$('[data-title]', box).forEach((c) => c.onchange = () => { const id = c.dataset.title; const t = f.spec.titles; if (c.checked) { if (!t.includes(id)) t.push(id); } else t.splice(t.indexOf(id), 1); loadQueue(); });
     $$('[data-pick-series]', box).forEach((b) => b.onclick = () => { f.spec.seriesId = b.dataset.pickSeries; f.seriesName = b.dataset.name; if (!f.name.trim()) f.name = b.dataset.name.slice(0, 60); f.seriesInfo = null; paint(); loadSide(); });
   }
+  const MIN_SCORES = [['', 'Any'], ['6', '6 or more'], ['7', '7 or more'], ['8', '8 or more']];
+  function ratingRules(sp) {
+    const r = state.ratings; const certs = (r && r.film) || [];
+    if (!r || !r.hasTmdbKey) {
+      return `<div class="field"><span>Ratings</span><p class="hint">To limit this channel by rating, add a free TMDB key in <a href="#/settings">TV settings</a>.</p></div>`;
+    }
+    const rules = !!(sp.maxRating || sp.minScore);
+    return `<div class="field"><span>Highest rating</span>
+        <div class="selrow" role="radiogroup" aria-label="Highest rating">${[{ certification: '', meaning: 'Any rating' }].concat(certs).map((c) => `<button class="chip ${(sp.maxRating || '') === c.certification ? 'on' : ''}" data-maxr="${esc(c.certification)}" role="radio" aria-checked="${(sp.maxRating || '') === c.certification}" title="${esc(c.meaning || '')}">${c.certification ? esc(c.certification) : 'Any'}</button>`).join('')}</div>
+        <span class="hint">${sp.maxRating ? esc((certs.find((c) => c.certification === sp.maxRating) || {}).meaning || '') + ' Films rated higher are left out.' : `Official ${esc(countryName(r.country))} ratings. Change the country in TV settings.`}</span></div>
+      <div class="field"><span>Lowest score</span><div class="seg full" role="radiogroup">${MIN_SCORES.map(([k, l]) => `<button data-mins="${k}" class="${String(sp.minScore || '') === k ? 'on' : ''}" role="radio" aria-checked="${String(sp.minScore || '') === k}">${l}</button>`).join('')}</div>
+        <span class="hint">Scores out of 10 from TMDB viewers.</span></div>
+      ${rules ? `<div class="field"><span>Films without a rating${sp.minScore ? ' or score' : ''}</span><div class="seg full" role="radiogroup"><button data-unrated="play" class="${sp.skipUnrated ? '' : 'on'}" role="radio" aria-checked="${!sp.skipUnrated}">Play them</button><button data-unrated="skip" class="${sp.skipUnrated ? 'on' : ''}" role="radio" aria-checked="${!!sp.skipUnrated}">Leave them out</button></div>
+        <span class="hint">Older and foreign films often have no rating in ${esc(countryName(r.country))}.</span></div>` : ''}`;
+  }
+  function seriesRating() {
+    const i = f.seriesDetails;
+    if (!i) return '';
+    return `<div class="f fw g8" style="align-items:center">${i.rating ? rbadge(i.rating) + `<span class="cap">${esc(i.ratingMeaning || 'Rated ' + i.rating)}</span>` : '<span class="cap">No official rating</span>'}${i.score ? `<span class="cap">· ${esc(scoreText(i.score))}</span>` : ''}<button class="btn ghost" id="seriesAbout">About this series</button></div>`;
+  }
   const SHOW = 12;
   function paintQueue() {
     const el = $('#queuePanel'); if (!el) return;
@@ -1449,6 +1547,7 @@ screens.film = (() => {
       ${q && q.error ? `<p class="hint err">${esc(q.error)}</p>` : !q ? `<p class="muted">${isFilm ? 'Pick a category or some films to see the queue.' : 'Pick a series to see its episodes.'}</p>`
         : !entries.length ? '<p class="muted">Nothing to play yet.</p>'
         : `<div class="list">${entries.slice(0, SHOW).map((e, i) => `<div class="qitem"><span class="cap i">${i + 1}</span><div class="grow"><div dir="auto" class="ell" style="font-weight:600">${esc(e.title)}</div><div class="cap">${esc(i === 0 && !isFilm && q.resumeItemId ? 'Plays next · ' + (e.detail || '') : (e.detail || ''))}</div></div>${isFilm ? `<button class="ibtn" data-first="${esc(e.id)}" aria-label="Play ${esc(e.title)} first" title="Play first" ${i === 0 ? 'disabled' : ''}>${ico('up', 18)}</button><button class="ibtn" data-skip="${esc(e.id)}" aria-label="Leave out ${esc(e.title)}" title="Leave out">${ico('close', 18)}</button>` : ''}</div>`).join('')}</div>`}
+      ${q && q.toCheck ? `<div class="f g8 cap" role="status">${q.checked < q.toCheck ? '<span class="spin" style="width:14px;height:14px"></span>' : ico('check', 14, 2.4)}<span>${q.checked < q.toCheck ? `Checking ratings: ${fmtN(q.checked)} of ${fmtN(q.toCheck)} films so far. Films wait until they’re checked.` : `All ${fmtN(q.toCheck)} films checked; ${fmtN(q.total)} fit the rules.`}</span></div>` : ''}
       <div class="cap">${esc(more)}</div>
       ${isFilm && sp.excluded.length ? `<button class="btn ghost" id="unskip" style="align-self:flex-start">Put back ${plural(sp.excluded.length, 'left-out film')}</button>` : ''}`;
     $$('[data-first]', el).forEach((b) => b.onclick = () => { const id = b.dataset.first; if (sp.titles.length) { sp.titles.splice(sp.titles.indexOf(id), 1); sp.titles.unshift(id); } else { sp.first = [id].concat(sp.first.filter((x) => x !== id)); } loadQueue(); });
@@ -1464,6 +1563,10 @@ screens.film = (() => {
     $$('[data-src]', el).forEach((b) => b.onclick = () => { if (f.source === b.dataset.src) return; f.source = b.dataset.src; if (f.source === 'pick') { sp.categories = []; } else { sp.titles = []; } paint(); loadSide(); });
     $$('[data-fcat]', el).forEach((b) => b.onclick = () => { const id = b.dataset.fcat; const c = sp.categories; if (c.includes(id)) c.splice(c.indexOf(id), 1); else c.push(id); paint(); loadQueue(); });
     const mf = $('#moreFCats', el); if (mf) mf.onclick = () => { f.catsAll = true; paint(); };
+    $$('[data-maxr]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'maxRating', b.dataset.maxr); if (!sp.maxRating && !sp.minScore) Reflect.deleteProperty(sp, 'skipUnrated'); paint(); loadQueue(); });
+    $$('[data-mins]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'minScore', b.dataset.mins ? Number(b.dataset.mins) : null); if (!sp.maxRating && !sp.minScore) Reflect.deleteProperty(sp, 'skipUnrated'); paint(); loadQueue(); });
+    $$('[data-unrated]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'skipUnrated', b.dataset.unrated === 'skip'); paint(); loadQueue(); });
+    const sa = $('#seriesAbout', el); if (sa) sa.onclick = () => showDetails(sp.providerId, 'SERIES', sp.seriesId, f.seriesName || f.name);
     $$('[data-sub]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'subtitles', b.dataset.sub); paint(); });
     $$('[data-audio]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'audio', b.dataset.audio); paint(); });
     $$('[data-shuffle]', el).forEach((b) => b.onclick = () => { sp.shuffle = b.dataset.shuffle === '1'; if (!sp.shuffle) sp.seed = 0; paint(); loadQueue(); });
@@ -1498,7 +1601,7 @@ screens.settings = (() => {
     if (!state.settings || !state.status) { el.innerHTML = loadingCard(4); await loadCore(); if (stale(seq)) return; }
     else GET('/api/settings').then((s) => { state.settings = s; }).catch(() => {});
     paint();
-    const [guard, keys, qr] = await Promise.all([GET('/api/guard').catch(() => null), GET('/api/keys').catch(() => []), state.qr ? state.qr : GET('/api/qr').catch(() => null)]);
+    const [guard, keys, qr] = await Promise.all([GET('/api/guard').catch(() => null), GET('/api/keys').catch(() => []), state.qr ? state.qr : GET('/api/qr').catch(() => null), loadRatings(true)]);
     if (stale(seq)) return;
     state.guard = guard; state.keys = keys; state.qr = qr; paint();
   }
@@ -1510,6 +1613,30 @@ screens.settings = (() => {
     const q = state.qr; if (!q) return '';
     let d = ''; q.rows.forEach((row, y) => { for (let x = 0; x < row.length; x++) if (row[x] === '1') d += `M${x} ${y}h1v1h-1z`; });
     return `<svg viewBox="-1 -1 ${q.size + 2} ${q.size + 2}" shape-rendering="crispEdges" role="img" aria-label="QR code for this page"><path d="${d}" fill="currentColor"/></svg>`;
+  }
+  function ratingsCard() {
+    const r = state.ratings; const s = S(); const st = state.status; const has = !!(st.hasTmdbKey || (r && r.hasTmdbKey));
+    const tvC = (r && r.tvRegion) || st.tvRegion || '';
+    const countries = (r && r.countries) || [];
+    return `<section class="card col g12">
+      <h2 class="sec">Film details and ratings</h2>
+      <p class="muted">Posters, trailers, descriptions and official age ratings for films and series. They come from TMDB, The Movie Database, with your own free key.</p>
+      ${has ? `<div class="f fw g8"><span class="pill ok">${ico('check', 14, 2.4)}TMDB key saved</span><button class="btn ghost" id="tmdbRemove">Remove key</button></div>` : ''}
+      <details ${has ? '' : 'open'}><summary>${ico('right', 18)}${has ? 'Replace the key' : 'Add your TMDB key'}</summary><div class="col g8">
+        <ol class="muted" style="margin:0;padding-inline-start:20px;line-height:22px"><li>Make a free account at themoviedb.org.</li><li>Open Settings, then API, and ask for a key for personal use.</li><li>Copy the long “API Read Access Token” and paste it here.</li></ol>
+        <div class="f fw g8"><label class="inp grow" style="min-width:200px"><span class="sr">TMDB key</span><input id="tmdbKey" type="password" autocomplete="off" spellcheck="false" dir="ltr" placeholder="Paste the API Read Access Token"></label><button class="btn" id="tmdbSave">Check and save</button></div>
+        <p class="hint">It stays on the TV and is never shown again.</p><p class="hint err hide" id="tmdbErr"></p>
+      </div></details>
+      <label class="field"><span>Rating country</span><span class="inp" style="max-width:340px"><select id="rCountry" ${countries.length ? '' : 'disabled'}>
+        <option value="" ${s.ratingCountry ? '' : 'selected'}>Same as the TV${tvC ? ' (' + esc(countryName(tvC)) + ')' : ''}</option>
+        ${countries.map((c) => `<option value="${esc(c)}" ${s.ratingCountry === c ? 'selected' : ''}>${esc(countryName(c))}</option>`).sort((a, b) => a.replace(/<[^>]+>/g, '').localeCompare(b.replace(/<[^>]+>/g, ''))).join('')}
+      </select></span><span class="hint">${countries.length ? 'Whose official ratings film channels follow. The badges below are that country\u2019s ratings, mildest first.' : 'Add a TMDB key to choose.'}</span></label>
+      ${r && r.film && r.film.length ? `<div class="f fw g8" aria-label="Ratings in ${esc(countryName(r.country))}">${r.film.map((c) => rbadge(c.certification, `title="${esc(c.meaning || '')}"`)).join('')}</div>` : ''}
+      <div class="f g12"><div class="grow"><div style="font-weight:600" id="rbH">Show the rating on the TV</div><div class="cap">Next to the film's title in the channel banner.</div></div><button class="sw ${s.ratingOnBanner ? 'on' : ''}" id="rbSw" role="switch" aria-checked="${!!s.ratingOnBanner}" aria-labelledby="rbH"></button></div>
+      <div class="f g12"><div class="grow"><div style="font-weight:600" id="adH">Never play adult titles</div><div class="cap">On every film channel, whatever its other rules.</div></div><button class="sw ${s.hideAdult ? 'on' : ''}" id="adSw" role="switch" aria-checked="${!!s.hideAdult}" aria-labelledby="adH"></button></div>
+      <p class="hint">Each film channel can also set its own highest rating and lowest score.</p>
+      ${has ? '<p class="cap">This product uses the TMDB API but is not endorsed or certified by TMDB.</p>' : ''}
+    </section>`;
   }
   function guardCard() {
     const g = state.guard;
@@ -1568,6 +1695,7 @@ screens.settings = (() => {
             ${st.hasYoutubeKey ? `<div class="f fw g8"><span class="pill ok">${ico('check', 14, 2.4)}Saved</span><button class="btn ghost" id="keyRemove">Remove key</button></div>` : ''}
             <div class="f fw g8"><label class="inp grow" style="min-width:200px"><span class="sr">YouTube key</span><input id="ytKey" type="password" autocomplete="off" spellcheck="false" dir="ltr" placeholder="${st.hasYoutubeKey ? 'Paste a new key to replace it' : 'Paste your key'}"></label><button class="btn" id="keySave">Save key</button></div>
           </div></details></section>
+        ${ratingsCard()}
         <section class="card col g12">
           <div class="f g12"><h2 class="sec grow" id="pinH">Lock this page with a PIN</h2><button class="sw ${st.pinSet ? 'on' : ''}" id="pinSw" role="switch" aria-checked="${st.pinSet}" aria-labelledby="pinH"></button></div>
           <p class="muted">${st.pinSet ? 'This page asks for the PIN. It also shows on the TV’s settings screen (press MENU on the remote).' : 'Anyone on your Wi-Fi can open this page today. A PIN of 4 to 6 digits keeps it to you. It also shows on the TV’s settings screen.'}</p>
@@ -1594,6 +1722,20 @@ screens.settings = (() => {
     $$('[data-lang]', el).forEach((b) => b.onclick = () => setSetting({ language: b.dataset.lang }, 'Saved. The TV uses it now.'));
     $$('[data-theme]', el).forEach((b) => b.onclick = () => { store.set('stv.theme', b.dataset.theme === 'system' ? null : b.dataset.theme); applyTheme(); paint(); });
     const t = $('#rTime', el); t.onchange = () => { if (t.value) setSetting({ catalogRefreshTime: t.value }, `Saved. The lists update at ${clock(new Date('2000-01-01T' + t.value).getTime())} each day.`).then(() => GET('/api/status').then((s) => { state.status = s; paint(); })); };
+    const tk = $('#tmdbSave', el);
+    if (tk) tk.onclick = async () => {
+      const v = $('#tmdbKey').value.trim(); const e = $('#tmdbErr'); if (!v) return;
+      tk.disabled = true; tk.innerHTML = '<span class="spin"></span>Checking…';
+      try { await PUT('/api/tmdb/key', { key: v }); toast('Saved. The TV is getting film details now.'); state.status = await GET('/api/status'); await loadRatings(true); paint(); }
+      catch (x) { tk.disabled = false; tk.textContent = 'Check and save'; if (x.status !== 401 && e) { e.textContent = x.message; e.classList.remove('hide'); } }
+    };
+    const tr = $('#tmdbRemove', el); if (tr) tr.onclick = async () => {
+      if (!(await dialog({ title: 'Remove the TMDB key?', text: 'Film channels with rating rules will only play films the TV has already checked.', ok: 'Remove key', danger: true }))) return;
+      try { await saving(() => PUT('/api/tmdb/key', { key: '' }), 'Removed.'); state.status = await GET('/api/status'); await loadRatings(true); paint(); } catch (x) { /* toast */ }
+    };
+    const rc = $('#rCountry', el); if (rc) rc.onchange = async () => { await setSetting({ ratingCountry: rc.value }, 'Saved. Film channels follow ' + countryName(rc.value || (state.ratings && state.ratings.tvRegion)) + ' ratings now.'); await loadRatings(true); paint(); };
+    $('#rbSw', el).onclick = () => setSetting({ ratingOnBanner: !S().ratingOnBanner });
+    $('#adSw', el).onclick = () => setSetting({ hideAdult: !S().hideAdult });
     $$('[data-yt]', el).forEach((b) => b.onclick = () => setSetting({ youtubePlayback: b.dataset.yt }));
     $('#keySave', el).onclick = async () => { const v = $('#ytKey').value.trim(); if (!v) return; try { await saving(() => PUT('/api/youtube/key', { key: v }), 'Saved. @ links work now.'); state.status = await GET('/api/status'); paint(); } catch (e) { /* toast */ } };
     const kr = $('#keyRemove', el); if (kr) kr.onclick = async () => { try { await saving(() => PUT('/api/youtube/key', { key: '' }), 'Removed.'); state.status = await GET('/api/status'); paint(); } catch (e) { /* toast */ } };

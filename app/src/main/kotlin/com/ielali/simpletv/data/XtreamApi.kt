@@ -118,6 +118,44 @@ object XtreamApi {
     fun seriesInfoUrl(server: String, username: String, password: String, seriesId: String) =
         accountUrl(server, username, password) + "&action=get_series_info&series_id=${enc(seriesId)}"
 
+    fun vodInfoUrl(server: String, username: String, password: String, vodId: String) =
+        accountUrl(server, username, password) + "&action=get_vod_info&vod_id=${enc(vodId)}"
+
+    private val youtubeId = Regex("""(?:v=|youtu\.be/|embed/|^)([A-Za-z0-9_-]{11})(?:[?&#]|$)""")
+
+    /**
+     * The provider's details for a film (`get_vod_info`) or series (`get_series_info`): the `info`
+     * block. Panels differ a lot; every field is optional.
+     */
+    fun parseInfoMeta(body: String, itemId: String, type: CatalogType, now: Long): FilmMeta? {
+        val root = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull() ?: return null
+        val o = root["info"] as? JsonObject ?: return null
+        val list = { v: String? -> v?.split(',', '/', '|')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty() }
+        val backdrop = when (val b = o["backdrop_path"]) {
+            is JsonArray -> b.firstOrNull().asString()
+            else -> b.asString()
+        }
+        val score = o["rating"].asString()?.toDoubleOrNull()?.takeIf { it > 0 }
+            ?: o["rating_5based"].asString()?.toDoubleOrNull()?.takeIf { it > 0 }?.times(2)
+        val trailer = o["youtube_trailer"].asString()?.let { t -> youtubeId.find(t.trim())?.groupValues?.get(1) }
+        return FilmMeta(
+            itemId = itemId,
+            type = type,
+            tmdbId = (o["tmdb_id"] ?: o["tmdb"]).asString()?.toDoubleOrNull()?.toLong()?.takeIf { it > 0 },
+            poster = (o["movie_image"] ?: o["cover_big"] ?: o["cover"]).asString()?.takeIf { it.startsWith("http") },
+            backdrop = backdrop?.takeIf { it.startsWith("http") },
+            plot = (o["plot"] ?: o["description"]).asString()?.trim(),
+            cast = list((o["cast"] ?: o["actors"]).asString()).take(6),
+            director = o["director"].asString()?.trim(),
+            genres = list(o["genre"].asString()),
+            year = (o["releasedate"] ?: o["releaseDate"] ?: o["release_date"]).asString()?.take(4)?.takeIf { it.length == 4 && it.all(Char::isDigit) },
+            score = score,
+            trailer = trailer,
+            providerRating = (o["age"] ?: o["mpaa_rating"] ?: o["mpaa"]).asString()?.trim(),
+            fetchedAt = now,
+        )
+    }
+
     fun movieUrl(server: String, username: String, password: String, id: String, ext: String): String =
         "${XtreamCodes.baseUrl(server)}/movie/${enc(username.trim())}/${enc(password)}/$id.${ext.ifBlank { "mp4" }}"
 

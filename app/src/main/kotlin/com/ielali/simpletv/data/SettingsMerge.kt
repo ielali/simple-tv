@@ -23,5 +23,6 @@ object SettingsMerge {
         guardPausedUntil = settings.guardPausedUntil.coerceAtLeast(0L),
         language = TvLanguage.normalise(settings.language),
         catalogRefreshTime = RefreshSchedule.normalise(settings.catalogRefreshTime),
+        ratingCountry = settings.ratingCountry.trim().uppercase().takeIf { it.length == 2 && it.all(Char::isLetter) }.orEmpty(),
     )
 }

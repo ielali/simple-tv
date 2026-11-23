@@ -6,6 +6,8 @@ import com.ielali.simpletv.data.CatalogRepository
 import com.ielali.simpletv.data.CatalogService
 import com.ielali.simpletv.data.ChannelRepository
 import com.ielali.simpletv.data.HttpFetcher
+import com.ielali.simpletv.data.MetadataService
+import com.ielali.simpletv.data.TmdbClient
 import com.ielali.simpletv.data.ProviderLoader
 import com.ielali.simpletv.data.QueuePlayback
 import com.ielali.simpletv.data.SecretsStore
@@ -51,6 +53,10 @@ class SimpleTvApp : Application() {
     lateinit var catalog: CatalogService
         private set
 
+    /** Film and series details, official ratings and the rating checks of film channels. */
+    lateinit var meta: MetadataService
+        private set
+
     /** Film and series channels: what plays next and where each stopped. */
     lateinit var queue: QueuePlayback
         private set
@@ -74,7 +80,9 @@ class SimpleTvApp : Application() {
         loader = ProviderLoader(HttpFetcher())
         catalogs = CatalogRepository(this)
         catalog = CatalogService(appScope, providers, channels, settings, catalogs, loader)
-        queue = QueuePlayback(this, catalog, catalogs, providers)
+        meta = MetadataService(this, appScope, providers, catalogs, channels, settings, secrets, loader, TmdbClient(HttpFetcher(readTimeoutMs = 15_000)))
+        queue = QueuePlayback(this, catalog, catalogs, providers, meta, settings)
+        meta.start()
         catalog.startScheduler()
         configServer = ConfigServer(this, CONFIG_PORT).also { it.start() }
     }

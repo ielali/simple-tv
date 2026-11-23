@@ -26,7 +26,7 @@ object FetchErrors {
         else -> "The provider could not be reached (${e.javaClass.simpleName}). Check the server address and port."
     }
 
-    private val queryCredential = Regex("""(?i)((?:username|password|user|pass|token)=)[^&\s]*""")
+    private val queryCredential = Regex("""(?i)((?:username|password|user|pass|token|api_key)=)[^&\s]*""")
     private val xtreamPath = Regex("""(/(?:live|movie|series)/)[^/\s]+/[^/\s]+/""")
     private val userInfo = Regex("""(?i)(https?://)[^/@\s]+@""")
 

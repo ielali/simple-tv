@@ -96,6 +96,20 @@ class ProviderLoader(private val fetcher: TextFetcher) {
         }
     }
 
+    /** The provider's own details for a film or series (Xtream only); null when it has none. */
+    fun loadInfo(provider: Provider, type: CatalogType, itemId: String, ua: String? = null, now: Long = System.currentTimeMillis()): FilmMeta? {
+        if (provider.kind != ProviderKind.XTREAM) return null
+        val user = provider.username.orEmpty(); val pass = provider.password.orEmpty()
+        val url = if (type == CatalogType.SERIES) XtreamApi.seriesInfoUrl(provider.url, user, pass, itemId)
+        else XtreamApi.vodInfoUrl(provider.url, user, pass, itemId)
+        return try {
+            fetcher.get(url, mapOf("User-Agent" to (ua ?: agentsFor(provider).first())))
+                .takeIf { it.ok }?.let { XtreamApi.parseInfoMeta(it.body, itemId, type, now) }
+        } catch (e: IOException) {
+            null
+        }
+    }
+
     /** "Test connection": the account check alone, in plain words. */
     fun test(provider: Provider): Result = when (provider.kind) {
         ProviderKind.M3U -> load(provider)

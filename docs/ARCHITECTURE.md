@@ -83,6 +83,12 @@ searches it for the page; `LineupFlags` and `LineupRepair` keep the lineup in st
 channels carry a `PlaylistSpec`; `QueuePlayback` turns it into the item to play and its address,
 `TvViewModel` plays it with a start position, moves on at the end and saves progress.
 
+Film details and ratings (ADR-018): `MetadataService` asks the provider's details call, then TMDB
+when the household has a key, caches the result per subscription, and checks every film of a film
+channel with rating rules in the background. `RatingRules` decides what a channel may play;
+`QueuePlayback` filters the queue with it. Routes: `GET /api/details/{pid}/{type}/{id}`,
+`GET /api/ratings`, `PUT /api/tmdb/key`.
+
 ## Playback
 
 `PlaybackEngine` wraps a single `ExoPlayer`: short start buffer for quick zapping, 6 s live offset,

@@ -40,6 +40,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -79,6 +80,10 @@ class ConfigServer(
         val configUrl: String,
         val pinSet: Boolean,
         val hasYoutubeKey: Boolean,
+        val hasTmdbKey: Boolean = false,
+        /** Country whose official ratings apply, and the TV's own region (the default). */
+        val ratingCountry: String = "",
+        val tvRegion: String = "",
         /** Nothing set up yet: the page opens the three-step first run. */
         val firstRun: Boolean,
         val refreshTime: String,
@@ -198,6 +203,9 @@ class ConfigServer(
             configUrl = NetworkAddress.configUrl(appContext, port),
             pinSet = pinSet(),
             hasYoutubeKey = !app.secrets.current().youtubeApiKey.isNullOrEmpty(),
+            hasTmdbKey = app.meta.hasKey(),
+            ratingCountry = app.meta.country(),
+            tvRegion = app.meta.tvRegion(),
             firstRun = channels == 0 && providers == 0,
             refreshTime = time,
             nextRefresh = app.catalog.nextRefresh(),
@@ -240,6 +248,9 @@ class ConfigServer(
                     val before = settingsRepo.current()
                     val saved = settingsRepo.replace(SettingsMerge.merge(before, call.receive<JsonObject>()))
                     if (saved.guardEnabled != before.guardEnabled) GuardSetup.apply(appContext, saved.guardEnabled)
+                    if (saved.hideAdult != before.hideAdult || saved.ratingCountry != before.ratingCountry) {
+                        app.appScope.launch { app.meta.checkChannels() }
+                    }
                     call.respond(saved)
                 }
                 get("/api/guard") { call.respond(guardStatus()) }

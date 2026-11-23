@@ -18,6 +18,10 @@ object CatalogQuery {
         val minutes: Int? = null,
         val inLineup: Boolean = false,
         val lineupNumber: Int? = null,
+        /** Films and series whose details the TV already has. */
+        val poster: String? = null,
+        val rating: String? = null,
+        val score: Double? = null,
     )
 
     @Serializable
@@ -45,6 +49,8 @@ object CatalogQuery {
         limit: Int,
         lineup: List<Channel>,
         providerId: String,
+        details: (CatalogItem) -> FilmMeta? = { null },
+        country: String = "",
     ): Page {
         val words = q.orEmpty().lowercase().split(' ').map { it.trim() }.filter { it.isNotEmpty() }
         val matching = catalog?.of(type).orEmpty().filter { item ->
@@ -58,10 +64,13 @@ object CatalogQuery {
             ItemView(
                 id = it.id, name = it.name, logo = it.logo, group = it.group, year = it.year, minutes = it.minutes,
                 inLineup = it.id in inLineup, lineupNumber = inLineup[it.id],
-            )
+            ).withDetails(details(it), country)
         }
         return Page(total = matching.size, offset = from, items = page)
     }
+
+    private fun ItemView.withDetails(m: FilmMeta?, country: String) =
+        if (m == null) this else copy(poster = m.poster ?: logo, rating = RatingRules.certOf(m, country) ?: m.providerRating, score = m.score, year = year ?: m.year)
 }
 
 /** Channels the caregiver should look at, shown as warnings in the lineup (never deleted silently). */

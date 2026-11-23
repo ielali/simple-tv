@@ -72,7 +72,9 @@ app/src/main/kotlin/com/ielali/simpletv/
   config/PinAuth.kt       PIN rules: 4-6 digits, 5 tries then 5-minute lock, in-memory sessions
   data/Catalog*.kt        Cached catalogs, refresh service and schedule, queries, lineup flags
   data/PlaylistQueue.kt   Film/series queue rules (pure); data/QueuePlayback.kt plays and resumes
-  data/SecretsStore.kt    Page PIN and YouTube key, never returned by the API
+  data/SecretsStore.kt    Page PIN, YouTube key and TMDB key, never returned by the API
+  data/FilmMeta.kt        Film details model and RatingRules (pure); TmdbApi/TmdbClient parse TMDB
+  data/MetadataService.kt Caches details per subscription, checks film channels' ratings in the background
   youtube/YouTubeLookup.kt YouTube link preview (oEmbed, optional Data API key)
   config/NetworkAddress.kt LAN IP discovery
   config/QrCode.kt        ZXing wrapper: URL -> module matrix (pure JVM)

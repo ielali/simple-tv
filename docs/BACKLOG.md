@@ -11,6 +11,8 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    catalog download takes and how big `files/catalog/` gets; if a big provider makes it slow or
    large, page the catalog file or move it to SQLite. Play a film channel with Arabic subtitles
    and an .mkv that has them; check the size and that "No Arabic subtitles" shows when it lacks them.
+   Add a TMDB key, make a PG film channel and check how long the first rating check takes, how
+   many films the provider's details call covers, and that the banner shows the rating.
 1. **First device run.** Build `assembleDebug`, sideload on an Android TV box, confirm: app opens
    fullscreen, empty state shows the config URL, config page loads from a phone, adding an HLS
    channel plays. Record device, Android version and remote model in DEPLOYMENT.md.
@@ -45,6 +47,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
     logo/name large (radio behaviour) instead of "No signal".
 
 ## Later
+
+- Arabic descriptions from TMDB (`language=ar`) when the TV language is Arabic.
+- Show the poster and rating in the TV banner, not just the rating text.
 
 - Separate subtitle files: some providers list .srt/.vtt files for a film (Xtream `get_vod_info`).
   Attach them with `MediaItem.SubtitleConfiguration` when the file itself has none.
@@ -87,6 +92,10 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- Film and series details (posters, trailers, plot, cast, score) and official ratings by country
+  from the provider and an optional TMDB key; per-channel highest rating, lowest score and unrated
+  rule; rating in the TV banner; never play adult titles (ADR-018).
 
 - Subtitles and soundtrack language per film or series channel, large subtitles on the TV (ADR-017).
 

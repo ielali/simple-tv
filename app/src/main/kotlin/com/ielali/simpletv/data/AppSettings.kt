@@ -32,4 +32,10 @@ data class AppSettings(
     val language: String = TvLanguage.SYSTEM,
     /** When the TV refreshes every subscription's catalog each day, "HH:mm" in the TV's time zone. */
     val catalogRefreshTime: String = RefreshSchedule.DEFAULT_TIME,
+    /** Country whose official film ratings apply ("AU"); "" = the TV's own region. */
+    val ratingCountry: String = "",
+    /** Show a film's rating next to its title in the TV banner. */
+    val ratingOnBanner: Boolean = false,
+    /** Never play titles TMDB marks as adult, on any film channel. */
+    val hideAdult: Boolean = true,
 )

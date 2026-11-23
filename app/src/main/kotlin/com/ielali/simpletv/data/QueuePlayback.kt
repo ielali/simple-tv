@@ -16,6 +16,8 @@ class QueuePlayback(
     private val catalog: CatalogService,
     private val catalogRepo: CatalogRepository,
     private val providers: ProviderRepository,
+    private val meta: MetadataService,
+    private val settings: SettingsRepository,
 ) {
     @Serializable
     data class Progress(val itemId: String? = null, val positionMs: Long = 0L, val updatedAt: Long = 0L)
@@ -32,7 +34,7 @@ class QueuePlayback(
     val nowTitle: StateFlow<Pair<String, String>?> = _nowTitle.asStateFlow()
 
     suspend fun queue(spec: PlaylistSpec): List<QueueEntry> = when (spec.mode) {
-        PlaylistMode.FILM -> PlaylistQueue.films(catalogRepo.catalog(spec.providerId) ?: catalog.ensureCatalog(spec.providerId), spec)
+        PlaylistMode.FILM -> PlaylistQueue.films(catalogRepo.catalog(spec.providerId) ?: catalog.ensureCatalog(spec.providerId), spec) { meta.allowed(spec, it) }
         PlaylistMode.SERIES -> {
             val id = spec.seriesId
             if (id == null) emptyList() else {
@@ -44,7 +46,7 @@ class QueuePlayback(
 
     /** The queue from what is already on the TV, never downloading (for listing the lineup). */
     suspend fun queueCached(spec: PlaylistSpec): List<QueueEntry> = when (spec.mode) {
-        PlaylistMode.FILM -> PlaylistQueue.films(catalogRepo.catalog(spec.providerId), spec)
+        PlaylistMode.FILM -> PlaylistQueue.films(catalogRepo.catalog(spec.providerId), spec) { meta.allowed(spec, it) }
         PlaylistMode.SERIES -> spec.seriesId?.let { catalogRepo.episodes(spec.providerId, it) }
             ?.let { PlaylistQueue.episodes(it, spec) }.orEmpty()
     }
@@ -87,6 +89,14 @@ class QueuePlayback(
         return q.getOrNull(PlaylistQueue.resumeIndex(q, p.itemId))?.title
     }
 
+    /** The film's (or series') rating for the banner, when the caregiver turned that on. */
+    private fun bannerRating(spec: PlaylistSpec, e: QueueEntry): String? {
+        if (!settings.current().ratingOnBanner) return null
+        val m = if (spec.mode == PlaylistMode.SERIES) spec.seriesId?.let { meta.cached(spec.providerId, CatalogType.SERIES, it) }
+        else meta.cached(spec.providerId, CatalogType.FILM, e.id)
+        return RatingRules.certOf(m, meta.country())
+    }
+
     private fun playable(channel: Channel, spec: PlaylistSpec, e: QueueEntry, start: Long): Playable? {
         val provider = providers.find(spec.providerId) ?: return null
         val user = provider.username.orEmpty()
@@ -95,7 +105,7 @@ class QueuePlayback(
             PlaylistMode.FILM -> XtreamApi.movieUrl(provider.url, user, pass, e.id, e.ext.orEmpty())
             PlaylistMode.SERIES -> XtreamApi.episodeUrl(provider.url, user, pass, e.id, e.ext.orEmpty())
         }
-        _nowTitle.value = channel.id to e.title
+        _nowTitle.value = channel.id to (e.title + (bannerRating(spec, e)?.let { " · $it" } ?: ""))
         return Playable(e.id, e.title, url, provider.authHeaders() + e.headers, start)
     }
 }
