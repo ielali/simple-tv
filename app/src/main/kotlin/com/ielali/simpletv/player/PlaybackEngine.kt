@@ -33,7 +33,7 @@ class PlaybackEngine(context: Context) {
     val lastError: StateFlow<String?> = _lastError
 
     private val httpFactory = DefaultHttpDataSource.Factory()
-        .setUserAgent("SimpleTV/0.1 (Android TV)")
+        .setUserAgent(DEFAULT_USER_AGENT)
         .setAllowCrossProtocolRedirects(true)
         .setConnectTimeoutMs(8_000)
         .setReadTimeoutMs(8_000)
@@ -78,7 +78,10 @@ class PlaybackEngine(context: Context) {
 
     fun play(channel: Channel) {
         _lastError.value = null
-        httpFactory.setDefaultRequestProperties(channel.headers)
+        // The data source sets User-Agent itself (overriding request properties), so apply it here:
+        // imported channels carry the User-Agent their provider accepted.
+        httpFactory.setUserAgent(channel.headers["User-Agent"] ?: DEFAULT_USER_AGENT)
+        httpFactory.setDefaultRequestProperties(channel.headers - "User-Agent")
         val item = MediaItem.Builder()
             .setUri(channel.url)
             .setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(6_000).build())
@@ -95,4 +98,8 @@ class PlaybackEngine(context: Context) {
     }
 
     fun release() = player.release()
+
+    private companion object {
+        const val DEFAULT_USER_AGENT = "SimpleTV/0.1 (Android TV)"
+    }
 }

@@ -48,9 +48,12 @@ unique numbers, non-blank names, generated ids. The list is small; whole-file re
 
 ## Providers
 
-`Provider` describes an IPTV subscription. `Provider.playlistUrl()` builds the Xtream `get.php`
-link or returns the M3U link; `authHeaders()` yields Basic auth for M3U accounts. `ProviderImport.merge`
-is pure: it appends channels not yet present for that provider, numbering after the highest existing
+`Provider` describes an IPTV subscription. `ProviderLoader` downloads its channels: for Xtream
+accounts the `player_api.php` interface first (account check, categories, live streams via
+`XtreamApi`), then the `get.php` playlist; for M3U providers the link itself with Basic auth from
+`authHeaders()`. Each step retries with a player User-Agent after a refusal, and the accepted one is
+stored on the channels for playback. Import is preview-then-add: `/api/providers/preview` returns
+categories with counts, `/api/providers/import` adds the ticked ones. `ProviderImport.merge` is pure: it appends channels not yet present for that provider, numbering after the highest existing
 number, inheriting the provider icon and auth headers. `ConfigServer` fetches the playlist on the TV so
 credentials never pass through the browser.
 

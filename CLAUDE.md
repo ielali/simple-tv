@@ -51,6 +51,10 @@ app/src/main/kotlin/com/ielali/simpletv/
   data/Provider.kt        IPTV subscription (Xtream Codes or M3U link), URL building, Basic auth
   data/ProviderRepository.kt providers.json; blank password on write keeps the stored one
   data/ProviderImport.kt  Pure merge of a fetched playlist into the channel list
+  data/ProviderLoader.kt  Downloads a provider: Xtream API first, then M3U; User-Agent retry
+  data/XtreamApi.kt       player_api.php URLs and lenient JSON parsing (account, categories, streams)
+  data/FetchErrors.kt     Caregiver-readable failure messages; redact() strips credentials
+  data/HttpFetcher.kt     HTTP GET that returns status codes instead of throwing
   data/JsonStore.kt       Generic one-file JSON persistence with a StateFlow
   data/SettingsRepository.kt settings.json persistence
   data/M3uParser.kt       IPTV playlist import

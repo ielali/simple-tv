@@ -6,7 +6,10 @@ import com.ielali.simpletv.data.ChannelList
 import com.ielali.simpletv.data.ChannelRepository
 import com.ielali.simpletv.data.SettingsRepository
 import com.ielali.simpletv.data.M3uParser
+import com.ielali.simpletv.data.FetchErrors
+import com.ielali.simpletv.data.HttpFetcher
 import com.ielali.simpletv.data.Provider
+import com.ielali.simpletv.data.ProviderLoader
 import com.ielali.simpletv.data.ProviderImport
 import com.ielali.simpletv.data.ProviderList
 import com.ielali.simpletv.data.ProviderRepository
@@ -36,8 +39,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import java.net.HttpURLConnection
-import java.net.URL
 
 /**
  * Tiny LAN-only HTTP server so a caregiver can configure channels from a phone or laptop
@@ -57,7 +58,8 @@ import java.net.URL
  *  POST /api/keys/clear
  *  GET  /api/providers         -> ProviderList with passwords blanked (hasPassword flags instead)
  *  PUT  /api/providers         <- ProviderList; a blank password keeps the stored one
- *  POST /api/providers/import  <- { providerId }  fetches the playlist and adds new channels
+ *  POST /api/providers/preview <- { providerId }  downloads the channel list, returns its categories
+ *  POST /api/providers/import  <- { providerId, groups? }  adds new channels from the chosen categories
  *  POST /api/providers/remove  <- { providerId }  deletes the provider and its channels
  *
  * There is no authentication: it binds to every interface of a device on a home network. Adding a
@@ -98,6 +100,37 @@ class ConfigServer(
 
     @Serializable
     data class ProviderImportResult(val added: Int, val skipped: Int, val total: Int)
+
+    @Serializable
+    data class ProviderImportRequest(val providerId: String, val groups: List<String>? = null)
+
+    @Serializable
+    data class GroupCount(val name: String, val count: Int)
+
+    @Serializable
+    data class ProviderPreview(
+        val total: Int,
+        val groups: List<GroupCount>,
+        val source: String,
+        val accountExpiresAt: Long? = null,
+        val maxConnections: Int? = null,
+    )
+
+    private val loader = ProviderLoader(HttpFetcher())
+
+    /** Last downloaded list per provider, so "Import selected" does not download thousands of channels twice. */
+    private val previews = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, ProviderLoader.Result.Loaded>>()
+
+    private suspend fun loadProvider(provider: Provider, useCache: Boolean): ProviderLoader.Result {
+        if (useCache) {
+            previews[provider.id]?.let { (at, loaded) ->
+                if (System.currentTimeMillis() - at < PREVIEW_TTL_MS) return loaded
+            }
+        }
+        val result = withContext(Dispatchers.IO) { loader.load(provider) }
+        if (result is ProviderLoader.Result.Loaded) previews[provider.id] = System.currentTimeMillis() to result
+        return result
+    }
 
     @Serializable
     data class KeyName(val code: Int, val name: String)
@@ -205,25 +238,45 @@ class ConfigServer(
                     providerRepo.replaceAll(call.receive<ProviderList>())
                     call.respond(providerViews())
                 }
-                post("/api/providers/import") {
+                post("/api/providers/preview") {
                     val ref = call.receive<ProviderRef>()
-                    val provider: Provider? = providerRepo.find(ref.providerId)
+                    val provider = providerRepo.find(ref.providerId)
                     if (provider == null) {
                         call.respond(HttpStatusCode.NotFound, ErrorBody("Unknown provider"))
                         return@post
                     }
-                    val text = runCatching { withContext(Dispatchers.IO) { fetch(provider.playlistUrl(), provider.authHeaders()) } }
-                        .getOrElse { e ->
-                            call.respond(HttpStatusCode.BadGateway, ErrorBody("Could not download playlist: ${e.message}"))
-                            return@post
-                        }
-                    val parsed = M3uParser.parse(text)
-                    if (parsed.isEmpty()) {
-                        call.respond(HttpStatusCode.BadGateway, ErrorBody("Playlist was empty or not an M3U. Check the server, username and password."))
+                    when (val result = loadProvider(provider, useCache = false)) {
+                        is ProviderLoader.Result.Failed -> call.respond(HttpStatusCode.BadGateway, ErrorBody(result.message))
+                        is ProviderLoader.Result.Loaded -> call.respond(
+                            ProviderPreview(
+                                total = result.channels.size,
+                                groups = ProviderLoader.groups(result.channels).map { GroupCount(it.first, it.second) },
+                                source = result.source,
+                                accountExpiresAt = result.account?.expiresAt,
+                                maxConnections = result.account?.maxConnections,
+                            )
+                        )
+                    }
+                }
+                post("/api/providers/import") {
+                    val req = call.receive<ProviderImportRequest>()
+                    val provider = providerRepo.find(req.providerId)
+                    if (provider == null) {
+                        call.respond(HttpStatusCode.NotFound, ErrorBody("Unknown provider"))
                         return@post
                     }
-                    val merged = ProviderImport.merge(repo.current().channels, parsed, provider)
+                    val loaded = when (val result = loadProvider(provider, useCache = true)) {
+                        is ProviderLoader.Result.Failed -> {
+                            call.respond(HttpStatusCode.BadGateway, ErrorBody(result.message))
+                            return@post
+                        }
+                        is ProviderLoader.Result.Loaded -> result
+                    }
+                    val wanted = req.groups?.toSet()
+                    val chosen = if (wanted == null) loaded.channels else loaded.channels.filter { it.group.orEmpty() in wanted }
+                    val merged = ProviderImport.merge(repo.current().channels, chosen, provider)
                     val updated = repo.replaceAll(repo.current().copy(channels = merged.channels))
+                    previews.remove(provider.id)
                     call.respond(ProviderImportResult(merged.added, merged.skipped, updated.channels.size))
                 }
                 post("/api/providers/remove") {
@@ -236,7 +289,22 @@ class ConfigServer(
                     val req = call.receive<ImportRequest>()
                     val text = when {
                         !req.text.isNullOrBlank() -> req.text
-                        !req.url.isNullOrBlank() -> withContext(Dispatchers.IO) { fetch(req.url) }
+                        !req.url.isNullOrBlank() -> {
+                            val response = runCatching {
+                                withContext(Dispatchers.IO) {
+                                    HttpFetcher().get(req.url, mapOf("User-Agent" to ProviderLoader.DEFAULT_USER_AGENT))
+                                }
+                            }.getOrElse { e ->
+                                val msg = (e as? java.io.IOException)?.let(FetchErrors::forNetwork) ?: "The playlist could not be downloaded."
+                                call.respond(HttpStatusCode.BadGateway, ErrorBody(msg))
+                                return@post
+                            }
+                            if (!response.ok) {
+                                call.respond(HttpStatusCode.BadGateway, ErrorBody(FetchErrors.forHttp(response.code)))
+                                return@post
+                            }
+                            response.body
+                        }
                         else -> null
                     }
                     if (text == null) {
@@ -260,16 +328,8 @@ class ConfigServer(
         engine = null
     }
 
-    private fun fetch(url: String, headers: Map<String, String> = emptyMap()): String {
-        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 10_000
-            readTimeout = 30_000
-            instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "SimpleTV/0.1")
-            headers.forEach { (k, v) -> setRequestProperty(k, v) }
-        }
-        return conn.inputStream.bufferedReader().use { it.readText() }
+    private companion object {
+        const val TAG = "ConfigServer"
+        const val PREVIEW_TTL_MS = 10 * 60 * 1000L
     }
-
-    private companion object { const val TAG = "ConfigServer" }
 }

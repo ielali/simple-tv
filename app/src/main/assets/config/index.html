@@ -63,7 +63,7 @@
     <h2>Getting started</h2>
     <p class="hint" style="margin-bottom:6px">There are two kinds of channel. Each gets a number that is typed on the remote.</p>
     <ol style="margin:0 0 0 18px;padding:0;line-height:1.6">
-      <li><b>IPTV</b> (from an IPTV subscription). In <b>IPTV providers</b> below, add the server address, username and password your provider sent you, or the playlist link they gave you. Press <b>Save providers</b>, then <b>Import channels</b>. For a single stream link, use <b>+ Add channel</b> and leave the type on <b>Stream</b>.</li>
+      <li><b>IPTV</b> (from an IPTV subscription). In <b>IPTV providers</b> below, add the server address, username and password your provider sent you, or the playlist link they gave you. Press <b>Save providers</b>, then <b>Import channels</b> and tick the categories you want. For a single stream link, use <b>+ Add channel</b> and leave the type on <b>Stream</b>.</li>
       <li><b>YouTube</b>. Use <b>+ Add channel</b>, set the type to <b>YouTube</b> and paste a live link or channel ID. To avoid ads with your YouTube Premium account, choose <b>In the YouTube app</b> at the bottom of this page.</li>
     </ol>
     <p class="hint" style="margin-top:8px">Then press a number on the remote. Channel up/down and numbers also work while YouTube is playing.</p>
@@ -281,6 +281,8 @@
   let providers = [];
   const provBox = $('#providers');
 
+  const pickers = {}; // providerId -> { preview, selected:Set, filter }, open after "Import channels"
+
   function renderProviders() {
     provBox.innerHTML = '';
     if (!providers.length) { provBox.innerHTML = '<p class="hint">No providers yet.</p>'; return; }
@@ -305,10 +307,11 @@
         <div class="row">
           <input data-k="username" value="${esc(p.username || '')}" placeholder="Username" autocomplete="off" style="flex:1;min-width:140px">
           <input data-k="password" type="password" value="" placeholder="${p.hasPassword ? 'Password saved — type to change' : 'Password'}" autocomplete="new-password" style="flex:1;min-width:140px">
-          <button data-act="import" ${p.id ? '' : 'disabled title="Save first"'}>Import channels</button>
+          <button data-act="import" ${p.id ? '' : 'disabled title="Save first"'}>${pickers[p.id] ? 'Download again' : 'Import channels'}</button>
           <button data-act="remove" class="danger">Remove</button>
         </div>`;
       provBox.appendChild(div);
+      renderPicker(p, div);
     });
   }
 
@@ -329,13 +332,81 @@
       providers.splice(i, 1); renderProviders(); load(); return;
     }
     if (b.dataset.act === 'import') {
-      b.disabled = true; b.textContent = 'Importing…'; setMsg('Downloading playlist from ' + p.name + '…');
+      b.disabled = true; b.textContent = 'Downloading…'; setMsg('Downloading the channel list from ' + p.name + '. Large subscriptions can take a minute.');
       try {
-        const res = await api('/api/providers/import', { method: 'POST', body: JSON.stringify({ providerId: p.id }) });
+        const preview = await api('/api/providers/preview', { method: 'POST', body: JSON.stringify({ providerId: p.id }) });
+        pickers[p.id] = { preview, selected: new Set(), filter: '' };
+        renderProviders();
+        const acct = preview.accountExpiresAt ? ` Account active until ${new Date(preview.accountExpiresAt * 1000).toLocaleDateString()}.` : '';
+        setMsg(`${p.name}: ${preview.total} channels in ${preview.groups.length} categories.${acct} Choose the categories to add.`, 'ok');
+      } catch (err) { setMsg('Import failed: ' + err.message, 'err'); renderProviders(); }
+      return;
+    }
+    const picker = pickers[p.id];
+    if (!picker) return;
+    if (b.dataset.act === 'pick-all') { visibleGroups(picker).forEach((g) => picker.selected.add(g.name)); renderPicker(p, b.closest('[data-index]')); }
+    if (b.dataset.act === 'pick-none') { picker.selected.clear(); renderPicker(p, b.closest('[data-index]')); }
+    if (b.dataset.act === 'pick-cancel') { delete pickers[p.id]; renderProviders(); setMsg(''); }
+    if (b.dataset.act === 'pick-import') {
+      const count = selectedCount(picker);
+      if (!count) { setMsg('Tick at least one category.', 'err'); return; }
+      if (count > 300 && !confirm(`Add ${count} channels? With only up and down on the remote, that is a long list to step through.`)) return;
+      b.disabled = true; b.textContent = 'Adding…';
+      try {
+        const res = await api('/api/providers/import', { method: 'POST', body: JSON.stringify({ providerId: p.id, groups: [...picker.selected] }) });
+        delete pickers[p.id];
         await load(); await loadProviders();
-        setMsg(`${p.name}: ${res.added} new channel(s) added, ${res.skipped} already present. Total ${res.total}.`, 'ok');
+        setMsg(`${p.name}: ${res.added} channel(s) added, ${res.skipped} already present. Total ${res.total}.`, 'ok');
       } catch (err) { setMsg('Import failed: ' + err.message, 'err'); renderProviders(); }
     }
+  });
+
+  // ---- Category picker shown after "Import channels" ----
+  const groupLabel = (name) => name || 'No category';
+  const visibleGroups = (picker) => picker.preview.groups.filter((g) =>
+    groupLabel(g.name).toLowerCase().includes(picker.filter.toLowerCase()));
+  const selectedCount = (picker) => picker.preview.groups
+    .filter((g) => picker.selected.has(g.name)).reduce((n, g) => n + g.count, 0);
+
+  function renderPicker(p, box) {
+    const picker = pickers[p.id];
+    let el = box.querySelector('.picker');
+    if (!picker) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.className = 'picker'; el.style.marginTop = '12px'; box.appendChild(el); }
+    const groups = visibleGroups(picker);
+    const count = selectedCount(picker);
+    el.innerHTML = `
+      <p class="hint" style="margin:0 0 8px">Tick the categories to add. Each channel gets the next free number.</p>
+      <div class="row" style="margin-bottom:8px">
+        <input data-picker-filter value="${esc(picker.filter)}" placeholder="Search categories, e.g. news or UK" style="flex:1;min-width:180px">
+        <button data-act="pick-all">Tick shown</button>
+        <button data-act="pick-none">Clear</button>
+      </div>
+      <div style="max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px">
+        ${groups.map((g) => `<label class="row" style="padding:4px 0;gap:10px">
+          <input type="checkbox" data-group="${esc(g.name)}" ${picker.selected.has(g.name) ? 'checked' : ''}>
+          <span style="flex:1">${esc(groupLabel(g.name))}</span><span class="badge">${g.count}</span></label>`).join('')
+          || '<p class="hint">No categories match.</p>'}
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="primary" data-act="pick-import">Add ${count} channel${count === 1 ? '' : 's'}</button>
+        <button data-act="pick-cancel">Cancel</button>
+      </div>`;
+    const filter = el.querySelector('[data-picker-filter]');
+    if (picker.focusFilter) { filter.focus(); filter.setSelectionRange(filter.value.length, filter.value.length); picker.focusFilter = false; }
+  }
+
+  provBox.addEventListener('change', (e) => {
+    const cb = e.target.closest('input[data-group]'); if (!cb) return;
+    const box = cb.closest('[data-index]'); const p = providers[+box.dataset.index]; const picker = pickers[p.id];
+    if (cb.checked) picker.selected.add(cb.dataset.group); else picker.selected.delete(cb.dataset.group);
+    renderPicker(p, box);
+  });
+  provBox.addEventListener('input', (e) => {
+    if (!e.target.hasAttribute('data-picker-filter')) return;
+    const box = e.target.closest('[data-index]'); const p = providers[+box.dataset.index]; const picker = pickers[p.id];
+    picker.filter = e.target.value; picker.focusFilter = true;
+    renderPicker(p, box);
   });
 
   $('#addProvider').onclick = () => {

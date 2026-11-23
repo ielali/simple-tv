@@ -53,7 +53,7 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 - Provider re-sync that also removes channels the provider dropped and refreshes names/logos
   (today import only adds new ones).
-- Xtream `player_api.php` support: categories and EPG straight from the API instead of the M3U.
+- EPG from the Xtream API (`get_short_epg`): "now playing" title in the banner.
 - Encrypt providers.json with Android Keystore (today it is plaintext in app-private storage).
 
 - XMLTV EPG: show "now playing" title in the banner.
@@ -65,6 +65,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- Provider import rebuilt (ADR-011): Xtream API first with account checks, playlist fallback,
+  User-Agent retry, plain-language errors without credentials, pick categories before adding.
 
 - Remote keeps working inside the YouTube app (ADR-010): app-scoped TvController, guard routing of
   channel keys over YouTube, channel banner overlay, direct YouTube-to-YouTube hand-over, getting

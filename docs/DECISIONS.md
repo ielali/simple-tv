@@ -122,3 +122,22 @@ YouTube app stays allowed by the guard for as long as the current channel is a Y
 Consequences: YouTube-app mode now depends on the home guard; with the guard off or paused the remote
 drives YouTube as before. Whether the YouTube TV app replaces the playing video on a new VIEW intent
 must be confirmed on the device; if it does not, ExternalPlayer can add FLAG_ACTIVITY_CLEAR_TASK.
+
+## ADR-011 Provider import: Xtream API first, plain-language errors, pick categories
+
+Context: First real subscription on the Kogan. Import failed with an error that printed the playlist
+URL, password included, on the config page. The same account works in IPTVX. Many providers disable
+the `get.php` playlist download or refuse unknown app names, while IPTV apps use the Xtream
+`player_api.php`. Real subscriptions also carry thousands of channels, unusable with up/down only.
+
+Decision:
+- `ProviderLoader` tries `player_api.php` first (it also reports wrong logins, expiry and bans), then
+  the M3U playlist. Each step is tried with Simple TV's User-Agent, then with a widely recognised
+  player one (VLC); the accepted one is stored on the imported channels and used for playback.
+- Failures become caregiver-readable messages from `FetchErrors` and never contain a URL.
+- Import is two steps: preview (download once, show categories with counts and the account expiry),
+  then add only the ticked categories. The download is cached for ten minutes between the two.
+- Xtream streams use HLS (.m3u8) when the account allows it, else MPEG-TS.
+
+Consequences: works with providers that block playlist downloads or unknown apps. The VLC
+User-Agent is a compatibility fallback, used only after a refusal. EPG from the API is still to do.
