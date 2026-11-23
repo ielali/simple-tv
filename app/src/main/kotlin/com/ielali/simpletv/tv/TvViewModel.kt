@@ -92,7 +92,10 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         }
         // Tell the config page what subtitles and soundtracks the film on screen has.
         viewModelScope.launch {
-            engine.tracks.collect { r -> simpleTv.nowTracks.value = r?.let { controller.current.value?.id to it } }
+            engine.tracks.collect { r ->
+                val id = controller.current.value?.id
+                simpleTv.nowTracks.value = if (r != null && id != null) id to r else null
+            }
         }
         // A film or episode finished: move to the next one in the queue.
         viewModelScope.launch {
