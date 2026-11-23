@@ -4,6 +4,16 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 ## Next
 
+0. **Caregiver web app redesign.** Brief for Claude Design in `docs/design/claude-design-prompt.md`.
+   Build from the resulting design. Related engine work below:
+   - Catalog cache per provider (live, films, series, with categories) on the TV; automatic daily
+     refresh at a quiet hour plus "Refresh now"; change summary; flag lineup channels the provider
+     dropped instead of deleting them.
+   - Unified "Add channel" API: catalog search across categories, YouTube link preview.
+   - Film and series channels from Xtream VOD (`get_vod_streams`, `get_series`, `get_series_info`):
+     a numbered channel that plays a queue of films, or a series in order with resume.
+   - "Play on TV now" and a "now playing" status endpoint.
+
 1. **First device run.** Build `assembleDebug`, sideload on an Android TV box, confirm: app opens
    fullscreen, empty state shows the config URL, config page loads from a phone, adding an HLS
    channel plays. Record device, Android version and remote model in DEPLOYMENT.md.
