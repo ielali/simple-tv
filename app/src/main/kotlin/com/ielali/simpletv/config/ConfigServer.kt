@@ -6,6 +6,7 @@ import com.ielali.simpletv.data.ChannelList
 import com.ielali.simpletv.data.ChannelRepository
 import com.ielali.simpletv.data.SettingsRepository
 import com.ielali.simpletv.data.M3uParser
+import com.ielali.simpletv.SimpleTvApp
 import com.ielali.simpletv.data.FetchErrors
 import com.ielali.simpletv.data.HttpFetcher
 import com.ielali.simpletv.data.Provider
