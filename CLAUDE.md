@@ -38,7 +38,10 @@ app/src/main/kotlin/com/ielali/simpletv/
   MainActivity.kt         Fullscreen activity; dispatchKeyEvent routes all remote keys to TvViewModel
   tv/ChannelTuner.kt      Pure Kotlin digit-entry state machine (timeout / max digits / OK)
   tv/ChannelNavigator.kt  Pure functions: resolve number, next, previous
-  tv/TvViewModel.kt       Glue: repo + tuner + player, exposes TvUiState
+  tv/TvController.kt      App-scoped TV state: current channel, digits, banner, YouTube-app hand-off.
+                          Android-free; driven by the screen and, over YouTube, by the guard
+  tv/ExternalPlayer.kt    Opens the YouTube app / brings Simple TV forward from app context
+  tv/TvViewModel.kt       Screen adapter: video surface + settings overlay, exposes TvUiState
   tv/PlayerScreen.kt      Compose UI: video surface, YouTube WebView, banner, overlays
   player/PlaybackEngine.kt Media3 ExoPlayer wrapper tuned for live TV
   youtube/YouTubeEmbed.kt Parses YouTube links/ids and builds the iframe page
@@ -61,6 +64,7 @@ app/src/main/kotlin/com/ielali/simpletv/
   guard/HomeGuardPolicy.kt  Pure decisions for keys and windows; GuardKeys.kt mirrors KeyEvent codes
   guard/GuardSetup.kt     Enables/disables the service via WRITE_SECURE_SETTINGS (granted over adb)
   guard/KeyLog.kt         Recent key presses for the config page's "Remote buttons" card
+  guard/BannerOverlay.kt  Channel banner drawn over the YouTube app (accessibility overlay window)
   data/SettingsMerge.kt   Partial PUT /api/settings; also sanitizes blocked keys
 app/src/main/assets/config/index.html   Caregiver web UI (vanilla JS, no build step)
 tools/tv-admin.sh                       adb admin: status, install, guard-on/off, stock, debloat, restore
@@ -76,7 +80,7 @@ docs/                                   Feasibility, architecture, decisions, ba
   in the same commit that finishes it. Add new items you discover rather than fixing them silently.
 - **Record decisions in `docs/DECISIONS.md`** when you choose between approaches (library, protocol,
   UX behaviour). One short entry: context, decision, consequences.
-- **Pure logic stays Android-free.** Anything in `tv/ChannelTuner`, `tv/ChannelNavigator`, `data/`,
+- **Pure logic stays Android-free.** Anything in `tv/ChannelTuner`, `tv/ChannelNavigator`, `tv/TvController`, `data/`,
   `youtube/`, `guard/HomeGuardPolicy`, `guard/GuardKeys`, `guard/AccessibilityServiceList`, `guard/KeyLog`
   must compile without Android so it is unit-testable on the JVM. Put Android calls in the
   ViewModel, Activity, Compose or engine classes.

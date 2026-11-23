@@ -105,3 +105,20 @@ direct-boot awareness (it would start Simple TV before credential storage unlock
 Consequences: works on a signed-in device and is fully reversible (`tv-admin.sh stock`). It is a
 soft lock: a determined user can still reach Settings through the guard's pause. Device-owner mode
 remains the option for a hard lock on a fresh device, under the same never-disable rule.
+
+## ADR-010 Remote control continues inside the YouTube app
+
+Context: First device test on the Kogan. YouTube-app mode avoids ads with the signed-in Premium
+account, but once YouTube was in front the remote drove YouTube, so changing channel meant BACK to
+Simple TV's holding screen and then a number. IPTV channels were not reachable from YouTube at all.
+
+Decision: move channel state out of the activity into an app-scoped, Android-free `TvController`. The
+home guard, which already sees every key, routes channel keys to it while YouTube is in front, and
+draws the channel banner over YouTube with an accessibility overlay window (no extra permission).
+YouTube-to-YouTube changes open the next video in the YouTube app directly; YouTube-to-stream brings
+Simple TV forward. BACK and MENU are swallowed over YouTube so the viewer stays in the video. The
+YouTube app stays allowed by the guard for as long as the current channel is a YouTube-app channel.
+
+Consequences: YouTube-app mode now depends on the home guard; with the guard off or paused the remote
+drives YouTube as before. Whether the YouTube TV app replaces the playing video on a new VIEW intent
+must be confirmed on the device; if it does not, ExternalPlayer can add FLAG_ACTIVITY_CLEAR_TASK.

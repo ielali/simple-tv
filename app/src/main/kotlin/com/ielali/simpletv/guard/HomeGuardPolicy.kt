@@ -1,6 +1,12 @@
 package com.ielali.simpletv.guard
 
-enum class KeyAction { PASS, GO_HOME, SWALLOW }
+enum class KeyAction {
+    PASS,
+    GO_HOME,
+    SWALLOW,
+    /** Send to TvController: channel control while the YouTube app is in front. */
+    ROUTE,
+}
 enum class WindowAction { NONE, GO_HOME }
 
 /** Snapshot of everything the guard needs to decide; built fresh for every event. */
@@ -44,6 +50,25 @@ object HomeGuardPolicy {
         keyCode in GuardKeys.PROTECTED -> KeyAction.PASS
         keyCode in GuardKeys.DEFAULT_BLOCKED || keyCode in config.extraBlockedKeys -> KeyAction.SWALLOW
         else -> KeyAction.PASS
+    }
+
+    /**
+     * Keys while the current channel plays in the YouTube app. Channel keys change channel without
+     * passing through Simple TV's screen; BACK and MENU do nothing, so the viewer cannot wander into
+     * YouTube's browse screens; OK, left/right and media keys still control the video.
+     */
+    fun onKeyDuringExternal(keyCode: Int, config: GuardConfig, now: Long, digitsPending: Boolean): KeyAction {
+        if (!isActive(config, now)) return KeyAction.PASS
+        return when (keyCode) {
+            in GuardKeys.DIGIT_0..GuardKeys.DIGIT_9, in GuardKeys.NUMPAD_0..GuardKeys.NUMPAD_9,
+            GuardKeys.CHANNEL_UP, GuardKeys.CHANNEL_DOWN, GuardKeys.PAGE_UP, GuardKeys.PAGE_DOWN,
+            GuardKeys.DPAD_UP, GuardKeys.DPAD_DOWN,
+            GuardKeys.INFO, GuardKeys.GUIDE, GuardKeys.HOME, GuardKeys.TV, GuardKeys.BACK -> KeyAction.ROUTE
+            GuardKeys.DPAD_CENTER, GuardKeys.ENTER, GuardKeys.NUMPAD_ENTER ->
+                if (digitsPending) KeyAction.ROUTE else KeyAction.PASS
+            GuardKeys.MENU, GuardKeys.SETTINGS -> KeyAction.SWALLOW
+            else -> onKey(keyCode, config, now)
+        }
     }
 
     fun onWindow(packageName: String?, config: GuardConfig, now: Long): WindowAction = when {

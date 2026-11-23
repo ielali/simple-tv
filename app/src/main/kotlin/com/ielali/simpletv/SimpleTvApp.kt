@@ -6,6 +6,12 @@ import com.ielali.simpletv.data.ChannelRepository
 import com.ielali.simpletv.data.ProviderRepository
 import com.ielali.simpletv.data.SettingsRepository
 import com.ielali.simpletv.guard.GuardSetup
+import com.ielali.simpletv.tv.ExternalPlayer
+import com.ielali.simpletv.tv.PrefsLastChannelStore
+import com.ielali.simpletv.tv.TvController
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 class SimpleTvApp : Application() {
 
@@ -18,6 +24,12 @@ class SimpleTvApp : Application() {
     lateinit var providers: ProviderRepository
         private set
 
+    /** The TV's channel state; app-scoped so it keeps working while the YouTube app is in front. */
+    lateinit var tv: TvController
+        private set
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
     private var configServer: ConfigServer? = null
 
     override fun onCreate() {
@@ -26,6 +38,7 @@ class SimpleTvApp : Application() {
         settings = SettingsRepository(this)
         providers = ProviderRepository(this)
         GuardSetup.ensureEnabledIfWanted(this, settings.current().guardEnabled)
+        tv = TvController(appScope, channels.channels, settings.settings, ExternalPlayer(this), PrefsLastChannelStore(this))
         configServer = ConfigServer(this, channels, settings, providers, CONFIG_PORT).also { it.start() }
     }
 

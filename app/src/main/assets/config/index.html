@@ -60,6 +60,26 @@
 
 <main>
   <section class="card">
+    <h2>Getting started</h2>
+    <p class="hint" style="margin-bottom:6px">There are two kinds of channel. Each gets a number that is typed on the remote.</p>
+    <ol style="margin:0 0 0 18px;padding:0;line-height:1.6">
+      <li><b>IPTV</b> (from an IPTV subscription). In <b>IPTV providers</b> below, add the server address, username and password your provider sent you, or the playlist link they gave you. Press <b>Save providers</b>, then <b>Import channels</b>. For a single stream link, use <b>+ Add channel</b> and leave the type on <b>Stream</b>.</li>
+      <li><b>YouTube</b>. Use <b>+ Add channel</b>, set the type to <b>YouTube</b> and paste a live link or channel ID. To avoid ads with your YouTube Premium account, choose <b>In the YouTube app</b> at the bottom of this page.</li>
+    </ol>
+    <p class="hint" style="margin-top:8px">Then press a number on the remote. Channel up/down and numbers also work while YouTube is playing.</p>
+  </section>
+
+  <section class="card">
+    <h2>IPTV providers</h2>
+    <p class="hint">Your IPTV subscription. Most providers give a server address, a username and a password (Xtream Codes). If you only have a playlist link, choose <b>M3U link</b>. Passwords stay on the TV and are never shown here again.</p>
+    <div id="providers"></div>
+    <div class="row" style="margin-top:12px">
+      <button id="addProvider">+ Add provider</button>
+      <button id="saveProviders" class="primary">Save providers</button>
+    </div>
+  </section>
+
+  <section class="card">
     <h2>Channels</h2>
     <p class="hint">The number is what gets typed on the remote. Drag rows or use the arrows to reorder, then <b>Renumber</b> to make the numbers follow the order.</p>
     <table id="grid">
@@ -70,16 +90,6 @@
       <button id="add">+ Add channel</button>
       <button id="renumber">Renumber 1…n in this order</button>
       <button id="sortByNumber">Sort by number</button>
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>IPTV providers</h2>
-    <p class="hint">Your IPTV subscription. Most providers give a server address, a username and a password (Xtream Codes). If you only have a playlist link, choose <b>M3U link</b>. Passwords stay on the TV and are never shown here again.</p>
-    <div id="providers"></div>
-    <div class="row" style="margin-top:12px">
-      <button id="addProvider">+ Add provider</button>
-      <button id="saveProviders" class="primary">Save providers</button>
     </div>
   </section>
 
@@ -104,7 +114,7 @@
     </label>
     <label class="row" style="align-items:flex-start">
       <input type="radio" name="ytmode" value="YOUTUBE_APP" style="margin-top:4px">
-      <span><b>In the YouTube app</b> — uses the Google account already signed in on the TV box (YouTube Premium removes ads; subscriptions and restrictions apply). While YouTube is on screen the remote drives YouTube; the viewer presses BACK, then a channel number, to return.</span>
+      <span><b>In the YouTube app</b> — uses the Google account already signed in on the TV box (YouTube Premium removes ads; subscriptions and restrictions apply). Numbers and channel up/down keep working while YouTube plays, and the channel banner shows over it. Needs the home guard to be on.</span>
     </label>
     <p class="hint" style="margin-top:10px">Saved immediately when changed.</p>
   </section>

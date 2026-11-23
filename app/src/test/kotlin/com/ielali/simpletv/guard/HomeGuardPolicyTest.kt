@@ -97,4 +97,29 @@ class HomeGuardPolicyTest {
         assertFalse(d.tryAcquire(300))
         assertTrue(d.tryAcquire(410))
     }
+
+    @Test
+    fun `over youtube channel keys are routed and back and menu do nothing`() {
+        listOf(GuardKeys.DIGIT_0, GuardKeys.CHANNEL_UP, GuardKeys.DPAD_DOWN, GuardKeys.INFO, GuardKeys.HOME,
+            GuardKeys.BACK).forEach {
+            assertEquals("key $it", KeyAction.ROUTE, HomeGuardPolicy.onKeyDuringExternal(it, on, now, digitsPending = false))
+        }
+        assertEquals(KeyAction.SWALLOW, HomeGuardPolicy.onKeyDuringExternal(GuardKeys.MENU, on, now, false))
+        assertEquals(KeyAction.SWALLOW, HomeGuardPolicy.onKeyDuringExternal(GuardKeys.ASSIST, on, now, false))
+    }
+
+    @Test
+    fun `over youtube ok controls the video unless digits are pending`() {
+        assertEquals(KeyAction.PASS, HomeGuardPolicy.onKeyDuringExternal(GuardKeys.DPAD_CENTER, on, now, false))
+        assertEquals(KeyAction.ROUTE, HomeGuardPolicy.onKeyDuringExternal(GuardKeys.DPAD_CENTER, on, now, true))
+        listOf(GuardKeys.DPAD_LEFT, GuardKeys.MEDIA_PLAY_PAUSE, GuardKeys.VOLUME_UP).forEach {
+            assertEquals("key $it", KeyAction.PASS, HomeGuardPolicy.onKeyDuringExternal(it, on, now, false))
+        }
+    }
+
+    @Test
+    fun `paused guard leaves youtube alone`() {
+        val paused = on.copy(pausedUntil = now + 1)
+        assertEquals(KeyAction.PASS, HomeGuardPolicy.onKeyDuringExternal(GuardKeys.CHANNEL_UP, paused, now, false))
+    }
 }

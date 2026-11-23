@@ -18,14 +18,27 @@
                                        └─ Settings / NoChannels overlays (URL + QR code)
 ```
 
+## TvController
+
+`TvController` (created by `SimpleTvApp`) owns the TV: current channel, digit entry, banner, last
+channel, and whether a YouTube channel plays in the YouTube app. It is app-scoped and Android-free,
+so it keeps working while YouTube is in front and is unit tested with virtual time. Two adapters drive
+it: `TvViewModel` (Simple TV's screen, which also owns the ExoPlayer and the settings overlay) and the
+home guard (keys over YouTube). `ExternalPlayer` launches YouTube or brings Simple TV forward from
+the application context. `MainActivity.onStart/onStop` report screen visibility, which is how the
+controller knows YouTube is in front.
+
 ## Data flow for a channel change
 
-1. Viewer presses `1`, `2`. `MainActivity` forwards the first DOWN of each key to `TvViewModel.onKeyDown`.
+1. Viewer presses `1`, `2`. On Simple TV's screen `MainActivity` forwards the first DOWN of each key to
+   `TvViewModel.onKeyDown`, which passes channel keys to `TvController.onRemoteKey`. While YouTube is in
+   front the home guard sends the same keys straight to the controller.
 2. `ChannelTuner` accumulates `"12"` and exposes it through `pendingDigits`; the banner shows the digits.
 3. After 1.5 s without another digit (or OK, or a third digit) the tuner emits `12` on `tuneRequests`.
-4. `TvViewModel` resolves the number with `ChannelNavigator.resolve` against the sorted list.
-5. `switchTo` stores the number as "last watched", starts `PlaybackEngine.play` for STREAM channels,
-   or stops the engine and lets Compose swap in the YouTube WebView.
+4. `TvController` resolves the number with `ChannelNavigator.resolve` against the sorted list.
+5. `switchTo` stores the number as "last watched". STREAM channels play in `TvViewModel`'s engine (Simple
+   TV is brought forward if YouTube was in front). YouTube channels use the WebView, or in YouTube-app
+   mode the YouTube app is opened directly, with no stop on Simple TV's screen in between.
 6. The banner shows number and name for 3.5 s.
 
 ## Persistence
@@ -81,6 +94,12 @@ so config-page changes apply immediately. `GuardSetup` edits the accessibility s
 app holds WRITE_SECURE_SETTINGS (granted once by `tools/tv-admin.sh guard-on`) and re-enables the
 service at app start and boot. An enabled accessibility service also exempts the app from Android's
 background-activity-start limits, which is what lets `BootReceiver` open the TV.
+
+While the current channel plays in the YouTube app (`TvController.isExternalFront`), keys go through
+`HomeGuardPolicy.onKeyDuringExternal`: digits, channel keys and up/down are routed to the controller;
+INFO/GUIDE/HOME show the banner; BACK and MENU do nothing so the viewer cannot wander into YouTube's
+browse screens; OK (unless digits are pending), left/right, media and volume keys still reach YouTube.
+`BannerOverlay` draws the channel banner over YouTube as a TYPE_ACCESSIBILITY_OVERLAY window.
 
 Both the guard and `MainActivity` write key presses to `KeyLog`, served at `/api/keys` for the
 config page's remote audit.

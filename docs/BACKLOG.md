@@ -10,7 +10,11 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 2. **Key mapping audit on real remotes.** Use the config page's **Remote buttons** card on the Kogan:
    press every button, block anything that still opens an app, record codes in DEPLOYMENT.md.
    Confirm volume/mute/power pass through and that HOME returns to Simple TV after a reboot.
-3. **YouTube embed spike.** Add three real live channels (news, music, nature cams). Note which
+3. **YouTube app channel switching on the Kogan (ADR-010).** Confirm: digits and CH+/- over YouTube
+   change channel with the banner drawn over YouTube; YouTube-to-YouTube replaces the video without
+   Simple TV's screen; YouTube-to-IPTV and back works; BACK does nothing over YouTube; OK pauses.
+   If a new video does not replace the playing one, add FLAG_ACTIVITY_CLEAR_TASK in ExternalPlayer.
+3b. **YouTube embed spike.** Add three real live channels (news, music, nature cams). Note which
    embed, which refuse, whether autoplay works without a gesture on the box's WebView version.
    Decide on the intent fallback and record it in DECISIONS.md.
 4. **YouTube app handoff on device.** With `youtubePlayback = YOUTUBE_APP`, confirm the TV build
@@ -61,6 +65,10 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- Remote keeps working inside the YouTube app (ADR-010): app-scoped TvController, guard routing of
+  channel keys over YouTube, channel banner overlay, direct YouTube-to-YouTube hand-over, getting
+  started card and IPTV providers first on the config page.
 
 - Soft kiosk home guard (ADR-009): accessibility service for HOME/TV and shortcut keys, stock home
   and sponsored-app covering with a YouTube hand-off exemption, pause/on/off and a remote key log with

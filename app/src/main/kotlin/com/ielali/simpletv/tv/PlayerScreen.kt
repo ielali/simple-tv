@@ -36,7 +36,6 @@ import androidx.media3.ui.PlayerView
 import com.ielali.simpletv.R
 import com.ielali.simpletv.data.Channel
 import com.ielali.simpletv.data.SourceType
-import com.ielali.simpletv.data.YouTubePlayback
 import com.ielali.simpletv.player.PlaybackState
 import com.ielali.simpletv.youtube.YouTubeEmbed
 
@@ -55,11 +54,7 @@ fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
             current == null -> Unit
             current.type == SourceType.STREAM -> VideoSurface(vm)
             current.type == SourceType.YOUTUBE ->
-                if (state.settings.youtubePlayback == YouTubePlayback.YOUTUBE_APP && !state.externalPlayerUnavailable) {
-                    CenterMessage(stringResource(R.string.playing_in_youtube_app))
-                } else {
-                    YouTubeSurface(current)
-                }
+                if (state.youtubeInApp) OpeningYouTube(current) else YouTubeSurface(current)
         }
 
         if (current?.type == SourceType.STREAM && state.playback == PlaybackState.ERROR) {
@@ -204,6 +199,21 @@ private fun ConfigPrompt(title: String, hint: String, configUrl: String, footer:
         }
         Spacer(Modifier.width(48.dp))
         QrCodeView(text = configUrl, size = 300.dp)
+    }
+}
+
+/** Shown for a moment while the YouTube app opens; the channel banner stays readable meanwhile. */
+@Composable
+private fun OpeningYouTube(channel: Channel) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(channel.number.toString(), color = Accent, fontSize = 120.sp, fontWeight = FontWeight.Black)
+        Text(channel.name, color = Fg, fontSize = 56.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(24.dp))
+        Text(stringResource(R.string.opening_youtube), color = Fg.copy(alpha = 0.7f), fontSize = 32.sp)
     }
 }
 

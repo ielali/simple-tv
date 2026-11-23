@@ -1,8 +1,5 @@
 package com.ielali.simpletv
 
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -13,19 +10,12 @@ import androidx.compose.runtime.getValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.media3.common.util.UnstableApi
-import com.ielali.simpletv.guard.GuardState
-import com.ielali.simpletv.guard.HomeGuardPolicy
 import com.ielali.simpletv.guard.KeyLog
 import com.ielali.simpletv.guard.KeyLogEntry
 import com.ielali.simpletv.tv.PlayerScreen
 import com.ielali.simpletv.tv.TvViewModel
-import com.ielali.simpletv.youtube.YouTubeEmbed
-import kotlinx.coroutines.launch
 
 @UnstableApi
 class MainActivity : ComponentActivity() {
@@ -44,41 +34,6 @@ class MainActivity : ComponentActivity() {
             val state by vm.uiState.collectAsStateWithLifecycle()
             PlayerScreen(state = state, vm = vm)
         }
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                vm.openExternal.collect { channel -> openInYouTubeApp(channel.url) }
-            }
-        }
-    }
-
-    /**
-     * Plays a YouTube channel in the YouTube app on the box, which uses the Google account signed in
-     * there. Prefers the TV build, then any handler of the URL. Falls back to the embed when neither exists.
-     */
-    private fun openInYouTubeApp(source: String) {
-        val target = YouTubeEmbed.parse(source)
-        if (target == null) {
-            vm.onExternalPlayerUnavailable()
-            return
-        }
-        val uri = Uri.parse(YouTubeEmbed.watchUrl(target))
-        val candidates = listOf(
-            Intent(Intent.ACTION_VIEW, uri).setPackage(YOUTUBE_TV_PACKAGE),
-            Intent(Intent.ACTION_VIEW, uri).setPackage(YOUTUBE_MOBILE_PACKAGE),
-            Intent(Intent.ACTION_VIEW, uri),
-        )
-        // Tell the home guard this YouTube window is wanted, so it does not bounce the viewer back.
-        GuardState.allowedExternalPackages = setOf(HomeGuardPolicy.YOUTUBE_TV, HomeGuardPolicy.YOUTUBE_MOBILE)
-        for (intent in candidates) {
-            try {
-                startActivity(intent)
-                return
-            } catch (e: ActivityNotFoundException) {
-                // try the next candidate
-            }
-        }
-        GuardState.allowedExternalPackages = emptySet()
-        vm.onExternalPlayerUnavailable()
     }
 
     /** Every remote key comes through here first so nothing in the view tree can steal focus. */
@@ -97,16 +52,19 @@ class MainActivity : ComponentActivity() {
         return true
     }
 
-    override fun onResume() {
-        super.onResume()
-        // Back in Simple TV: a YouTube hand-off is over, so the guard may bounce YouTube again.
-        GuardState.allowedExternalPackages = emptySet()
-        vm.engine.player.playWhenReady = true
+    override fun onStart() {
+        super.onStart()
+        vm.controller.onAppVisible(true)
     }
 
-    private companion object {
-        const val YOUTUBE_TV_PACKAGE = "com.google.android.youtube.tv"
-        const val YOUTUBE_MOBILE_PACKAGE = "com.google.android.youtube"
+    override fun onStop() {
+        vm.controller.onAppVisible(false)
+        super.onStop()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        vm.engine.player.playWhenReady = true
     }
 
     override fun onPause() {
