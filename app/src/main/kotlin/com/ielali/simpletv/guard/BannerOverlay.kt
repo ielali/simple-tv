@@ -19,7 +19,11 @@ import android.widget.TextView
  * without the "display over other apps" permission. Never focusable or touchable: keys still reach
  * the guard and YouTube.
  */
-class BannerOverlay(private val service: AccessibilityService) {
+class BannerOverlay(
+    private val service: AccessibilityService,
+    /** True when the TV language reads right to left (Arabic): number on the right, name to its left. */
+    private val rightToLeft: () -> Boolean = { false },
+) {
 
     private val windowManager = service.getSystemService(WindowManager::class.java)
     private var root: View? = null
@@ -28,6 +32,7 @@ class BannerOverlay(private val service: AccessibilityService) {
 
     fun show(number: String, name: String) {
         if (root == null && !attach()) return
+        root?.layoutDirection = if (rightToLeft()) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
         numberView.text = number
         nameView.text = name
         nameView.visibility = if (name.isEmpty()) View.GONE else View.VISIBLE
@@ -51,7 +56,7 @@ class BannerOverlay(private val service: AccessibilityService) {
             setTextColor(Color.rgb(0xF2, 0xF4, 0xF8))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 48f)
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            setPadding(dp(32), 0, 0, 0)
+            setPaddingRelative(dp(32), 0, 0, 0)
         }
         val layout = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -73,7 +78,8 @@ class BannerOverlay(private val service: AccessibilityService) {
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
+            // Absolute side: relative START would follow the system language, not the TV language.
+            gravity = Gravity.TOP or (if (rightToLeft()) Gravity.RIGHT else Gravity.LEFT)
             x = dp(48)
             y = dp(48)
         }

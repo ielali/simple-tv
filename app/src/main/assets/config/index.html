@@ -70,6 +70,16 @@
   </section>
 
   <section class="card">
+    <h2>TV language</h2>
+    <p class="hint">Language of the words on the TV screen. Channel names stay as the provider sends them.</p>
+    <select id="tvLanguage">
+      <option value="">Same as the TV's own language</option>
+      <option value="en">English</option>
+      <option value="ar" lang="ar">العربية (Arabic)</option>
+    </select>
+  </section>
+
+  <section class="card">
     <h2>IPTV providers</h2>
     <p class="hint">Your IPTV subscription. Most providers give a server address, a username and a password (Xtream Codes). If you only have a playlist link, choose <b>M3U link</b>. Passwords stay on the TV and are never shown here again.</p>
     <div id="providers"></div>
@@ -256,6 +266,7 @@
   async function loadSettings() {
     try {
       const st = await api('/api/settings');
+      $('#tvLanguage').value = st.language || '';
       const r = document.querySelector(`input[name=ytmode][value=${st.youtubePlayback}]`);
       if (r) r.checked = true;
     } catch (e) { /* status line already reports connectivity */ }
@@ -266,6 +277,12 @@
       setMsg('YouTube playback mode saved.', 'ok');
     } catch (e) { setMsg('Could not save setting: ' + e.message, 'err'); }
   }));
+  $('#tvLanguage').onchange = async (e) => {
+    try {
+      await api('/api/settings', { method: 'PUT', body: JSON.stringify({ language: e.target.value }) });
+      setMsg('TV language changed. The TV screen updates straight away.', 'ok');
+    } catch (err) { setMsg('Could not change the language: ' + err.message, 'err'); }
+  };
   loadSettings();
 
   async function importM3u(body) {

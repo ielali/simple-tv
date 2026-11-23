@@ -1,5 +1,6 @@
 package com.ielali.simpletv
 
+import android.content.Context
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -11,16 +12,28 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import com.ielali.simpletv.guard.KeyLog
 import com.ielali.simpletv.guard.KeyLogEntry
+import com.ielali.simpletv.tv.LocaleSupport
 import com.ielali.simpletv.tv.PlayerScreen
 import com.ielali.simpletv.tv.TvViewModel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 @UnstableApi
 class MainActivity : ComponentActivity() {
 
     private val vm: TvViewModel by viewModels()
+
+    /** The TV language from the config page applies to this screen without touching the system language. */
+    override fun attachBaseContext(newBase: Context) {
+        val language = (newBase.applicationContext as SimpleTvApp).settings.current().language
+        super.attachBaseContext(LocaleSupport.wrap(newBase, language))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,6 +46,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by vm.uiState.collectAsStateWithLifecycle()
             PlayerScreen(state = state, vm = vm)
+        }
+        // Language changed on the config page: rebuild the screen in the new language. The view model,
+        // and with it the playing channel, survives the recreation.
+        lifecycleScope.launch {
+            (application as SimpleTvApp).settings.settings
+                .map { it.language }.distinctUntilChanged().drop(1)
+                .collect { recreate() }
         }
     }
 

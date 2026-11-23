@@ -41,6 +41,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 ## Later
 
+- Native-speaker review of `values-ar/strings.xml`; check right-to-left layouts on the device.
+- Config page in Arabic (follow the TV language setting or the phone's browser language).
+
 - Local videos channel type ("media vault", idea from tv-vibehack): family videos pushed to the device
   and played full screen with the remote; ExoPlayer already plays files.
 - App allow-list on the config page, for households that do use Netflix or Prime through the guard.
@@ -65,6 +68,8 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- TV screen in English and Arabic with right-to-left layout, chosen on the config page (ADR-012).
 
 - Tuning card: channel number, name and spinner while an IPTV stream loads; small spinner on stalls;
   "No signal. Trying again…" with endless backoff retries; YouTube-app opening uses the same card.

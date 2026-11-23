@@ -21,5 +21,6 @@ object SettingsMerge {
     fun sanitize(settings: AppSettings): AppSettings = settings.copy(
         guardBlockedKeys = HomeGuardPolicy.sanitizeBlockedKeys(settings.guardBlockedKeys),
         guardPausedUntil = settings.guardPausedUntil.coerceAtLeast(0L),
+        language = TvLanguage.normalise(settings.language),
     )
 }

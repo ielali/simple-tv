@@ -39,7 +39,9 @@ class HomeGuardService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        val banner = BannerOverlay(this).also { overlay = it }
+        val banner = BannerOverlay(this) {
+            com.ielali.simpletv.data.TvLanguage.isRightToLeft((application as SimpleTvApp).settings.current().language)
+        }.also { overlay = it }
         scope.launch {
             combine(tv.bannerVisible, tv.current, tv.tuner.pendingDigits, tv.appVisible) { visible, ch, digits, _ ->
                 val overYouTube = visible && tv.isExternalFront() &&

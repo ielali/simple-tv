@@ -141,3 +141,19 @@ Decision:
 
 Consequences: works with providers that block playlist downloads or unknown apps. The VLC
 User-Agent is a compatibility fallback, used only after a refusal. EPG from the API is still to do.
+
+## ADR-012 TV screen in English and Arabic, chosen on the config page
+
+Context: The household needs Arabic as well as English. The Kogan's system language may be set for
+whoever else uses the TV, so Simple TV's language should be chosen independently.
+
+Decision: Android string resources with a `values-ar` translation, and an app setting
+(`AppSettings.language`: device language, English or Arabic) chosen on the config page.
+`MainActivity.attachBaseContext` wraps its context in that locale, which also turns on right-to-left
+layout, and the activity recreates when the setting changes (the playing channel survives). The
+banner drawn over YouTube follows the same setting. Channel names are shown as the provider sends
+them. Remote digits and channel numbers stay Western (0-9), matching the remote's keys.
+
+Consequences: works on every Android version without the per-app-language API. The config page
+itself is still English; translating it is on the backlog. The Arabic strings should be reviewed by
+a native speaker.

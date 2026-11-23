@@ -18,7 +18,11 @@ This file is the contract for any AI agent working in this repository. Read it f
    the home screen (see docs/DEPLOYMENT.md).
 4. **Never blank.** A missing number lands on the nearest real channel. Stream errors show
    "No signal" and keep retrying. An empty channel list shows the config URL in large text.
-5. **Text on the TV is huge.** Banner number 96sp, names 48sp, hints 32sp minimum. Light text on
+5. **Every word on the TV screen is translated.** Put on-screen text in `values/strings.xml` and the
+   same key in every `values-<lang>/strings.xml` (Arabic today). `TranslationsTest` fails the build
+   when one is missing. Layouts must work right to left: use start/end, never left/right, except
+   where the TV language must override the system direction (see `BannerOverlay`).
+5b. **Text on the TV is huge.** Banner number 96sp, names 48sp, hints 32sp minimum. Light text on
    dark, no thin weights.
 6. **YouTube goes through the official embedded player or the YouTube app only.** Never add
    stream-URL extraction (yt-dlp, NewPipe, Invidious) or user-agent spoofing to get past Google's
@@ -42,6 +46,8 @@ app/src/main/kotlin/com/ielali/simpletv/
                           Android-free; driven by the screen and, over YouTube, by the guard
   tv/ExternalPlayer.kt    Opens the YouTube app / brings Simple TV forward from app context
   tv/TvViewModel.kt       Screen adapter: video surface + settings overlay, exposes TvUiState
+  tv/LocaleSupport.kt     Applies the config page's TV language to Simple TV's screen only
+  data/TvLanguage.kt      Supported TV languages (English, Arabic) and RTL detection
   tv/PlayerScreen.kt      Compose UI: video surface, YouTube WebView, banner, overlays
   player/PlaybackEngine.kt Media3 ExoPlayer wrapper tuned for live TV; never stops retrying
   player/TuneTracker.kt   Pure: tuning / rebuffering / no-signal state and retry backoff

@@ -36,4 +36,11 @@ class SettingsMergeTest {
     fun `negative pause is clamped`() {
         assertEquals(0L, SettingsMerge.merge(AppSettings(), patch("""{"guardPausedUntil": -5}""")).guardPausedUntil)
     }
+
+    @Test
+    fun `language is kept when supported and dropped otherwise`() {
+        assertEquals("ar", SettingsMerge.merge(AppSettings(), patch("""{"language": "ar"}""")).language)
+        assertEquals("", SettingsMerge.merge(AppSettings(language = "ar"), patch("""{"language": "klingon"}""")).language)
+        assertEquals("ar", SettingsMerge.merge(AppSettings(language = "ar"), patch("""{"guardEnabled": false}""")).language)
+    }
 }

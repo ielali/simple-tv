@@ -28,4 +28,6 @@ data class AppSettings(
     val guardPausedUntil: Long = 0L,
     /** Extra remote key codes to swallow, found with the key log on the config page. */
     val guardBlockedKeys: List<Int> = emptyList(),
+    /** Language of Simple TV's screens: "" follows the device, else a key of TvLanguage.SUPPORTED. */
+    val language: String = TvLanguage.SYSTEM,
 )
