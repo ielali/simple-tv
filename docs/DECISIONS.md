@@ -189,3 +189,27 @@ each hand-off it takes a screenshot every 1.5 s (`canTakeScreenshot`, Android 11
 (mean difference <= 12 and correlation >= 0.85, blank frames never match) and presses OK (Android 13+)
 on a match, which chooses the highlighted first account. The word-based detector stays for other
 YouTube builds. Screenshots are never stored or sent; only the taught thumbnail is kept on the TV.
+
+## ADR-014 Optional YouTube Data API key, stored on the TV
+
+Context: The redesigned "Add channel" flow (docs/design/claude-design-prompt.md) should accept YouTube
+`@handle` links. Resolving a handle to a channel ID needs the YouTube Data API; scraping the handle
+page would break YouTube's terms. Claude Design asked whether a key is acceptable and where it lives.
+
+Decision:
+- The key is optional. Without it, video and live links still get a preview from YouTube's public
+  oEmbed endpoint (title, thumbnail, channel name), and channel IDs / `/channel/UC...` links work.
+  With it, `@handle` links resolve (`channels.list?forHandle=`, 1 quota unit) with name and avatar,
+  and a "Live now" badge is checked once when adding (`search.list eventType=live`, 100 units).
+- Each household supplies its own key from a free Google Cloud project, restricted to the YouTube
+  Data API v3. No key is built into the APK, where it could be extracted and its quota shared.
+- The key is stored only on the TV in app-private storage, like provider passwords. The config API
+  never returns it (`hasYoutubeKey` instead), it is never logged or put in error messages, and all
+  YouTube API calls are made by the TV, so the key never reaches the phone.
+- UI: Settings > YouTube > Advanced, "YouTube API key (optional)"; after saving, "Key saved" with
+  Replace and Remove. Without a key, pasting an @handle shows how to add one or to paste the
+  channel link instead. Errors in plain words: key not accepted, daily limit reached, handle not found.
+
+Consequences: @handle support costs the caregiver a one-time Google Cloud setup; everything else in
+the YouTube path works with no key. Until HTTPS exists (backlog), entering the key crosses the LAN
+once in plain text, the same as provider passwords.

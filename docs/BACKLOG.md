@@ -9,7 +9,8 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    - Catalog cache per provider (live, films, series, with categories) on the TV; automatic daily
      refresh at a quiet hour plus "Refresh now"; change summary; flag lineup channels the provider
      dropped instead of deleting them.
-   - Unified "Add channel" API: catalog search across categories, YouTube link preview.
+   - Unified "Add channel" API: catalog search across categories, YouTube link preview (oEmbed, no
+     key) and optional YouTube Data API key for @handle resolution and "Live now" (ADR-014).
    - Film and series channels from Xtream VOD (`get_vod_streams`, `get_series`, `get_series_info`):
      a numbered channel that plays a queue of films, or a series in order with resume.
    - "Play on TV now" and a "now playing" status endpoint.

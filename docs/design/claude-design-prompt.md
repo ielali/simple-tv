@@ -24,7 +24,7 @@ Simple TV is an Android TV app that turns a streaming stick (currently a Kogan G
 - **Works at 390 px (phone), 820 px (tablet) and 1440 px (laptop).** Phone first. Touch targets at least 44 px.
 - **Light and dark themes**, following the device setting.
 - **Large lists.** A real IPTV subscription can hold 10,000+ live channels and thousands of films. Lists must be searchable and paged or virtualised, and must never render everything at once.
-- **Security.** No login yet; a PIN is planned. Provider passwords are never shown after saving, only as "saved". Error messages never contain URLs, because IPTV URLs embed the password.
+- **Security.** No login yet; a PIN is planned. Provider passwords and the optional YouTube API key are never shown after saving, only as "saved". The key lives on the TV, and the TV makes all YouTube API calls, so the key never reaches the phone. Error messages never contain URLs, because IPTV URLs embed the password.
 - **The TV can be unreachable** (switched off, Wi-Fi changed). Design that state clearly.
 
 ## Visual direction
@@ -76,7 +76,11 @@ POST /api/providers/remove   remove a provider and its channels
 
 2. **One "Add channel" flow (planned).** Replace today's scattered sections with one entry point and three choices:
    - **From my TV subscription:** browse the cached catalog by category, search across all categories, see logos, and add single channels or whole categories. Show which are already in the lineup.
-   - **From YouTube:** paste a link or channel ID. Show a preview (title, thumbnail, whether it is live now), with the name filled in for the caregiver. Supporting `@handle` links is a stretch goal; it may need a YouTube API key.
+   - **From YouTube:** paste a link, channel ID or `@handle`, and the name is filled in for the caregiver. What works depends on an **optional YouTube API key** (decided, see below):
+     - **Video or live link:** preview with thumbnail, title and channel name, **without** a key.
+     - **Channel link (`/channel/UC…`) or channel ID:** works without a key. The preview shows the channel name when a key is present, and a generic YouTube tile otherwise.
+     - **`@handle`:** with a key, resolves to the channel and shows its name and avatar. Without a key, an inline message: "To add @handle links, add a YouTube API key in Settings, or paste the channel's link instead", with a button to Settings.
+     - **"Live now" badge:** only with a key, checked once when adding. Show "Live now", "Not live right now (will play its next live stream)" or no badge.
    - **From a link:** a single stream address, under Advanced.
 
    Every path ends the same way: the channel gets the next free number by default, the caregiver can change the number or name, and it lands in the lineup where they can see it.
@@ -96,7 +100,7 @@ Provide each at 390 px and 1440 px, plus 820 px where the layout changes meaning
 3. **Add channel:** the three paths above, including catalog browsing with category list and search, bulk add, and the YouTube preview.
 4. **Subscriptions:** list of providers with status, add or edit form (password saved state, test connection), refresh now, refresh history, and remove with clear consequences.
 5. **Film or series channel editor.**
-6. **TV settings:** language, how YouTube plays, home guard (on, off, paused with countdown), remote buttons log with block and unblock, and the page address and QR code.
+6. **TV settings:** language, how YouTube plays, home guard (on, off, paused with countdown), remote buttons log with block and unblock, and the page address and QR code. Under YouTube, an **Advanced** area with "YouTube API key (optional)", a short "Why?" explainer, and a "How to get a free key" link to an instructions page (no inline wizard). After saving, show "Key saved" with Replace and Remove. The key is never displayed again, as with provider passwords. Key errors in plain words: "The key was not accepted", "YouTube's daily limit was reached, try again tomorrow", "Handle not found".
 7. **First-run setup:** for an empty TV. A short guided path: add a subscription or YouTube channel, add a few channels, see them on the TV.
 8. **States:** loading, empty, a 10,000-channel catalog, very long and right-to-left channel names, provider errors, TV unreachable, saving and saved, and destructive confirmations.
 
