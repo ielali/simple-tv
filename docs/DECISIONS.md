@@ -260,3 +260,23 @@ Consequences: Very large providers mean a large catalog file and a slow first do
 on the Kogan, backlog item 0). Film and series channels need the Xtream API; plain M3U providers
 offer live channels only.
 
+## ADR-017 Subtitles and soundtrack per film or series channel
+
+Context: Films and episodes from Xtream providers often carry several subtitle and audio tracks
+(mostly in .mkv files). Caregivers want subtitles on without the viewer touching a menu.
+
+Decision:
+- Each film or series channel stores `PlaylistSpec.subtitles` (off, "any", or a language) and
+  `PlaylistSpec.audio` (as it comes, or a language), set on the config page.
+- When the file's tracks are known, `PlaybackEngine` applies the choice made by the pure
+  `player/TrackPicker`: full subtitles beat forced ones, the file's default breaks ties, and language
+  tags are normalised ("ara", "ar-SA" -> "ar"). A missing language means no subtitles, or the
+  soundtrack the file comes with (caregiver's choice); the TV never guesses another language.
+- Subtitles are drawn large (about 1.6 times the usual size, bold white on a dark box) unless the
+  TV's own caption settings are on; the file's own fonts and colours are ignored.
+- The page's "On the TV now" card says when the item on screen lacks the chosen language and which
+  languages it has.
+
+Consequences: Subtitles only appear when the file carries them; separate subtitle files offered by
+some providers are not used yet (backlog). Live channels are unchanged.
+

@@ -591,11 +591,30 @@ function channelSub(c) {
   if (c.type === 'FILMS' && c.playlist) {
     const pl = c.playlist;
     const what = pl.titles && pl.titles.length ? plural(pl.titles.length, 'hand-picked film') : listWords(pl.categories || []);
-    return [what, pl.shuffle ? 'shuffled' : '', c.queueSize ? plural(c.queueSize, 'film') : ''].filter(Boolean).join(' · ');
+    return [what, pl.shuffle ? 'shuffled' : '', c.queueSize ? plural(c.queueSize, 'film') : '', trackWords(pl)].filter(Boolean).join(' · ');
   }
-  if (c.type === 'SERIES') return c.resume ? c.resume.split(' · ')[0] + ' next' : (c.queueSize ? plural(c.queueSize, 'episode') : 'Plays episode by episode');
+  if (c.type === 'SERIES') return [c.resume ? c.resume.split(' · ')[0] + ' next' : (c.queueSize ? plural(c.queueSize, 'episode') : 'Plays episode by episode'), trackWords(c.playlist)].filter(Boolean).join(' · ');
   if (c.type === 'YOUTUBE') return c.group || 'YouTube';
   return c.group || providerName(c.providerId) || 'Live';
+}
+const LANG_NAME = { ar: 'Arabic', en: 'English', fr: 'French', de: 'German', es: 'Spanish', it: 'Italian', tr: 'Turkish', fa: 'Persian', ur: 'Urdu', he: 'Hebrew', pt: 'Portuguese', ru: 'Russian', hi: 'Hindi', zh: 'Chinese' };
+const langName = (c) => LANG_NAME[c] || (c ? c.toUpperCase() : 'unnamed');
+function trackWords(pl) {
+  if (!pl) return '';
+  const bits = [];
+  if (pl.subtitles) bits.push(pl.subtitles === 'any' ? 'subtitles' : langName(pl.subtitles) + ' subtitles');
+  if (pl.audio) bits.push(langName(pl.audio) + ' sound');
+  return bits.join(', ');
+}
+/** "No Arabic subtitles in this one (it has English and French)." */
+function trackNote(n) {
+  const t = n && n.tracks; const pl = n && n.channel && n.channel.playlist;
+  if (!t || !pl) return '';
+  const notes = [];
+  const has = (l) => l.length ? ` (it has ${listWords(l.map(langName))})` : '';
+  if (t.subtitlesMissing) notes.push(pl.subtitles === 'any' ? 'No subtitles in this one.' : `No ${langName(pl.subtitles)} subtitles in this one${has(t.subtitleLanguages)}.`);
+  if (t.audioMissing) notes.push(`No ${langName(pl.audio)} soundtrack in this one${has(t.audioLanguages)}, so it plays as it comes.`);
+  return notes.join(' ');
 }
 const FLAG_TEXT = { missing: 'Your provider doesn’t offer this channel any more', failed: 'Didn’t play last time you tried it' };
 async function playOnTv(body, name) {
@@ -622,6 +641,7 @@ function tvCard() {
       <div style="font-size:24px;line-height:30px;font-weight:700" dir="auto" class="ell">${esc(ch.name)}</div>
       ${n.title ? `<div dir="auto">${esc(n.title)}</div>` : ''}
       <div class="cap">${esc([n.preview ? 'Preview, not in your lineup' : kind, how].filter(Boolean).join(' · '))}</div>
+      ${trackNote(n) ? `<div class="cap" style="color:#FFC857">${esc(trackNote(n))}</div>` : ''}
       <div class="f fw g8" style="margin-top:6px"><a class="btn pri" href="#/lineup">Open lineup</a></div>
     </div>
   </section>`;
@@ -1290,6 +1310,10 @@ screens.subs = (() => {
 })();
 
 /* ---------- Film and series channels ---------- */
+const SUB_CHOICES = [['', 'Off'], ['ar', 'العربية'], ['en', 'English'], ['any', 'Any language']];
+const AUDIO_CHOICES = [['', 'As it comes'], ['ar', 'العربية'], ['en', 'English']];
+/** Sets or clears an optional field so a saved spec compares equal to an unchanged one. */
+const setOpt = (o, k, v) => { if (v) o[k] = v; else Reflect.deleteProperty(o, k); };
 screens.film = (() => {
   let f = null; // { id, number, name, spec, source, cats, series, seriesInfo, queue, results, q, restartWanted }
   let qT = null; let sT = null;
@@ -1375,6 +1399,10 @@ screens.film = (() => {
               ${sp.seriesId && f.seriesInfo ? `<div class="f g12 card" style="padding:12px"><div class="poster sm"><span dir="auto">${esc(f.name)}</span></div><div class="grow"><div style="font-weight:700" dir="auto">${esc(f.seriesName || f.name)}</div><div class="cap">${plural(f.seriesInfo.seasons, 'season')} · ${plural(f.seriesInfo.episodes, 'episode')}</div></div>${f.id ? '<span class="pill ok">Selected</span>' : '<button class="btn ghost" id="otherSeries">Choose another</button>'}</div>`
                 : sp.seriesId ? '<div class="skel" style="height:80px"></div>' : `<label class="field"><span>Series</span><span class="inp big">${ico('search', 20)}<input id="fQ" type="search" value="${esc(f.q)}" placeholder="Search series" autocomplete="off" dir="auto"></span></label><div id="fResults" class="col g4"></div>`}
               ${f.progress ? `<div class="f fw g12 card" style="padding:12px"><span class="icobox ok">${ico('check', 20, 2.2)}</span><div class="grow" style="min-width:160px"><div style="font-weight:600">Stopped at ${esc(f.progress.resume.split(' · ')[0].replace(/^S/, 's'))}</div><div class="cap">The TV picks up from here next time.</div></div><button class="btn" id="restart">Start again</button></div>` : ''}`}
+            <div class="field"><span>Subtitles</span><div class="seg full" role="radiogroup">${SUB_CHOICES.map(([k, l]) => `<button data-sub="${k}" class="${(sp.subtitles || '') === k ? 'on' : ''}" role="radio" aria-checked="${(sp.subtitles || '') === k}" ${k === 'ar' ? 'lang="ar"' : ''}>${l}</button>`).join('')}</div>
+              <span class="hint">Shown large on the TV. If ${isFilm ? 'a film doesn’t' : 'an episode doesn’t'} have them, it plays without.</span></div>
+            <div class="field"><span>Soundtrack</span><div class="seg full" role="radiogroup">${AUDIO_CHOICES.map(([k, l]) => `<button data-audio="${k}" class="${(sp.audio || '') === k ? 'on' : ''}" role="radio" aria-checked="${(sp.audio || '') === k}" ${k === 'ar' ? 'lang="ar"' : ''}>${l}</button>`).join('')}</div>
+              <span class="hint">Some ${isFilm ? 'films' : 'episodes'} come with more than one language. If the one you pick isn’t there, it plays as it comes.</span></div>
           </section>
           <div class="f fw g8">
             <button class="btn pri" id="fSave" ${clash ? 'disabled' : ''}>${f.id ? 'Save changes' : 'Add as channel ' + esc(num > 0 ? num : '')}</button>
@@ -1436,6 +1464,8 @@ screens.film = (() => {
     $$('[data-src]', el).forEach((b) => b.onclick = () => { if (f.source === b.dataset.src) return; f.source = b.dataset.src; if (f.source === 'pick') { sp.categories = []; } else { sp.titles = []; } paint(); loadSide(); });
     $$('[data-fcat]', el).forEach((b) => b.onclick = () => { const id = b.dataset.fcat; const c = sp.categories; if (c.includes(id)) c.splice(c.indexOf(id), 1); else c.push(id); paint(); loadQueue(); });
     const mf = $('#moreFCats', el); if (mf) mf.onclick = () => { f.catsAll = true; paint(); };
+    $$('[data-sub]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'subtitles', b.dataset.sub); paint(); });
+    $$('[data-audio]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'audio', b.dataset.audio); paint(); });
     $$('[data-shuffle]', el).forEach((b) => b.onclick = () => { sp.shuffle = b.dataset.shuffle === '1'; if (!sp.shuffle) sp.seed = 0; paint(); loadQueue(); });
     const q = $('#fQ', el); if (q) q.oninput = () => { f.q = q.value; clearTimeout(sT); sT = setTimeout(search, 250); };
     const os = $('#otherSeries', el); if (os) os.onclick = () => { sp.seriesId = null; f.seriesInfo = null; f.queue = null; paint(); loadSide(); };

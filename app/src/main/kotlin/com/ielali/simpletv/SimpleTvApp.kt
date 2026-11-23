@@ -55,6 +55,9 @@ class SimpleTvApp : Application() {
     lateinit var queue: QueuePlayback
         private set
 
+    /** Subtitles and soundtracks of the film or episode on screen, by channel id (set by the player). */
+    val nowTracks = kotlinx.coroutines.flow.MutableStateFlow<Pair<String, com.ielali.simpletv.player.TrackPicker.Report>?>(null)
+
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private var configServer: ConfigServer? = null

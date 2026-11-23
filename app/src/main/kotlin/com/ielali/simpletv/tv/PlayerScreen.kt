@@ -34,7 +34,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
 import com.ielali.simpletv.R
 import com.ielali.simpletv.data.Channel
 import com.ielali.simpletv.data.SourceType
@@ -99,10 +101,35 @@ private fun VideoSurface(vm: TvViewModel) {
                 keepScreenOn = true
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 setShutterBackgroundColor(android.graphics.Color.BLACK)
+                subtitleView?.let { styleSubtitles(it, ctx) }
                 layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             }
         },
     )
+}
+
+/**
+ * Subtitles big enough to read from the sofa: the TV's own caption settings when someone set them,
+ * otherwise bold white text on a dark box at about 1.6 times the usual size. The file's own fonts,
+ * sizes and colours are ignored (some films ship tiny or coloured subtitles).
+ */
+@UnstableApi
+private fun styleSubtitles(view: SubtitleView, ctx: android.content.Context) {
+    view.setApplyEmbeddedStyles(false)
+    view.setApplyEmbeddedFontSizes(false)
+    val captions = ctx.getSystemService(android.view.accessibility.CaptioningManager::class.java)
+    if (captions?.isEnabled == true) {
+        view.setUserDefaultStyle()
+        view.setUserDefaultTextSize()
+    } else {
+        view.setStyle(
+            CaptionStyleCompat(
+                android.graphics.Color.WHITE, 0xD9000000.toInt(), android.graphics.Color.TRANSPARENT,
+                CaptionStyleCompat.EDGE_TYPE_NONE, android.graphics.Color.WHITE, android.graphics.Typeface.DEFAULT_BOLD,
+            )
+        )
+        view.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 1.6f)
+    }
 }
 
 @SuppressLint("SetJavaScriptEnabled")

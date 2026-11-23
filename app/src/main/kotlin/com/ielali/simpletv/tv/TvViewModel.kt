@@ -17,6 +17,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import com.ielali.simpletv.player.PlaybackEngine
 import com.ielali.simpletv.player.PlaybackState
+import com.ielali.simpletv.player.TrackPicker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -89,6 +90,10 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+        // Tell the config page what subtitles and soundtracks the film on screen has.
+        viewModelScope.launch {
+            engine.tracks.collect { r -> simpleTv.nowTracks.value = r?.let { controller.current.value?.id to it } }
+        }
         // A film or episode finished: move to the next one in the queue.
         viewModelScope.launch {
             engine.ended.collect {
@@ -125,7 +130,9 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         queueItem = ch to item.itemId
-        engine.play(ch, item.url, item.headers, item.startPositionMs, live = false)
+        val spec = ch.playlist
+        engine.play(ch, item.url, item.headers, item.startPositionMs, live = false,
+            tracks = spec?.let { TrackPicker.Wish(it.subtitles, it.audio) })
     }
 
     private suspend fun saveQueueProgress() {

@@ -7,6 +7,8 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -39,6 +41,13 @@ class PlaybackEngine(context: Context) {
     /** Fires when a film or episode reaches its end, so the queue can move on. */
     private val _ended = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val ended: SharedFlow<Unit> = _ended.asSharedFlow()
+
+    /** Subtitles and soundtrack the file offered and what was chosen (films and episodes only). */
+    private val _tracks = MutableStateFlow<TrackPicker.Report?>(null)
+    val tracks: StateFlow<TrackPicker.Report?> = _tracks
+
+    private var wish: TrackPicker.Wish? = null
+    private var appliedGroups = -1
 
     private val tracker = TuneTracker()
     private val backoff = RetryBackoff()
@@ -79,6 +88,8 @@ class PlaybackEngine(context: Context) {
                     if (phase == PlayerPhase.ENDED && currentChannel != null) _ended.tryEmit(Unit)
                 }
 
+                override fun onTracksChanged(tracks: Tracks) = applyWish(tracks)
+
                 override fun onPlayerError(error: PlaybackException) {
                     _lastError.value = error.errorCodeName
                     _state.value = tracker.onError()
@@ -104,11 +115,62 @@ class PlaybackEngine(context: Context) {
     fun play(channel: Channel) = play(channel, channel.url, channel.headers, startPositionMs = 0L, live = true)
 
     /**
+     * Films and episodes: once the file's tracks are known, show the wished subtitles and soundtrack
+     * (TrackPicker). Applied again only if more tracks appear later, never fighting the player.
+     */
+    private fun applyWish(tracks: Tracks) {
+        val w = wish ?: return
+        if (tracks.groups.isEmpty() || tracks.groups.size == appliedGroups) return
+        val text = ArrayList<TrackPicker.Track>()
+        val audio = ArrayList<TrackPicker.Track>()
+        tracks.groups.forEachIndexed { gi, g ->
+            for (i in 0 until g.length) {
+                if (!g.isTrackSupported(i)) continue
+                val f = g.getTrackFormat(i)
+                val t = TrackPicker.Track(
+                    gi, i, f.language,
+                    isDefault = f.selectionFlags and C.SELECTION_FLAG_DEFAULT != 0,
+                    isForced = f.selectionFlags and C.SELECTION_FLAG_FORCED != 0,
+                )
+                when (g.type) {
+                    C.TRACK_TYPE_TEXT -> text += t
+                    C.TRACK_TYPE_AUDIO -> audio += t
+                }
+            }
+        }
+        appliedGroups = tracks.groups.size
+        val params = player.trackSelectionParameters.buildUpon()
+        when (val c = TrackPicker.subtitles(text, w.subtitles)) {
+            TrackPicker.Choice.Off -> params.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            is TrackPicker.Choice.Pick -> params.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .setOverrideForType(TrackSelectionOverride(tracks.groups[c.group].mediaTrackGroup, c.index))
+            TrackPicker.Choice.Keep -> Unit
+        }
+        val a = TrackPicker.audio(audio, w.audio)
+        if (a is TrackPicker.Choice.Pick) {
+            params.setOverrideForType(TrackSelectionOverride(tracks.groups[a.group].mediaTrackGroup, a.index))
+        }
+        player.trackSelectionParameters = params.build()
+        _tracks.value = TrackPicker.report(text, audio, w)
+    }
+
+    /**
      * Plays [url] for [channel] (a film or episode of a film/series channel uses its own address),
      * from [startPositionMs] for films and episodes that were part-watched.
      */
-    fun play(channel: Channel, url: String, headers: Map<String, String>, startPositionMs: Long, live: Boolean) {
+    fun play(
+        channel: Channel, url: String, headers: Map<String, String>, startPositionMs: Long, live: Boolean,
+        tracks: TrackPicker.Wish? = null,
+    ) {
         retryHandler.removeCallbacksAndMessages(null)
+        // Each item starts from the player's own track choice; a film's wishes apply once its tracks load.
+        wish = tracks
+        appliedGroups = -1
+        _tracks.value = null
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .clearOverrides()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .build()
         backoff.reset()
         currentChannel = channel
         currentLive = live
@@ -130,6 +192,8 @@ class PlaybackEngine(context: Context) {
 
     fun stop() {
         retryHandler.removeCallbacksAndMessages(null)
+        wish = null
+        _tracks.value = null
         currentChannel = null
         player.stop()
         player.clearMediaItems()

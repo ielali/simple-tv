@@ -87,6 +87,8 @@ class ContentRoutes(private val app: SimpleTvApp) {
         val startedFromApp: Boolean = false,
         /** Played from the page without being in the lineup. */
         val preview: Boolean = false,
+        /** Film and series channels: the subtitles and soundtracks the item on screen has. */
+        val tracks: com.ielali.simpletv.player.TrackPicker.Report? = null,
         val now: Long,
     )
 
@@ -379,7 +381,9 @@ class ContentRoutes(private val app: SimpleTvApp) {
             call.respond(
                 NowPlaying(
                     channel = ch?.let { ApiViews.channel(it) }, title = title, since = tv.since,
-                    startedFromApp = tv.startedFromApp, preview = ch != null && ch.number == 0, now = System.currentTimeMillis(),
+                    startedFromApp = tv.startedFromApp, preview = ch != null && ch.number == 0,
+                    tracks = app.nowTracks.value?.takeIf { it.first == ch?.id && ch?.playlist != null }?.second,
+                    now = System.currentTimeMillis(),
                 )
             )
         }

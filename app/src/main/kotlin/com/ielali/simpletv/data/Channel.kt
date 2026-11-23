@@ -41,6 +41,10 @@ data class PlaylistSpec(
     val first: List<String> = emptyList(),
     /** Item ids the caregiver took out of the queue. */
     val excluded: List<String> = emptyList(),
+    /** Subtitles to show: null = off, "any", or a language code ("ar", "en"). Missing = none shown. */
+    val subtitles: String? = null,
+    /** Soundtrack language; null = as the film comes. Missing = the film's own soundtrack. */
+    val audio: String? = null,
 )
 
 /**
