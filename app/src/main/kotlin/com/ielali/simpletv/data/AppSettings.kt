@@ -22,4 +22,10 @@ enum class YouTubePlayback {
 @Serializable
 data class AppSettings(
     val youtubePlayback: YouTubePlayback = YouTubePlayback.EMBEDDED,
+    /** Home guard wanted. When true the app re-enables its accessibility service at start and boot. */
+    val guardEnabled: Boolean = true,
+    /** Epoch millis (TV clock) until which the guard steps aside so a caregiver can use Google TV. */
+    val guardPausedUntil: Long = 0L,
+    /** Extra remote key codes to swallow, found with the key log on the config page. */
+    val guardBlockedKeys: List<Int> = emptyList(),
 )

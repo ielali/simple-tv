@@ -18,6 +18,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.media3.common.util.UnstableApi
+import com.ielali.simpletv.guard.GuardState
+import com.ielali.simpletv.guard.HomeGuardPolicy
+import com.ielali.simpletv.guard.KeyLog
+import com.ielali.simpletv.guard.KeyLogEntry
 import com.ielali.simpletv.tv.PlayerScreen
 import com.ielali.simpletv.tv.TvViewModel
 import com.ielali.simpletv.youtube.YouTubeEmbed
@@ -63,6 +67,8 @@ class MainActivity : ComponentActivity() {
             Intent(Intent.ACTION_VIEW, uri).setPackage(YOUTUBE_MOBILE_PACKAGE),
             Intent(Intent.ACTION_VIEW, uri),
         )
+        // Tell the home guard this YouTube window is wanted, so it does not bounce the viewer back.
+        GuardState.allowedExternalPackages = setOf(HomeGuardPolicy.YOUTUBE_TV, HomeGuardPolicy.YOUTUBE_MOBILE)
         for (intent in candidates) {
             try {
                 startActivity(intent)
@@ -71,11 +77,21 @@ class MainActivity : ComponentActivity() {
                 // try the next candidate
             }
         }
+        GuardState.allowedExternalPackages = emptySet()
         vm.onExternalPlayerUnavailable()
     }
 
     /** Every remote key comes through here first so nothing in the view tree can steal focus. */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            val handled = vm.handles(event.keyCode)
+            KeyLog.shared.record(
+                KeyLogEntry(
+                    System.currentTimeMillis(), event.keyCode, KeyEvent.keyCodeToString(event.keyCode),
+                    "app", if (handled) "HANDLED" else "SYSTEM",
+                )
+            )
+        }
         if (!vm.handles(event.keyCode)) return super.dispatchKeyEvent(event)
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) vm.onKeyDown(event.keyCode)
         return true
@@ -83,6 +99,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Back in Simple TV: a YouTube hand-off is over, so the guard may bounce YouTube again.
+        GuardState.allowedExternalPackages = emptySet()
         vm.engine.player.playWhenReady = true
     }
 

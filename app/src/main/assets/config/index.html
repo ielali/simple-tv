@@ -109,6 +109,32 @@
     <p class="hint" style="margin-top:10px">Saved immediately when changed.</p>
   </section>
 
+  <section class="card">
+    <h2>Home guard</h2>
+    <p class="hint">Keeps the TV on Simple TV. The Home button comes back here, and the assistant and app shortcut buttons on the remote do nothing. Pause it when you need Google TV's own settings, for example to change Wi-Fi.</p>
+    <p id="guardState" style="font-weight:600;margin:8px 0"></p>
+    <div class="row">
+      <button id="guardPause">Pause 15 minutes</button>
+      <button id="guardResume">Resume now</button>
+      <button id="guardToggle"></button>
+    </div>
+    <p id="guardSetupHint" class="hint" style="margin-top:10px" hidden></p>
+  </section>
+
+  <section class="card">
+    <h2>Remote buttons</h2>
+    <p class="hint">Press buttons on the TV remote, then press <b>Refresh</b>. Each press shows its code. Use <b>Block</b> on any button that opens something it should not, such as a Netflix or YouTube shortcut. Buttons Simple TV needs cannot be blocked.</p>
+    <div class="row" style="margin-bottom:8px">
+      <button id="keysRefresh">Refresh</button>
+      <button id="keysClear">Clear list</button>
+    </div>
+    <table>
+      <thead><tr><th>Time</th><th>Button</th><th>Code</th><th>Seen by</th><th>Result</th><th></th></tr></thead>
+      <tbody id="keyRows"></tbody>
+    </table>
+    <p class="hint" style="margin-top:10px">Extra blocked buttons: <span id="blockedList">none</span></p>
+  </section>
+
 </main>
 
 <div class="toolbar">
@@ -321,6 +347,78 @@
     try { providers = (await api('/api/providers')).providers; renderProviders(); } catch (e) { /* reported by status */ }
   }
   loadProviders();
+
+  // ---- Home guard ----
+  let guard = null;
+  const fmtTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  function renderGuard() {
+    if (!guard) return;
+    const paused = guard.pausedUntil > guard.now;
+    let text;
+    if (!guard.guardEnabled) text = 'Off. Google TV behaves normally.';
+    else if (!guard.serviceEnabled) text = 'Wanted, but not active on this TV yet.';
+    else if (paused) text = `Paused until about ${fmtTime(Date.now() + (guard.pausedUntil - guard.now))}.`;
+    else text = 'On. Home and shortcut buttons stay inside Simple TV.';
+    $('#guardState').textContent = text;
+    $('#guardPause').disabled = !guard.guardEnabled;
+    $('#guardResume').disabled = !paused;
+    $('#guardToggle').textContent = guard.guardEnabled ? 'Turn guard off' : 'Turn guard on';
+    const hint = $('#guardSetupHint');
+    if (guard.guardEnabled && !guard.serviceEnabled) {
+      hint.hidden = false;
+      hint.innerHTML = guard.canSelfManage
+        ? 'The TV switched the guard off. Restart the TV, or turn the guard off and on again here.'
+        : 'One-time setup needed from a computer: <code>tools/tv-admin.sh guard-on</code> (see the deployment guide).';
+    } else hint.hidden = true;
+    $('#blockedList').textContent = guard.blockedKeys.length
+      ? guard.blockedKeys.map((k) => `${k.name.replace('KEYCODE_', '')} (${k.code})`).join(', ') : 'none';
+  }
+  async function loadGuard() { try { guard = await api('/api/guard'); renderGuard(); } catch (e) { /* status line reports */ } }
+  $('#guardPause').onclick = async () => { guard = await api('/api/guard/pause', { method: 'POST', body: JSON.stringify({ minutes: 15 }) }); renderGuard(); setMsg('Guard paused for 15 minutes.', 'ok'); };
+  $('#guardResume').onclick = async () => { guard = await api('/api/guard/resume', { method: 'POST', body: '{}' }); renderGuard(); setMsg('Guard resumed.', 'ok'); };
+  $('#guardToggle').onclick = async () => {
+    try {
+      await api('/api/settings', { method: 'PUT', body: JSON.stringify({ guardEnabled: !guard.guardEnabled }) });
+      await loadGuard(); setMsg(guard.guardEnabled ? 'Guard turned on.' : 'Guard turned off.', 'ok');
+    } catch (e) { setMsg('Could not change the guard: ' + e.message, 'err'); }
+  };
+
+  // ---- Remote buttons ----
+  async function setBlocked(code, block) {
+    const settings = await api('/api/settings');
+    const keys = new Set(settings.guardBlockedKeys || []);
+    if (block) keys.add(code); else keys.delete(code);
+    await api('/api/settings', { method: 'PUT', body: JSON.stringify({ guardBlockedKeys: [...keys] }) });
+    await loadGuard(); await loadKeys();
+  }
+  async function loadKeys() {
+    let rows = [];
+    try { rows = await api('/api/keys'); } catch (e) { return; }
+    const body = $('#keyRows');
+    body.innerHTML = rows.length ? '' : '<tr><td colspan="6" class="hint">No buttons pressed yet.</td></tr>';
+    rows.forEach((k) => {
+      const tr = document.createElement('tr');
+      let action = '';
+      if (k.needed) action = '<span class="hint">Needed</span>';
+      else if (k.blockedByDefault) action = '<span class="hint">Blocked by default</span>';
+      else if (k.blocked) action = `<button data-unblock="${k.keyCode}">Unblock</button>`;
+      else if (k.blockable) action = `<button data-block="${k.keyCode}">Block</button>`;
+      tr.innerHTML = `<td data-label="Time">${fmtTime(k.atMillis)}</td><td data-label="Button">${esc(k.name.replace('KEYCODE_', ''))}</td>
+        <td data-label="Code">${k.keyCode}</td><td data-label="Seen by">${k.source === 'guard' ? 'Guard' : 'Simple TV'}</td>
+        <td data-label="Result">${esc(k.action.toLowerCase().replace('_', ' '))}</td><td>${action}</td>`;
+      body.appendChild(tr);
+    });
+  }
+  $('#keyRows').addEventListener('click', async (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    try {
+      if (b.dataset.block) { await setBlocked(+b.dataset.block, true); setMsg('Button blocked.', 'ok'); }
+      if (b.dataset.unblock) { await setBlocked(+b.dataset.unblock, false); setMsg('Button unblocked.', 'ok'); }
+    } catch (err) { setMsg('Could not update blocked buttons: ' + err.message, 'err'); }
+  });
+  $('#keysRefresh').onclick = loadKeys;
+  $('#keysClear').onclick = async () => { await api('/api/keys/clear', { method: 'POST', body: '{}' }); loadKeys(); };
+  loadGuard(); loadKeys();
 
   window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
   load();

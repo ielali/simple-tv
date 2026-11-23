@@ -23,7 +23,11 @@ This file is the contract for any AI agent working in this repository. Read it f
 6. **YouTube goes through the official embedded player or the YouTube app only.** Never add
    stream-URL extraction (yt-dlp, NewPipe, Invidious) or user-agent spoofing to get past Google's
    WebView sign-in block. Both violate the terms and break constantly. See ADR-007.
-7. **Configuration happens off the TV.** New settings go into the web UI at
+7. **Never disable, hide or suspend the stock Google TV home** (`com.google.android.apps.tv.launcherx`),
+   by `pm`, device-owner policy or debloat list. On Android 14 Google TV it can loop the device into
+   black-screen recovery (RescueParty). Cover it with the home guard instead. `tools/tv-admin.sh`
+   enforces this; keep its protected list in step with any new tooling.
+8. **Configuration happens off the TV.** New settings go into the web UI at
    `app/src/main/assets/config/index.html` and the JSON API in `ConfigServer`, not into on-TV forms.
 
 ## Layout
@@ -51,8 +55,17 @@ app/src/main/kotlin/com/ielali/simpletv/
   config/NetworkAddress.kt LAN IP discovery
   config/QrCode.kt        ZXing wrapper: URL -> module matrix (pure JVM)
   tv/QrCodeView.kt        Compose canvas renderer for the QR matrix
-  boot/BootReceiver.kt    Start on boot
+  boot/BootReceiver.kt    Start on boot (re-enables the guard first; its exemption allows the start)
+  guard/HomeGuardService.kt Accessibility service: HOME/TV keys -> Simple TV, swallows shortcut keys,
+                          covers the stock home and sponsored apps (soft kiosk, no factory reset)
+  guard/HomeGuardPolicy.kt  Pure decisions for keys and windows; GuardKeys.kt mirrors KeyEvent codes
+  guard/GuardSetup.kt     Enables/disables the service via WRITE_SECURE_SETTINGS (granted over adb)
+  guard/KeyLog.kt         Recent key presses for the config page's "Remote buttons" card
+  data/SettingsMerge.kt   Partial PUT /api/settings; also sanitizes blocked keys
 app/src/main/assets/config/index.html   Caregiver web UI (vanilla JS, no build step)
+tools/tv-admin.sh                       adb admin: status, install, guard-on/off, stock, debloat, restore
+tools/debloat/*.txt                     Reversible debloat lists (disable, never uninstall)
+tools/test/tv-admin.test.sh             Runs tv-admin.sh against a fake adb (CI runs it)
 app/src/test/kotlin/...                 JVM unit tests for everything without Android deps
 docs/                                   Feasibility, architecture, decisions, backlog, deployment
 ```
@@ -64,7 +77,8 @@ docs/                                   Feasibility, architecture, decisions, ba
 - **Record decisions in `docs/DECISIONS.md`** when you choose between approaches (library, protocol,
   UX behaviour). One short entry: context, decision, consequences.
 - **Pure logic stays Android-free.** Anything in `tv/ChannelTuner`, `tv/ChannelNavigator`, `data/`,
-  `youtube/` must compile without Android so it is unit-testable on the JVM. Put Android calls in the
+  `youtube/`, `guard/HomeGuardPolicy`, `guard/GuardKeys`, `guard/AccessibilityServiceList`, `guard/KeyLog`
+  must compile without Android so it is unit-testable on the JVM. Put Android calls in the
   ViewModel, Activity, Compose or engine classes.
 - **Every behaviour change to pure logic ships with a unit test.** Tests use JUnit 4 and
   `kotlinx-coroutines-test` with virtual time; see `ChannelTunerTest` for the pattern
@@ -74,6 +88,8 @@ docs/                                   Feasibility, architecture, decisions, ba
 - **Keep dependencies in `gradle/libs.versions.toml`.** Bump versions in one commit on their own.
 - **No secrets, no analytics, no network calls except stream playback, YouTube embeds and the LAN
   config server.**
+- **Shell scripts:** `set -euo pipefail`, and never pipe into `grep -q` (an early exit fails the pipe
+  under pipefail). Capture output, then search it, as `tv-admin.sh` does.
 - Commit messages: imperative summary line under 72 chars, blank line, why-not-what body when
   the diff does not explain itself.
 
@@ -83,6 +99,7 @@ docs/                                   Feasibility, architecture, decisions, ba
 ./gradlew testDebugUnitTest      # JVM unit tests (fast, run before every commit)
 ./gradlew assembleDebug          # debug APK -> app/build/outputs/apk/debug/
 ./gradlew lintDebug              # Android lint
+bash tools/test/tv-admin.test.sh # admin script against a fake adb
 adb connect <tv-ip>:5555 && adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.ielali.simpletv/.MainActivity
 adb shell input keyevent KEYCODE_1   # simulate remote keys; see docs/DEPLOYMENT.md

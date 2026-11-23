@@ -3,7 +3,6 @@ package com.ielali.simpletv.config
 import android.content.Context
 import android.util.Log
 import com.ielali.simpletv.data.ChannelList
-import com.ielali.simpletv.data.AppSettings
 import com.ielali.simpletv.data.ChannelRepository
 import com.ielali.simpletv.data.SettingsRepository
 import com.ielali.simpletv.data.M3uParser
@@ -11,6 +10,11 @@ import com.ielali.simpletv.data.Provider
 import com.ielali.simpletv.data.ProviderImport
 import com.ielali.simpletv.data.ProviderList
 import com.ielali.simpletv.data.ProviderRepository
+import com.ielali.simpletv.data.SettingsMerge
+import com.ielali.simpletv.guard.GuardKeys
+import com.ielali.simpletv.guard.GuardSetup
+import com.ielali.simpletv.guard.HomeGuardPolicy
+import com.ielali.simpletv.guard.KeyLog
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -31,6 +35,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -44,7 +49,12 @@ import java.net.URL
  *  PUT  /api/channels          <- ChannelList (replaces everything)
  *  POST /api/import/m3u        <- { url } or { text }  appends parsed channels
  *  GET  /api/settings          -> AppSettings
- *  PUT  /api/settings          <- AppSettings
+ *  PUT  /api/settings          <- partial AppSettings; only the fields sent change
+ *  GET  /api/guard             -> GuardStatus (home guard on/off/paused, blocked keys)
+ *  POST /api/guard/pause       <- { minutes }  lets the caregiver use Google TV for a while
+ *  POST /api/guard/resume
+ *  GET  /api/keys              -> recent remote key presses, newest first
+ *  POST /api/keys/clear
  *  GET  /api/providers         -> ProviderList with passwords blanked (hasPassword flags instead)
  *  PUT  /api/providers         <- ProviderList; a blank password keeps the stored one
  *  POST /api/providers/import  <- { providerId }  fetches the playlist and adds new channels
@@ -89,6 +99,55 @@ class ConfigServer(
     @Serializable
     data class ProviderImportResult(val added: Int, val skipped: Int, val total: Int)
 
+    @Serializable
+    data class KeyName(val code: Int, val name: String)
+
+    @Serializable
+    data class GuardStatus(
+        val guardEnabled: Boolean,
+        val serviceEnabled: Boolean,
+        val canSelfManage: Boolean,
+        val pausedUntil: Long,
+        val now: Long,
+        val blockedKeys: List<KeyName>,
+    )
+
+    @Serializable
+    data class PauseRequest(val minutes: Int = 15)
+
+    @Serializable
+    data class KeyRow(
+        val atMillis: Long, val keyCode: Int, val name: String, val source: String, val action: String,
+        val needed: Boolean, val blockedByDefault: Boolean, val blocked: Boolean, val blockable: Boolean,
+    )
+
+    private fun keyName(code: Int) = KeyName(code, android.view.KeyEvent.keyCodeToString(code))
+
+    private fun guardStatus(): GuardStatus {
+        val s = settingsRepo.current()
+        return GuardStatus(
+            guardEnabled = s.guardEnabled,
+            serviceEnabled = GuardSetup.isServiceEnabled(appContext),
+            canSelfManage = GuardSetup.canSelfManage(appContext),
+            pausedUntil = s.guardPausedUntil,
+            now = System.currentTimeMillis(),
+            blockedKeys = s.guardBlockedKeys.map { keyName(it) },
+        )
+    }
+
+    private fun keyRows(): List<KeyRow> {
+        val extra = settingsRepo.current().guardBlockedKeys.toSet()
+        return KeyLog.shared.entries().map {
+            KeyRow(
+                it.atMillis, it.keyCode, it.name, it.source, it.action,
+                needed = it.keyCode in GuardKeys.PROTECTED,
+                blockedByDefault = it.keyCode in GuardKeys.DEFAULT_BLOCKED,
+                blocked = it.keyCode in extra,
+                blockable = HomeGuardPolicy.isBlockable(it.keyCode),
+            )
+        }
+    }
+
     private fun providerViews(): ProviderViews {
         val counts = repo.current().channels.groupingBy { it.providerId }.eachCount()
         return ProviderViews(providerRepo.current().providers.map {
@@ -117,7 +176,28 @@ class ConfigServer(
                     call.respond(repo.replaceAll(list))
                 }
                 get("/api/settings") { call.respond(settingsRepo.current()) }
-                put("/api/settings") { call.respond(settingsRepo.replace(call.receive<AppSettings>())) }
+                put("/api/settings") {
+                    val before = settingsRepo.current()
+                    val saved = settingsRepo.replace(SettingsMerge.merge(before, call.receive<JsonObject>()))
+                    if (saved.guardEnabled != before.guardEnabled) GuardSetup.apply(appContext, saved.guardEnabled)
+                    call.respond(saved)
+                }
+                get("/api/guard") { call.respond(guardStatus()) }
+                post("/api/guard/pause") {
+                    val minutes = call.receive<PauseRequest>().minutes.coerceIn(1, 240)
+                    val until = System.currentTimeMillis() + minutes * 60_000L
+                    settingsRepo.replace(settingsRepo.current().copy(guardPausedUntil = until))
+                    call.respond(guardStatus())
+                }
+                post("/api/guard/resume") {
+                    settingsRepo.replace(settingsRepo.current().copy(guardPausedUntil = 0L))
+                    call.respond(guardStatus())
+                }
+                get("/api/keys") { call.respond(keyRows()) }
+                post("/api/keys/clear") {
+                    KeyLog.shared.clear()
+                    call.respond(keyRows())
+                }
                 get("/api/providers") { call.respond(providerViews()) }
                 put("/api/providers") {
                     providerRepo.replaceAll(call.receive<ProviderList>())

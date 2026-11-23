@@ -1,0 +1,80 @@
+package com.ielali.simpletv.guard
+
+enum class KeyAction { PASS, GO_HOME, SWALLOW }
+enum class WindowAction { NONE, GO_HOME }
+
+/** Snapshot of everything the guard needs to decide; built fresh for every event. */
+data class GuardConfig(
+    val enabled: Boolean = true,
+    val pausedUntil: Long = 0L,
+    val extraBlockedKeys: Set<Int> = emptySet(),
+    /** Apps Simple TV opened on purpose (YouTube hand-off); they may stay in front. */
+    val allowedExternalPackages: Set<String> = emptySet(),
+)
+
+/**
+ * Decides what the accessibility guard does with each key and window change.
+ *
+ * Idea credit: tv-vibehack (MIT) — github.com/toomramcharan/tv-vibehack. The stock Google TV home is
+ * never disabled; it is covered instead, because disabling it can send Android 14 Google TV into a
+ * RescueParty recovery loop.
+ */
+object HomeGuardPolicy {
+    const val OWN_PACKAGE = "com.ielali.simpletv"
+    const val STOCK_LAUNCHER = "com.google.android.apps.tv.launcherx"
+    const val YOUTUBE_TV = "com.google.android.youtube.tv"
+    const val YOUTUBE_MOBILE = "com.google.android.youtube"
+
+    /** Apps reachable by sponsored remote buttons. Bounced back to Simple TV unless Simple TV opened them. */
+    val SPONSORED_APPS: Set<String> = setOf(
+        "com.netflix.ninja",
+        "com.amazon.amazonvideo.livingroom",
+        "com.disney.disneyplus",
+        YOUTUBE_TV,
+    )
+
+    /** Window packages the accessibility service subscribes to (keeps it idle otherwise). */
+    val WATCHED_PACKAGES: Set<String> = SPONSORED_APPS + STOCK_LAUNCHER
+
+    fun isActive(config: GuardConfig, now: Long): Boolean = config.enabled && now >= config.pausedUntil
+
+    fun onKey(keyCode: Int, config: GuardConfig, now: Long): KeyAction = when {
+        !isActive(config, now) -> KeyAction.PASS
+        keyCode in GuardKeys.GO_HOME -> KeyAction.GO_HOME
+        keyCode in GuardKeys.PROTECTED -> KeyAction.PASS
+        keyCode in GuardKeys.DEFAULT_BLOCKED || keyCode in config.extraBlockedKeys -> KeyAction.SWALLOW
+        else -> KeyAction.PASS
+    }
+
+    fun onWindow(packageName: String?, config: GuardConfig, now: Long): WindowAction = when {
+        packageName == null || !isActive(config, now) -> WindowAction.NONE
+        packageName == STOCK_LAUNCHER -> WindowAction.GO_HOME
+        packageName in SPONSORED_APPS && packageName !in config.allowedExternalPackages -> WindowAction.GO_HOME
+        else -> WindowAction.NONE
+    }
+
+    /** Keys a caregiver may add to the block list: never protected keys, never the home keys, no duplicates. */
+    fun sanitizeBlockedKeys(keys: List<Int>): List<Int> =
+        keys.filter { it > 0 && it !in GuardKeys.PROTECTED && it !in GuardKeys.GO_HOME }.distinct().sorted()
+
+    fun isBlockable(keyCode: Int): Boolean = sanitizeBlockedKeys(listOf(keyCode)).isNotEmpty()
+}
+
+/** Drops repeat triggers inside [windowMs] so one key press or window flicker launches Simple TV once. */
+class Debouncer(private val windowMs: Long) {
+    private var last: Long? = null
+
+    @Synchronized
+    fun tryAcquire(now: Long): Boolean {
+        val prev = last
+        if (prev != null && now - prev < windowMs) return false
+        last = now
+        return true
+    }
+}
+
+/** Process-wide state shared between MainActivity (which opens YouTube) and the guard service. */
+object GuardState {
+    @Volatile
+    var allowedExternalPackages: Set<String> = emptySet()
+}

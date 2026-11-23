@@ -60,9 +60,40 @@ keeps the channel list. The config page header shows the installed build number.
 4. The TV shows "No channels yet" with an address and a QR code. Scan it with a phone on the same
    Wi-Fi, add one channel, press Save to TV.
 
-Do not set up kiosk / device-owner mode yet. `dpm set-device-owner` refuses to run while any Google
-account is on the device, so it needs either removing the account or a factory reset, and the app
-side of it (backlog item 10) is not built yet.
+5. Turn on the home guard (one time, from the laptop):
+
+   ```bash
+   TV_HOST=<dongle-ip> tools/tv-admin.sh guard-on
+   ```
+
+   From then on HOME and the TV button return to Simple TV, the assistant and app shortcut buttons do
+   nothing, and Simple TV opens by itself after a reboot. `tools/tv-admin.sh install simple-tv.apk`
+   does the install and this step together.
+
+6. Audit the remote: open the config page, press every button on the remote, press **Refresh** in
+   **Remote buttons**. Block any button that still opens something. Note the remote model and the codes
+   in the hardware table above.
+
+7. Optional debloat. List what is installed, trim `tools/debloat/google-tv-dongle.txt` to match, then:
+
+   ```bash
+   TV_HOST=<dongle-ip> tools/tv-admin.sh packages
+   TV_HOST=<dongle-ip> tools/tv-admin.sh debloat tools/debloat/google-tv-dongle.txt
+   ```
+
+   `restore` with the same file undoes it.
+
+### Getting into Google TV settings later
+
+- From a phone: config page, **Home guard**, **Pause 15 minutes**. Use the remote normally, then
+  **Resume now** or wait.
+- From a laptop: `tools/tv-admin.sh stock` hands the TV back to the normal Google TV home;
+  `guard-on` restores Simple TV.
+- `tools/tv-admin.sh status` checks everything, and re-enables the stock home if anything disabled it.
+
+**Never disable the stock Google TV home** (`com.google.android.apps.tv.launcherx`) by any means.
+On Android 14 Google TV this can loop the device into black-screen recovery. The guard covers the
+home screen instead, and `tv-admin.sh` refuses to disable it.
 
 ## Installing
 
@@ -113,15 +144,17 @@ network. Save writes `channels.json` on the TV and the running app updates immed
    and choose Simple TV "Always". Google TV devices may not offer this.
 2. **Boot**: `BootReceiver` starts the app after boot. Android 10+ may block background activity
    starts; being the HOME app avoids that.
-3. **Kiosk (recommended for a device set up in person)**: factory-reset the box, skip adding a Google
+3. **Soft kiosk (default)**: the home guard above. No reset, keeps the Google account.
+4. **Hard kiosk (optional, fresh device only)**: factory-reset the box, skip adding a Google
    account, then:
 
    ```bash
    adb shell dpm set-device-owner com.ielali.simpletv/.admin.DeviceAdminReceiver
    ```
 
-   This needs a `DeviceAdminReceiver` and lock-task setup (backlog item 8). With lock task enabled,
-   HOME and BACK cannot leave the app and the system UI stays hidden.
+   This needs a `DeviceAdminReceiver` and lock-task setup (see the backlog). With lock task enabled,
+   HOME and BACK cannot leave the app and the system UI stays hidden. Even here, never hide or
+   suspend the stock Google TV home.
 
 ## Updating
 

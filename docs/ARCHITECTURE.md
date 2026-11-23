@@ -67,7 +67,27 @@ YouTube package, then the mobile package, then any URL handler. If none exists i
 the UI falls back to the embed for that channel. See ADR-007 for why the device account cannot be
 used by the embedded player.
 
+## Home guard (soft kiosk)
+
+`HomeGuardService` is an accessibility service with key filtering. For each key it asks
+`HomeGuardPolicy.onKey`: HOME and TV bring `MainActivity` forward; assistant, colour and app-launch keys
+(plus caregiver-blocked codes) are swallowed; everything Simple TV, YouTube or the system needs passes.
+For window changes of the stock Google TV home and sponsored apps it asks `onWindow`, which brings
+Simple TV back unless `GuardState.allowedExternalPackages` says Simple TV opened that app itself
+(set before the YouTube hand-off, cleared in `MainActivity.onResume`). Launches are debounced.
+
+The guard reads `AppSettings` (`guardEnabled`, `guardPausedUntil`, `guardBlockedKeys`) on every event,
+so config-page changes apply immediately. `GuardSetup` edits the accessibility secure settings when the
+app holds WRITE_SECURE_SETTINGS (granted once by `tools/tv-admin.sh guard-on`) and re-enables the
+service at app start and boot. An enabled accessibility service also exempts the app from Android's
+background-activity-start limits, which is what lets `BootReceiver` open the TV.
+
+Both the guard and `MainActivity` write key presses to `KeyLog`, served at `/api/keys` for the
+config page's remote audit.
+
 ## Testing strategy
 
-Pure logic (tuner, navigator, parser, YouTube parsing) is JVM-tested. Android layers are verified
+Pure logic (tuner, navigator, parser, YouTube parsing, guard policy, settings merge) is JVM-tested;
+`GuardKeysSdkTest` checks mirrored key codes against the SDK, and `tools/test/tv-admin.test.sh` runs
+the admin script against a fake adb. Android layers are verified
 on device. CI runs unit tests, assembles the debug APK and runs lint.

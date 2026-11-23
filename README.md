@@ -8,8 +8,9 @@ channels and are configured by a caregiver from a phone or laptop.
 
 - Type a number on the remote, the channel changes. Channel up/down works too.
 - A large banner shows the channel number and name, then fades.
-- BACK does nothing harmful. MENU shows one screen with the address for the config page.
-- The app starts on boot and can be set as the home screen so the box never shows anything else.
+- BACK does nothing harmful. MENU shows one screen with the address and a QR code for the config page.
+- The home guard keeps the TV on Simple TV: HOME returns here, assistant and app shortcut buttons do
+  nothing, and the app starts after a reboot. A caregiver can pause it from the config page.
 
 ## How it works for the caregiver
 
@@ -41,3 +42,9 @@ CI builds the debug APK on every push to `main` and attaches it to the workflow 
 
 Scaffold. Core tuning logic, playback engine, config server and web UI are in place and the pure
 logic is unit tested. Not yet run on a device. Work through `docs/BACKLOG.md`.
+
+## Acknowledgements
+
+The home guard approach and the rule never to disable the stock Google TV home come from
+[tv-vibehack](https://github.com/toomramcharan/tv-vibehack) (MIT), built for the same audience.
+Simple TV reimplements the idea in Kotlin; see `docs/DECISIONS.md` ADR-009.

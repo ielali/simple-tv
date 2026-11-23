@@ -7,8 +7,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 1. **First device run.** Build `assembleDebug`, sideload on an Android TV box, confirm: app opens
    fullscreen, empty state shows the config URL, config page loads from a phone, adding an HLS
    channel plays. Record device, Android version and remote model in DEPLOYMENT.md.
-2. **Key mapping audit on real remotes.** Log `keyCode` for every button of the chosen remote(s)
-   and adjust `TvViewModel.handles`/`onKeyDown`. Confirm volume/mute/power pass through.
+2. **Key mapping audit on real remotes.** Use the config page's **Remote buttons** card on the Kogan:
+   press every button, block anything that still opens an app, record codes in DEPLOYMENT.md.
+   Confirm volume/mute/power pass through and that HOME returns to Simple TV after a reboot.
 3. **YouTube embed spike.** Add three real live channels (news, music, nature cams). Note which
    embed, which refuse, whether autoplay works without a gesture on the box's WebView version.
    Decide on the intent fallback and record it in DECISIONS.md.
@@ -27,14 +28,18 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 8. **Clock in the banner.** Elderly viewers use the TV as a clock; show HH:MM in the banner corner.
 9. **Stream health check in the web UI.** "Test" button per channel that has the TV try the URL for
    5 s and report OK / failed with the ExoPlayer error code.
-10. **Kiosk hardening.** Document and script `dpm set-device-owner` + lock task; verify BOOT_COMPLETED
-   launch on Android 11+ boxes; handle HOME via the launcher intent-filter.
+10. **Hard kiosk (optional).** Device-owner receiver + lock task for fresh installs without a Google
+   account. Never hide or suspend the stock Google TV home (ADR-009).
 11. **Last-channel resume and standby.** On resume after HDMI-CEC standby, retune the last channel
    instead of showing a frozen frame.
 12. **Audio-only fallback.** If the box cannot decode video for a stream, keep audio and show the
     logo/name large (radio behaviour) instead of "No signal".
 
 ## Later
+
+- Local videos channel type ("media vault", idea from tv-vibehack): family videos pushed to the device
+  and played full screen with the remote; ExoPlayer already plays files.
+- App allow-list on the config page, for households that do use Netflix or Prime through the guard.
 
 - Release signing: replace the committed debug key with a release keystore held in GitHub Actions
   secrets before any distribution outside the family. The debug key in `app/keystore` is not secret.
@@ -56,6 +61,11 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- Soft kiosk home guard (ADR-009): accessibility service for HOME/TV and shortcut keys, stock home
+  and sponsored-app covering with a YouTube hand-off exemption, pause/on/off and a remote key log with
+  per-key blocking on the config page, boot self-repair, `tools/tv-admin.sh` with protected packages,
+  starter debloat list, fake-adb script test in CI. Partial settings updates fixed.
 
 - IPTV providers: name, icon, Xtream Codes server + username + password (or M3U link with Basic
   auth), one-click channel import, per-provider removal. Passwords never leave the TV.

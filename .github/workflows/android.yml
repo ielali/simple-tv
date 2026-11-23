@@ -25,6 +25,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Admin script test
+        run: bash tools/test/tv-admin.test.sh
+
       - name: Unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
 

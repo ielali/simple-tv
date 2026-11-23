@@ -79,3 +79,29 @@ playlist and the streams; Xtream credentials travel in the URL as the protocol r
 Consequences: removing a provider removes its channels in one step; re-import is additive only
 (full sync is a backlog item); the LAN config page still needs a PIN before the password-holding
 endpoints are safe on shared networks.
+
+## ADR-009 Soft kiosk through an accessibility service; never disable the stock home
+
+Context: The Kogan dongle is already set up with a Google account, which the YouTube hand-off needs.
+Device-owner kiosk mode requires removing every account or a factory reset. The open-source project
+tv-vibehack (MIT, github.com/toomramcharan/tv-vibehack), built for the same audience, documents that
+disabling the stock Google TV home on Android 14 can trap the device in RescueParty recovery, and uses
+an accessibility service to cover the home screen instead.
+
+Decision: adopt that approach, rewritten in Kotlin with these changes:
+- Key decisions live in a pure `HomeGuardPolicy` with JVM tests; key codes are mirrored in `GuardKeys`
+  and checked against the SDK in CI.
+- HOME is consumed on DOWN, repeat and UP (the system acts on UP).
+- Sponsored apps are bounced back only when Simple TV did not open them, so the YouTube hand-off works.
+- The service list is edited, not overwritten, so other accessibility services survive.
+- The guard can be paused (15 min) or switched off from the config page, so a caregiver can always
+  reach Google TV settings, for example to fix Wi-Fi, without a computer.
+- A key log and per-key block list on the config page replace adb logcat for the remote audit.
+- `tools/tv-admin.sh` refuses to disable protected packages and re-enables the stock home if it finds
+  it disabled.
+Not adopted: their launcher UI, HDMI input switching (Realtek TV sets only), targetSdk 29, and
+direct-boot awareness (it would start Simple TV before credential storage unlocks).
+
+Consequences: works on a signed-in device and is fully reversible (`tv-admin.sh stock`). It is a
+soft lock: a determined user can still reach Settings through the guard's pause. Device-owner mode
+remains the option for a hard lock on a fresh device, under the same never-disable rule.

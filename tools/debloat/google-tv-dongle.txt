@@ -1,0 +1,20 @@
+# Starter debloat list for Google TV dongles (Kogan KAGDSX5MA, Blaupunkt BPTV30, Chromecast).
+# Not yet verified on a specific device: run `tools/tv-admin.sh packages` first and delete lines for
+# packages the TV does not have. Every entry is disabled, never uninstalled; `restore` undoes it.
+#
+# NEVER add com.google.android.apps.tv.launcherx (the stock Google TV home). Disabling it can loop
+# Android 14 Google TV into a black-screen recovery. tv-admin.sh refuses it and other system packages.
+#
+# Sources: tv-vibehack (MIT) Acer Google TV list and README; Simple TV hotkey review.
+
+# Recommendations, feedback and telemetry
+com.google.android.tvrecommendations
+com.google.android.feedback
+com.android.tv.feedbackconsent
+com.google.android.play.games
+
+# Streaming apps opened by sponsored remote buttons. Delete a line if the viewer uses that service.
+# YouTube is not listed: Simple TV can hand YouTube channels to it.
+com.netflix.ninja
+com.amazon.amazonvideo.livingroom
+com.disney.disneyplus

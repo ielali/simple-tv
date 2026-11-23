@@ -5,6 +5,7 @@ import com.ielali.simpletv.config.ConfigServer
 import com.ielali.simpletv.data.ChannelRepository
 import com.ielali.simpletv.data.ProviderRepository
 import com.ielali.simpletv.data.SettingsRepository
+import com.ielali.simpletv.guard.GuardSetup
 
 class SimpleTvApp : Application() {
 
@@ -24,6 +25,7 @@ class SimpleTvApp : Application() {
         channels = ChannelRepository(this)
         settings = SettingsRepository(this)
         providers = ProviderRepository(this)
+        GuardSetup.ensureEnabledIfWanted(this, settings.current().guardEnabled)
         configServer = ConfigServer(this, channels, settings, providers, CONFIG_PORT).also { it.start() }
     }
 
