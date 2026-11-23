@@ -48,6 +48,7 @@ object M3uParser {
                         logoUrl = pendingLogo,
                         group = pendingGroup,
                         headers = pendingHeaders.toMap(),
+                        sourceId = sourceIdFor(line),
                     )
                     pendingName = null; pendingLogo = null; pendingGroup = null
                     pendingHeaders = mutableMapOf()
@@ -55,6 +56,12 @@ object M3uParser {
             }
         }
         return result
+    }
+
+    /** Stable id for a playlist entry: the provider gives none, so hash its address (never shown). */
+    fun sourceIdFor(url: String): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-1").digest(url.trim().toByteArray())
+        return "u" + digest.take(8).joinToString("") { "%02x".format(it) }
     }
 
     fun isYouTube(url: String): Boolean =

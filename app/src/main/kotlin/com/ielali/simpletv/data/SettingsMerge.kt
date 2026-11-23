@@ -22,5 +22,6 @@ object SettingsMerge {
         guardBlockedKeys = HomeGuardPolicy.sanitizeBlockedKeys(settings.guardBlockedKeys),
         guardPausedUntil = settings.guardPausedUntil.coerceAtLeast(0L),
         language = TvLanguage.normalise(settings.language),
+        catalogRefreshTime = RefreshSchedule.normalise(settings.catalogRefreshTime),
     )
 }

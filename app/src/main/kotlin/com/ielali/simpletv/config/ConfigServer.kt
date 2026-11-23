@@ -2,39 +2,39 @@ package com.ielali.simpletv.config
 
 import android.content.Context
 import android.util.Log
-import com.ielali.simpletv.data.ChannelList
-import com.ielali.simpletv.data.ChannelRepository
-import com.ielali.simpletv.data.SettingsRepository
-import com.ielali.simpletv.data.M3uParser
 import com.ielali.simpletv.SimpleTvApp
 import com.ielali.simpletv.data.FetchErrors
 import com.ielali.simpletv.data.HttpFetcher
-import com.ielali.simpletv.data.Provider
+import com.ielali.simpletv.data.M3uParser
 import com.ielali.simpletv.data.ProviderLoader
-import com.ielali.simpletv.data.ProviderImport
-import com.ielali.simpletv.data.ProviderList
-import com.ielali.simpletv.data.ProviderRepository
 import com.ielali.simpletv.data.SettingsMerge
+import com.ielali.simpletv.guard.GuardBridge
 import com.ielali.simpletv.guard.GuardKeys
 import com.ielali.simpletv.guard.GuardSetup
 import com.ielali.simpletv.guard.HomeGuardPolicy
 import com.ielali.simpletv.guard.KeyLog
-import com.ielali.simpletv.guard.GuardBridge
 import com.ielali.simpletv.guard.ScreenFingerprint
 import com.ielali.simpletv.guard.YouTubeScreenLog
-import io.ktor.server.routing.delete
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.request.httpMethod
+import io.ktor.server.request.path
 import io.ktor.server.request.receive
+import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
+import io.ktor.server.routing.Route
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
@@ -46,99 +46,69 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 
 /**
- * Tiny LAN-only HTTP server so a caregiver can configure channels from a phone or laptop
- * instead of typing on a TV with a D-pad. Serves the single-page UI from assets/config/index.html.
+ * LAN-only HTTP server for the caregiver page (assets/config/index.html). Plain HTTP on the home
+ * network; HTTPS is parked in the backlog.
  *
- * API (all JSON):
- *  GET  /api/status            -> { appVersion, channelCount }
- *  GET  /api/channels          -> ChannelList
- *  PUT  /api/channels          <- ChannelList (replaces everything)
- *  POST /api/import/m3u        <- { url } or { text }  appends parsed channels
- *  GET  /api/settings          -> AppSettings
- *  PUT  /api/settings          <- partial AppSettings; only the fields sent change
- *  GET  /api/guard             -> GuardStatus (home guard on/off/paused, blocked keys)
- *  POST /api/guard/pause       <- { minutes }  lets the caregiver use Google TV for a while
- *  POST /api/guard/resume
- *  GET  /api/debug/youtube-screen -> what the guard last saw on YouTube's screen after a hand-off
- *  POST /api/guard/youtube-picker/remember  captures the TV screen as YouTube's account screen
- *  DELETE /api/guard/youtube-picker         forgets it
- *  GET  /api/keys              -> recent remote key presses, newest first
- *  POST /api/keys/clear
- *  GET  /api/providers         -> ProviderList with passwords blanked (hasPassword flags instead)
- *  PUT  /api/providers         <- ProviderList; a blank password keeps the stored one
- *  POST /api/providers/preview <- { providerId }  downloads the channel list, returns its categories
- *  POST /api/providers/import  <- { providerId, groups? }  adds new channels from the chosen categories
- *  POST /api/providers/remove  <- { providerId }  deletes the provider and its channels
+ * Rules (docs/design/handoff/README.md): no response carries a provider password or an IPTV address
+ * (they embed the password), error messages never contain a URL, and once a PIN is set every /api
+ * route except GET /api/auth and POST /api/auth/login needs the session token
+ * (`Authorization: Bearer …`). Sessions live in memory and end when the TV restarts.
  *
- * There is no authentication: it binds to every interface of a device on a home network. Adding a
- * PIN is on the backlog before any wider distribution.
+ * This file holds the shell, sign-in, status, settings, the home guard and the key log. Lineup,
+ * subscriptions, catalog, film channels, YouTube and "Play on TV" are in [ContentRoutes].
  */
 class ConfigServer(
     private val appContext: Context,
-    private val repo: ChannelRepository,
-    private val settingsRepo: SettingsRepository,
-    private val providerRepo: ProviderRepository,
     private val port: Int,
 ) {
+    private val app get() = appContext as SimpleTvApp
+    private val settingsRepo get() = app.settings
     private var engine: ApplicationEngine? = null
 
+    private val auth = PinAuth()
+    private val content = ContentRoutes(app)
+
     @Serializable
-    data class Status(val appVersion: String, val channelCount: Int, val configUrl: String)
+    data class ErrorBody(val error: String, val code: String? = null)
+
+    @Serializable
+    data class Status(
+        val appVersion: String,
+        val channelCount: Int,
+        val providerCount: Int,
+        val configUrl: String,
+        val pinSet: Boolean,
+        val hasYoutubeKey: Boolean,
+        /** Nothing set up yet: the page opens the three-step first run. */
+        val firstRun: Boolean,
+        val refreshTime: String,
+        val nextRefresh: Long,
+        val now: Long,
+    )
+
+    @Serializable
+    data class AuthState(val pinSet: Boolean, val signedIn: Boolean, val lockedUntil: Long, val now: Long)
+
+    @Serializable
+    data class LoginRequest(val pin: String = "")
+
+    @Serializable
+    data class LoginResponse(val token: String)
+
+    @Serializable
+    data class LoginProblem(val error: String, val code: String, val triesLeft: Int? = null, val retryAfterSeconds: Long? = null)
+
+    @Serializable
+    data class PinRequest(val pin: String = "")
+
+    @Serializable
+    data class PinResponse(val pinSet: Boolean, val token: String? = null)
 
     @Serializable
     data class ImportRequest(val url: String? = null, val text: String? = null)
 
     @Serializable
     data class ImportResult(val added: Int, val total: Int)
-
-    @Serializable
-    data class ErrorBody(val error: String)
-
-    @Serializable
-    data class ProviderView(
-        val id: String, val name: String, val kind: com.ielali.simpletv.data.ProviderKind, val url: String,
-        val username: String?, val logoUrl: String?, val hasPassword: Boolean, val channelCount: Int,
-    )
-
-    @Serializable
-    data class ProviderViews(val providers: List<ProviderView>)
-
-    @Serializable
-    data class ProviderRef(val providerId: String)
-
-    @Serializable
-    data class ProviderImportResult(val added: Int, val skipped: Int, val total: Int)
-
-    @Serializable
-    data class ProviderImportRequest(val providerId: String, val groups: List<String>? = null)
-
-    @Serializable
-    data class GroupCount(val name: String, val count: Int)
-
-    @Serializable
-    data class ProviderPreview(
-        val total: Int,
-        val groups: List<GroupCount>,
-        val source: String,
-        val accountExpiresAt: Long? = null,
-        val maxConnections: Int? = null,
-    )
-
-    private val loader = ProviderLoader(HttpFetcher())
-
-    /** Last downloaded list per provider, so "Import selected" does not download thousands of channels twice. */
-    private val previews = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, ProviderLoader.Result.Loaded>>()
-
-    private suspend fun loadProvider(provider: Provider, useCache: Boolean): ProviderLoader.Result {
-        if (useCache) {
-            previews[provider.id]?.let { (at, loaded) ->
-                if (System.currentTimeMillis() - at < PREVIEW_TTL_MS) return loaded
-            }
-        }
-        val result = withContext(Dispatchers.IO) { loader.load(provider) }
-        if (result is ProviderLoader.Result.Loaded) previews[provider.id] = System.currentTimeMillis() to result
-        return result
-    }
 
     @Serializable
     data class KeyName(val code: Int, val name: String)
@@ -202,33 +172,60 @@ class ConfigServer(
         }
     }
 
-    private fun providerViews(): ProviderViews {
-        val counts = repo.current().channels.groupingBy { it.providerId }.eachCount()
-        return ProviderViews(providerRepo.current().providers.map {
-            ProviderView(it.id, it.name, it.kind, it.url, it.username, it.logoUrl, !it.password.isNullOrEmpty(), counts[it.id] ?: 0)
-        })
+    private fun tokenOf(header: String?): String? =
+        header?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }?.substring(7)?.trim()
+
+    private fun pinSet() = !app.secrets.current().pin.isNullOrEmpty()
+
+    private fun isOpen(method: HttpMethod, path: String) =
+        (method == HttpMethod.Get && path == "/api/auth") || (method == HttpMethod.Post && path == "/api/auth/login")
+
+    private fun status(): Status {
+        val version = runCatching {
+            appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
+        }.getOrNull() ?: "dev"
+        val channels = app.channels.current().channels.size
+        val providers = app.providers.current().providers.size
+        val time = settingsRepo.current().catalogRefreshTime
+        return Status(
+            appVersion = version,
+            channelCount = channels,
+            providerCount = providers,
+            configUrl = NetworkAddress.configUrl(appContext, port),
+            pinSet = pinSet(),
+            hasYoutubeKey = !app.secrets.current().youtubeApiKey.isNullOrEmpty(),
+            firstRun = channels == 0 && providers == 0,
+            refreshTime = time,
+            nextRefresh = app.catalog.nextRefresh(),
+            now = System.currentTimeMillis(),
+        )
     }
 
     fun start() {
         if (engine != null) return
         engine = embeddedServer(CIO, port = port, host = "0.0.0.0") {
-            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; encodeDefaults = true }) }
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = false }) }
+            intercept(ApplicationCallPipeline.Plugins) {
+                val path = call.request.path()
+                if (path.startsWith("/api/")) {
+                    // The page and its data must never be cached by the browser or a proxy.
+                    call.response.header(HttpHeaders.CacheControl, "no-store")
+                    if (pinSet() && !isOpen(call.request.httpMethod, path) &&
+                        !auth.isValid(tokenOf(call.request.headers[HttpHeaders.Authorization]))
+                    ) {
+                        call.respond(HttpStatusCode.Unauthorized, ErrorBody("Enter the PIN shown on the TV.", "signin"))
+                        finish()
+                    }
+                }
+            }
             routing {
                 get("/") {
                     val html = withContext(Dispatchers.IO) { appContext.assets.open("config/index.html").bufferedReader().readText() }
+                    call.response.header(HttpHeaders.CacheControl, "no-store")
                     call.respondText(html, ContentType.Text.Html)
                 }
-                get("/api/status") {
-                    val version = runCatching {
-                        appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
-                    }.getOrNull() ?: "dev"
-                    call.respond(Status(version, repo.current().channels.size, NetworkAddress.configUrl(appContext, port)))
-                }
-                get("/api/channels") { call.respond(repo.current()) }
-                put("/api/channels") {
-                    val list = call.receive<ChannelList>()
-                    call.respond(repo.replaceAll(list))
-                }
+                authRoutes()
+                get("/api/status") { call.respond(status()) }
                 get("/api/settings") { call.respond(settingsRepo.current()) }
                 put("/api/settings") {
                     val before = settingsRepo.current()
@@ -280,58 +277,6 @@ class ConfigServer(
                     KeyLog.shared.clear()
                     call.respond(keyRows())
                 }
-                get("/api/providers") { call.respond(providerViews()) }
-                put("/api/providers") {
-                    providerRepo.replaceAll(call.receive<ProviderList>())
-                    call.respond(providerViews())
-                }
-                post("/api/providers/preview") {
-                    val ref = call.receive<ProviderRef>()
-                    val provider = providerRepo.find(ref.providerId)
-                    if (provider == null) {
-                        call.respond(HttpStatusCode.NotFound, ErrorBody("Unknown provider"))
-                        return@post
-                    }
-                    when (val result = loadProvider(provider, useCache = false)) {
-                        is ProviderLoader.Result.Failed -> call.respond(HttpStatusCode.BadGateway, ErrorBody(result.message))
-                        is ProviderLoader.Result.Loaded -> call.respond(
-                            ProviderPreview(
-                                total = result.channels.size,
-                                groups = ProviderLoader.groups(result.channels).map { GroupCount(it.first, it.second) },
-                                source = result.source,
-                                accountExpiresAt = result.account?.expiresAt,
-                                maxConnections = result.account?.maxConnections,
-                            )
-                        )
-                    }
-                }
-                post("/api/providers/import") {
-                    val req = call.receive<ProviderImportRequest>()
-                    val provider = providerRepo.find(req.providerId)
-                    if (provider == null) {
-                        call.respond(HttpStatusCode.NotFound, ErrorBody("Unknown provider"))
-                        return@post
-                    }
-                    val loaded = when (val result = loadProvider(provider, useCache = true)) {
-                        is ProviderLoader.Result.Failed -> {
-                            call.respond(HttpStatusCode.BadGateway, ErrorBody(result.message))
-                            return@post
-                        }
-                        is ProviderLoader.Result.Loaded -> result
-                    }
-                    val wanted = req.groups?.toSet()
-                    val chosen = if (wanted == null) loaded.channels else loaded.channels.filter { it.group.orEmpty() in wanted }
-                    val merged = ProviderImport.merge(repo.current().channels, chosen, provider)
-                    val updated = repo.replaceAll(repo.current().copy(channels = merged.channels))
-                    previews.remove(provider.id)
-                    call.respond(ProviderImportResult(merged.added, merged.skipped, updated.channels.size))
-                }
-                post("/api/providers/remove") {
-                    val ref = call.receive<ProviderRef>()
-                    repo.removeProvider(ref.providerId)
-                    providerRepo.replaceAll(ProviderList(providers = providerRepo.current().providers.filterNot { it.id == ref.providerId }))
-                    call.respond(providerViews())
-                }
                 post("/api/import/m3u") {
                     val req = call.receive<ImportRequest>()
                     val text = when {
@@ -359,15 +304,60 @@ class ConfigServer(
                         return@post
                     }
                     val parsed = M3uParser.parse(text)
-                    val updated = repo.append(parsed)
+                    val updated = app.channels.append(parsed)
                     call.respond(ImportResult(parsed.size, updated.channels.size))
                 }
+                with(content) { install() }
             }
         }.also {
             runCatching { it.start(wait = false) }
                 .onFailure { e -> Log.e(TAG, "Config server failed to start on port $port", e) }
         }
         Log.i(TAG, "Config server listening on ${NetworkAddress.configUrl(appContext, port)}")
+    }
+
+    private fun Route.authRoutes() {
+        get("/api/auth") {
+            val signedIn = !pinSet() || auth.isValid(tokenOf(call.request.headers[HttpHeaders.Authorization]))
+            call.respond(AuthState(pinSet(), signedIn, auth.lockedUntil(), System.currentTimeMillis()))
+        }
+        post("/api/auth/login") {
+            val entered = call.receive<LoginRequest>().pin.trim()
+            when (val r = auth.login(entered, app.secrets.current().pin)) {
+                is PinAuth.LoginResult.Ok -> call.respond(LoginResponse(r.token))
+                is PinAuth.LoginResult.NoPin -> call.respond(LoginResponse(""))
+                is PinAuth.LoginResult.Wrong -> call.respond(
+                    HttpStatusCode.Unauthorized,
+                    LoginProblem(
+                        "That PIN didn't match. You have ${r.triesLeft} ${if (r.triesLeft == 1) "try" else "tries"} left.",
+                        "wrong", triesLeft = r.triesLeft,
+                    ),
+                )
+                is PinAuth.LoginResult.Locked -> call.respond(
+                    HttpStatusCode.TooManyRequests,
+                    LoginProblem(
+                        "Too many tries. You can try again in ${(r.retryAfterSeconds + 59) / 60} minutes.",
+                        "locked", retryAfterSeconds = r.retryAfterSeconds,
+                    ),
+                )
+            }
+        }
+        // Setting the first PIN needs no sign-in (there was nothing to sign in with); changing or
+        // removing one does (the interceptor above). Either way everyone else is signed out.
+        put("/api/auth/pin") {
+            val pin = call.receive<PinRequest>().pin.trim()
+            if (pin.isNotEmpty() && !PinAuth.isValidPin(pin)) {
+                call.respond(HttpStatusCode.BadRequest, ErrorBody("Use 4 to 6 digits."))
+                return@put
+            }
+            app.secrets.setPin(pin.ifEmpty { null })
+            auth.reset()
+            call.respond(PinResponse(pinSet = pin.isNotEmpty(), token = if (pin.isNotEmpty()) auth.issue() else null))
+        }
+        post("/api/auth/logout") {
+            auth.revoke(tokenOf(call.request.headers[HttpHeaders.Authorization]))
+            call.respond(AuthState(pinSet(), false, auth.lockedUntil(), System.currentTimeMillis()))
+        }
     }
 
     fun stop() {
@@ -377,6 +367,5 @@ class ConfigServer(
 
     private companion object {
         const val TAG = "ConfigServer"
-        const val PREVIEW_TTL_MS = 10 * 60 * 1000L
     }
 }

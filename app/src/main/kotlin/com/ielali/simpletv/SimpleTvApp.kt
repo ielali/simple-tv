@@ -2,7 +2,13 @@ package com.ielali.simpletv
 
 import android.app.Application
 import com.ielali.simpletv.config.ConfigServer
+import com.ielali.simpletv.data.CatalogRepository
+import com.ielali.simpletv.data.CatalogService
 import com.ielali.simpletv.data.ChannelRepository
+import com.ielali.simpletv.data.HttpFetcher
+import com.ielali.simpletv.data.ProviderLoader
+import com.ielali.simpletv.data.QueuePlayback
+import com.ielali.simpletv.data.SecretsStore
 import com.ielali.simpletv.data.ProviderRepository
 import com.ielali.simpletv.data.SettingsRepository
 import com.ielali.simpletv.guard.GuardSetup
@@ -32,7 +38,24 @@ class SimpleTvApp : Application() {
     lateinit var tv: TvController
         private set
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    lateinit var secrets: SecretsStore
+        private set
+
+    lateinit var loader: ProviderLoader
+        private set
+
+    lateinit var catalogs: CatalogRepository
+        private set
+
+    /** Cached subscription catalogs and the daily refresh. */
+    lateinit var catalog: CatalogService
+        private set
+
+    /** Film and series channels: what plays next and where each stopped. */
+    lateinit var queue: QueuePlayback
+        private set
+
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private var configServer: ConfigServer? = null
 
@@ -44,7 +67,13 @@ class SimpleTvApp : Application() {
         pickerReference = PickerReferenceStore(this)
         GuardSetup.ensureEnabledIfWanted(this, settings.current().guardEnabled)
         tv = TvController(appScope, channels.channels, settings.settings, ExternalPlayer(this), PrefsLastChannelStore(this))
-        configServer = ConfigServer(this, channels, settings, providers, CONFIG_PORT).also { it.start() }
+        secrets = SecretsStore(this)
+        loader = ProviderLoader(HttpFetcher())
+        catalogs = CatalogRepository(this)
+        catalog = CatalogService(appScope, providers, channels, settings, catalogs, loader)
+        queue = QueuePlayback(this, catalog, catalogs, providers)
+        catalog.startScheduler()
+        configServer = ConfigServer(this, CONFIG_PORT).also { it.start() }
     }
 
     companion object {

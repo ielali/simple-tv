@@ -6,6 +6,7 @@
     <string name="settings_title">Settings</string>
     <string name="settings_hint">Open this address on a phone or computer to change channels:</string>
     <string name="scan_hint">Or scan the code with the phone camera.</string>
+    <string name="settings_pin">Page PIN: %1$s</string>
     <string name="settings_close">Press BACK to close</string>
     <string name="opening_youtube">Opening YouTube…</string>
     <string name="no_signal">No signal</string>

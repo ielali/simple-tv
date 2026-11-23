@@ -27,6 +27,8 @@ data class Provider(
     val username: String? = null,
     val password: String? = null,
     val logoUrl: String? = null,
+    /** Optional "Identify as" override, for providers that only accept a particular app name. */
+    val userAgent: String? = null,
 ) {
     /** URL of the M3U playlist to fetch for this provider. */
     fun playlistUrl(): String = when (kind) {

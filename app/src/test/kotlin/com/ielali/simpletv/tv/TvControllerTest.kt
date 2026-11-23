@@ -169,4 +169,28 @@ class TvControllerTest {
         r.controller.onRemoteKey(GuardKeys.CHANNEL_DOWN)
         assertEquals(4, r.store.value)
     }
+
+    @Test
+    fun `play from the app records when and how the channel started`() = runTest {
+        val r = rig(settings = AppSettings(), last = 1)
+        advanceTimeBy(10_000)
+        r.controller.playFromApp(stream(4))
+        assertEquals(4, r.controller.current.value?.number)
+        assertTrue(r.controller.startedFromApp)
+        assertEquals(testScheduler.currentTime, r.controller.since)
+        assertEquals(4, r.store.value)
+        r.controller.channelUp() // the viewer takes over
+        assertFalse(r.controller.startedFromApp)
+    }
+
+    @Test
+    fun `a preview plays without becoming the last channel and survives lineup changes`() = runTest {
+        val r = rig(settings = AppSettings(), last = 1)
+        val preview = Channel(id = "preview", number = 0, name = "Sky News", url = "http://x/p.m3u8")
+        r.controller.playFromApp(preview)
+        assertEquals("preview", r.controller.current.value?.id)
+        assertEquals(1, r.store.value)
+        r.controller.channelUp() // from a preview, up goes to the first channel
+        assertEquals(1, r.controller.current.value?.number)
+    }
 }

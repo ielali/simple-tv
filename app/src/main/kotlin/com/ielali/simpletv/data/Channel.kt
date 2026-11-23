@@ -10,7 +10,38 @@ enum class SourceType {
 
     /** A YouTube live stream, played through the official embedded player in a WebView. */
     YOUTUBE,
+
+    /** Plays films from a subscription one after another (see [PlaylistSpec]). */
+    FILMS,
+
+    /** Plays one series episode by episode and remembers where it stopped (see [PlaylistSpec]). */
+    SERIES,
 }
+
+@Serializable
+enum class PlaylistMode { FILM, SERIES }
+
+/**
+ * What a film or series channel plays. The queue is rebuilt from the cached catalog, so it follows
+ * the provider's offer; [seed] keeps a shuffled order stable between rebuilds.
+ */
+@Serializable
+data class PlaylistSpec(
+    val mode: PlaylistMode,
+    val providerId: String,
+    /** Film categories to play (FILM mode, when [titles] is empty). */
+    val categories: List<String> = emptyList(),
+    /** Hand-picked film ids, in play order (FILM mode). */
+    val titles: List<String> = emptyList(),
+    /** The series to play (SERIES mode). */
+    val seriesId: String? = null,
+    val shuffle: Boolean = false,
+    val seed: Long = 0L,
+    /** Item ids the caregiver moved to the front, in order. */
+    val first: List<String> = emptyList(),
+    /** Item ids the caregiver took out of the queue. */
+    val excluded: List<String> = emptyList(),
+)
 
 /**
  * One entry on the remote's channel list.
@@ -33,7 +64,15 @@ data class Channel(
     val headers: Map<String, String> = emptyMap(),
     /** Set when the channel was imported from a Provider; lets the list be re-synced or removed together. */
     val providerId: String? = null,
+    /** The provider's own id for this channel (Xtream stream id, or a hash of an M3U address). */
+    val sourceId: String? = null,
+    /** Film and series channels only. */
+    val playlist: PlaylistSpec? = null,
 )
+
+/** Streams, films and series play on Simple TV's own player (YouTube uses the WebView or the YouTube app). */
+val Channel.playsOnSimpleTv: Boolean
+    get() = type == SourceType.STREAM || type == SourceType.FILMS || type == SourceType.SERIES
 
 @Serializable
 data class ChannelList(

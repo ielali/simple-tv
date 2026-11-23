@@ -14,8 +14,11 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.ielali.simpletv.data.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 /**
  * Owns the single ExoPlayer instance for STREAM channels.
@@ -33,10 +36,15 @@ class PlaybackEngine(context: Context) {
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError
 
+    /** Fires when a film or episode reaches its end, so the queue can move on. */
+    private val _ended = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val ended: SharedFlow<Unit> = _ended.asSharedFlow()
+
     private val tracker = TuneTracker()
     private val backoff = RetryBackoff()
     private val retryHandler = Handler(Looper.getMainLooper())
     private var currentChannel: Channel? = null
+    private var currentLive = true
 
     private val httpFactory = DefaultHttpDataSource.Factory()
         .setUserAgent(DEFAULT_USER_AGENT)
@@ -68,6 +76,7 @@ class PlaybackEngine(context: Context) {
                     }
                     if (phase == PlayerPhase.READY) backoff.reset()
                     _state.value = tracker.onPhase(phase)
+                    if (phase == PlayerPhase.ENDED && currentChannel != null) _ended.tryEmit(Unit)
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
@@ -85,30 +94,39 @@ class PlaybackEngine(context: Context) {
         val delayMs = if (immediate) 0L else backoff.nextDelayMs()
         retryHandler.postDelayed({
             if (currentChannel === channel) {
-                player.seekToDefaultPosition()
+                // Live channels jump back to live; a film or episode carries on where it stopped.
+                if (currentLive) player.seekToDefaultPosition()
                 player.prepare()
             }
         }, delayMs)
     }
 
-    fun play(channel: Channel) {
+    fun play(channel: Channel) = play(channel, channel.url, channel.headers, startPositionMs = 0L, live = true)
+
+    /**
+     * Plays [url] for [channel] (a film or episode of a film/series channel uses its own address),
+     * from [startPositionMs] for films and episodes that were part-watched.
+     */
+    fun play(channel: Channel, url: String, headers: Map<String, String>, startPositionMs: Long, live: Boolean) {
         retryHandler.removeCallbacksAndMessages(null)
         backoff.reset()
         currentChannel = channel
+        currentLive = live
         _state.value = tracker.onTune()
         _lastError.value = null
         // The data source sets User-Agent itself (overriding request properties), so apply it here:
         // imported channels carry the User-Agent their provider accepted.
-        httpFactory.setUserAgent(channel.headers["User-Agent"] ?: DEFAULT_USER_AGENT)
-        httpFactory.setDefaultRequestProperties(channel.headers - "User-Agent")
-        val item = MediaItem.Builder()
-            .setUri(channel.url)
-            .setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(6_000).build())
-            .build()
-        player.setMediaItem(item)
+        httpFactory.setUserAgent(headers["User-Agent"] ?: DEFAULT_USER_AGENT)
+        httpFactory.setDefaultRequestProperties(headers - "User-Agent")
+        val builder = MediaItem.Builder().setUri(url)
+        if (live) builder.setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(6_000).build())
+        player.setMediaItem(builder.build(), startPositionMs.coerceAtLeast(0L))
         player.prepare()
         player.play()
     }
+
+    /** Current position, for remembering where a film or episode stopped. */
+    fun positionMs(): Long = player.currentPosition
 
     fun stop() {
         retryHandler.removeCallbacksAndMessages(null)

@@ -42,4 +42,12 @@ class YouTubeEmbedTest {
             YouTubeEmbed.watchUrl(Target.ChannelLive("UCupvZG-5ko_eiXAupbDfxWw")),
         )
     }
+
+    @Test
+    fun `handles are recognised but not treated as playable`() {
+        assertEquals("@skynews", YouTubeEmbed.handleOf("@skynews"))
+        assertEquals("@skynews", YouTubeEmbed.handleOf("https://www.youtube.com/@skynews/live"))
+        assertNull(YouTubeEmbed.handleOf("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+        assertNull(YouTubeEmbed.parse("@skynews"))
+    }
 }

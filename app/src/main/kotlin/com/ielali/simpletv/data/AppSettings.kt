@@ -30,4 +30,6 @@ data class AppSettings(
     val guardBlockedKeys: List<Int> = emptyList(),
     /** Language of Simple TV's screens: "" follows the device, else a key of TvLanguage.SUPPORTED. */
     val language: String = TvLanguage.SYSTEM,
+    /** When the TV refreshes every subscription's catalog each day, "HH:mm" in the TV's time zone. */
+    val catalogRefreshTime: String = RefreshSchedule.DEFAULT_TIME,
 )

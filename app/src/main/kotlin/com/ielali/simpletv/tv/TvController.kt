@@ -60,6 +60,12 @@ class TvController(
     private val _appVisible = MutableStateFlow(false)
     val appVisible: StateFlow<Boolean> = _appVisible.asStateFlow()
 
+    /** When the current channel started, and whether the caregiver started it from the config page. */
+    @Volatile var since: Long = 0L
+        private set
+    @Volatile var startedFromApp: Boolean = false
+        private set
+
     private val _externalUnavailable = MutableStateFlow(false)
     val externalUnavailable: StateFlow<Boolean> = _externalUnavailable.asStateFlow()
 
@@ -126,14 +132,26 @@ class TvController(
         }
     }
 
-    fun switchTo(channel: Channel?, launch: Boolean = true) {
+    /**
+     * "Play on TV now" from the config page: a lineup channel, or a [preview] that is not in the lineup
+     * (number 0), which is played but never remembered as the last channel.
+     */
+    fun playFromApp(channel: Channel) {
+        switchTo(channel, launch = true, fromApp = true)
+    }
+
+    fun switchTo(channel: Channel?, launch: Boolean = true, fromApp: Boolean = false) {
         _externalUnavailable.value = false
+        if (channel?.id != _current.value?.id || fromApp) {
+            since = clock()
+            startedFromApp = fromApp
+        }
         _current.value = channel
         if (channel == null) {
             GuardState.allowedExternalPackages = emptySet()
             return
         }
-        lastChannel.put(channel.number)
+        if (channel.number > 0) lastChannel.put(channel.number)
         if (usesExternalPlayer(channel)) {
             GuardState.allowedExternalPackages = YOUTUBE_PACKAGES
             if (launch) openExternal(channel)
@@ -175,8 +193,10 @@ class TvController(
                 // First load: pick the last-watched channel silently; onAppVisible starts playback.
                 val restored = ChannelNavigator.resolve(lastChannel.get() ?: sorted.first().number, sorted)
                 _current.value = restored
+                since = clock()
                 GuardState.allowedExternalPackages = if (usesExternalPlayer(restored)) YOUTUBE_PACKAGES else emptySet()
             }
+            cur.number == 0 -> Unit // a "Play on TV" preview stays on until the viewer changes channel
             sorted.none { it.id == cur.id } -> switchTo(ChannelNavigator.resolve(cur.number, sorted), launch = watching)
             else -> sorted.first { it.id == cur.id }.takeIf { it != cur }?.let { switchTo(it, launch = watching) }
         }

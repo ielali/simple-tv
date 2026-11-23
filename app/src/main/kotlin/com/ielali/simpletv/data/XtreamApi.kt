@@ -98,8 +98,98 @@ object XtreamApi {
                 url = streamUrl(server, username, password, id, ext),
                 logoUrl = o["stream_icon"].asString()?.takeIf { it.startsWith("http") },
                 group = categoryId?.let { categories[it] ?: "Category $it" },
+                sourceId = id,
             )
         }.sortedBy { it.first }.map { it.second }
+    }
+
+    fun vodCategoriesUrl(server: String, username: String, password: String) =
+        accountUrl(server, username, password) + "&action=get_vod_categories"
+
+    fun vodStreamsUrl(server: String, username: String, password: String) =
+        accountUrl(server, username, password) + "&action=get_vod_streams"
+
+    fun seriesCategoriesUrl(server: String, username: String, password: String) =
+        accountUrl(server, username, password) + "&action=get_series_categories"
+
+    fun seriesListUrl(server: String, username: String, password: String) =
+        accountUrl(server, username, password) + "&action=get_series"
+
+    fun seriesInfoUrl(server: String, username: String, password: String, seriesId: String) =
+        accountUrl(server, username, password) + "&action=get_series_info&series_id=${enc(seriesId)}"
+
+    fun movieUrl(server: String, username: String, password: String, id: String, ext: String): String =
+        "${XtreamCodes.baseUrl(server)}/movie/${enc(username.trim())}/${enc(password)}/$id.${ext.ifBlank { "mp4" }}"
+
+    fun episodeUrl(server: String, username: String, password: String, id: String, ext: String): String =
+        "${XtreamCodes.baseUrl(server)}/series/${enc(username.trim())}/${enc(password)}/$id.${ext.ifBlank { "mp4" }}"
+
+    private val yearInName = Regex("""\((19|20)\d{2}\)""")
+
+    private fun yearOf(o: JsonObject, name: String): String? =
+        (o["year"].asString() ?: o["releaseDate"].asString() ?: o["release_date"].asString())
+            ?.take(4)?.takeIf { it.length == 4 && it.all(Char::isDigit) }
+            ?: yearInName.find(name)?.value?.trim('(', ')')
+
+    /** Films (`get_vod_streams`) in the provider's order. */
+    fun parseVodStreams(body: String, categories: Map<String, String>): List<CatalogItem> {
+        val arr = runCatching { json.parseToJsonElement(body) as? JsonArray }.getOrNull() ?: return emptyList()
+        return arr.mapNotNull { el ->
+            val o = el as? JsonObject ?: return@mapNotNull null
+            val id = o["stream_id"].asString() ?: return@mapNotNull null
+            val name = o["name"].asString()?.trim().orEmpty().ifEmpty { "Film $id" }
+            val categoryId = o["category_id"].asString()
+            (o["num"].asInt() ?: Int.MAX_VALUE) to CatalogItem(
+                id = id,
+                name = name,
+                type = CatalogType.FILM,
+                group = categoryId?.let { categories[it] ?: "Category $it" },
+                logo = o["stream_icon"].asString()?.takeIf { it.startsWith("http") },
+                year = yearOf(o, name),
+                ext = o["container_extension"].asString(),
+            )
+        }.sortedBy { it.first }.map { it.second }
+    }
+
+    /** Series (`get_series`) in the provider's order. */
+    fun parseSeriesList(body: String, categories: Map<String, String>): List<CatalogItem> {
+        val arr = runCatching { json.parseToJsonElement(body) as? JsonArray }.getOrNull() ?: return emptyList()
+        return arr.mapNotNull { el ->
+            val o = el as? JsonObject ?: return@mapNotNull null
+            val id = o["series_id"].asString() ?: return@mapNotNull null
+            val name = o["name"].asString()?.trim().orEmpty().ifEmpty { "Series $id" }
+            val categoryId = o["category_id"].asString()
+            (o["num"].asInt() ?: Int.MAX_VALUE) to CatalogItem(
+                id = id,
+                name = name,
+                type = CatalogType.SERIES,
+                group = categoryId?.let { categories[it] ?: "Category $it" },
+                logo = o["cover"].asString()?.takeIf { it.startsWith("http") },
+                year = yearOf(o, name),
+            )
+        }.sortedBy { it.first }.map { it.second }
+    }
+
+    /** Episodes of one series (`get_series_info`), in season and episode order. */
+    fun parseSeriesEpisodes(body: String): List<Episode> {
+        val root = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull() ?: return emptyList()
+        val seasons = root["episodes"] as? JsonObject ?: return emptyList()
+        return seasons.entries.flatMap { (seasonKey, value) ->
+            (value as? JsonArray).orEmpty().mapNotNull { el ->
+                val o = el as? JsonObject ?: return@mapNotNull null
+                val id = o["id"].asString() ?: return@mapNotNull null
+                val info = o["info"] as? JsonObject
+                val seconds = info?.get("duration_secs").asInt()
+                Episode(
+                    id = id,
+                    season = o["season"].asInt() ?: seasonKey.toIntOrNull() ?: 1,
+                    episode = o["episode_num"].asInt() ?: 0,
+                    title = o["title"].asString()?.trim().orEmpty(),
+                    ext = o["container_extension"].asString(),
+                    minutes = seconds?.let { (it + 30) / 60 },
+                )
+            }
+        }.sortedWith(compareBy({ it.season }, { it.episode }))
     }
 
     private fun JsonElement?.asString(): String? = when (this) {

@@ -38,6 +38,7 @@ import androidx.media3.ui.PlayerView
 import com.ielali.simpletv.R
 import com.ielali.simpletv.data.Channel
 import com.ielali.simpletv.data.SourceType
+import com.ielali.simpletv.data.playsOnSimpleTv
 import com.ielali.simpletv.player.PlaybackState
 import com.ielali.simpletv.youtube.YouTubeEmbed
 
@@ -54,20 +55,20 @@ fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
         when {
             state.channels.isEmpty() -> NoChannels(state.configUrl)
             current == null -> Unit
-            current.type == SourceType.STREAM -> VideoSurface(vm)
+            current.playsOnSimpleTv -> VideoSurface(vm)
             current.type == SourceType.YOUTUBE ->
                 if (state.youtubeInApp) ChannelCard(current, stringResource(R.string.opening_youtube)) else YouTubeSurface(current)
         }
 
         // While a stream tunes or has no signal, a card keeps the channel's number and name on screen.
         val streamCard = when {
-            current?.type != SourceType.STREAM -> null
+            current?.playsOnSimpleTv != true -> null
             state.playback == PlaybackState.TUNING -> stringResource(R.string.tuning)
             state.playback == PlaybackState.ERROR -> stringResource(R.string.no_signal_retrying)
             else -> null
         }
         if (current != null && streamCard != null) ChannelCard(current, streamCard)
-        if (current?.type == SourceType.STREAM && state.playback == PlaybackState.REBUFFERING) {
+        if (current?.playsOnSimpleTv == true && state.playback == PlaybackState.REBUFFERING) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner(size = 72) }
         }
 
@@ -79,10 +80,10 @@ fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
             enter = fadeIn(), exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopStart),
         ) {
-            ChannelBanner(current = current, pendingDigits = state.pendingDigits)
+            ChannelBanner(current = current, pendingDigits = state.pendingDigits, nowTitle = state.nowTitle)
         }
 
-        if (state.settingsVisible) SettingsOverlay(state.configUrl)
+        if (state.settingsVisible) SettingsOverlay(state.configUrl, state.pin)
     }
 }
 
@@ -136,7 +137,7 @@ private fun YouTubeSurface(channel: Channel) {
 }
 
 @Composable
-private fun ChannelBanner(current: Channel?, pendingDigits: String) {
+private fun ChannelBanner(current: Channel?, pendingDigits: String, nowTitle: String?) {
     Row(
         modifier = Modifier
             .padding(48.dp)
@@ -144,7 +145,7 @@ private fun ChannelBanner(current: Channel?, pendingDigits: String) {
             .padding(horizontal = 40.dp, vertical = 24.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val number = if (pendingDigits.isNotEmpty()) pendingDigits else current?.number?.toString() ?: "--"
+        val number = if (pendingDigits.isNotEmpty()) pendingDigits else current?.number?.takeIf { it > 0 }?.toString() ?: ""
         Text(
             text = number,
             color = Accent,
@@ -152,12 +153,18 @@ private fun ChannelBanner(current: Channel?, pendingDigits: String) {
             fontWeight = FontWeight.Black,
         )
         Spacer(Modifier.width(32.dp))
-        Text(
-            text = if (pendingDigits.isNotEmpty()) "" else current?.name.orEmpty(),
-            color = Fg,
-            fontSize = 48.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
+        Column {
+            Text(
+                text = if (pendingDigits.isNotEmpty()) "" else current?.name.orEmpty(),
+                color = Fg,
+                fontSize = 48.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            // Film and series channels: what is playing on the channel right now.
+            if (pendingDigits.isEmpty() && !nowTitle.isNullOrBlank()) {
+                Text(nowTitle, color = Fg.copy(alpha = 0.8f), fontSize = 32.sp)
+            }
+        }
     }
 }
 
@@ -173,12 +180,14 @@ private fun NoChannels(configUrl: String) {
 }
 
 @Composable
-private fun SettingsOverlay(configUrl: String) {
+private fun SettingsOverlay(configUrl: String, pin: String?) {
+    // The page PIN is shown only here, on the TV itself, so whoever is in the room can sign in.
+    val close = stringResource(R.string.settings_close)
     ConfigPrompt(
         title = stringResource(R.string.settings_title),
         hint = stringResource(R.string.settings_hint),
         configUrl = configUrl,
-        footer = stringResource(R.string.settings_close),
+        footer = if (pin.isNullOrEmpty()) close else stringResource(R.string.settings_pin, pin) + "\n" + close,
         modifier = Modifier.fillMaxSize().background(Color(0xE60B1220)),
     )
 }
@@ -226,7 +235,8 @@ private fun ChannelCard(channel: Channel, status: String) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(channel.number.toString(), color = Accent, fontSize = 120.sp, fontWeight = FontWeight.Black)
+        // A "Play on TV" preview has no number (0).
+        if (channel.number > 0) Text(channel.number.toString(), color = Accent, fontSize = 120.sp, fontWeight = FontWeight.Black)
         Text(channel.name, color = Fg, fontSize = 56.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(40.dp))
         Spinner(size = 64)

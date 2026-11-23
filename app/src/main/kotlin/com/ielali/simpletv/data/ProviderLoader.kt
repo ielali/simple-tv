@@ -31,6 +31,101 @@ class ProviderLoader(private val fetcher: TextFetcher) {
             .let { it.result ?: Result.Failed(it.failure ?: GENERIC) }
     }
 
+    sealed interface CatalogResult {
+        data class Loaded(val catalog: Catalog, val account: XtreamApi.Account?) : CatalogResult
+        data class Failed(val message: String) : CatalogResult
+    }
+
+    /**
+     * The whole offer for the catalog cache: live channels (as [load]) plus, when the provider has the
+     * Xtream API, its films and series. Films or series failing to load never fails the refresh.
+     */
+    fun loadCatalog(provider: Provider, now: Long = System.currentTimeMillis()): CatalogResult {
+        val live = when (val r = load(provider)) {
+            is Result.Failed -> return CatalogResult.Failed(r.message)
+            is Result.Loaded -> r
+        }
+        val liveItems = live.channels.map { ch ->
+            CatalogItem(
+                id = ch.sourceId ?: M3uParser.sourceIdFor(ch.url),
+                name = ch.name,
+                type = CatalogType.LIVE,
+                group = ch.group,
+                logo = ch.logoUrl,
+                url = ch.url,
+                headers = ch.headers,
+            )
+        }
+        val extra = if (provider.kind == ProviderKind.XTREAM && live.source == SOURCE_API) {
+            val ua = live.channels.firstOrNull()?.headers?.get("User-Agent") ?: agentsFor(provider).first()
+            loadVodAndSeries(provider, ua)
+        } else emptyList()
+        return CatalogResult.Loaded(Catalog(provider.id, now, live.source, liveItems + extra), live.account)
+    }
+
+    private fun loadVodAndSeries(provider: Provider, ua: String): List<CatalogItem> {
+        val server = provider.url
+        val user = provider.username.orEmpty()
+        val pass = provider.password.orEmpty()
+        val headers = mapOf("User-Agent" to ua)
+        fun get(url: String): String? = try {
+            fetcher.get(url, headers).takeIf { it.ok }?.body
+        } catch (e: IOException) { null }
+        val films = get(XtreamApi.vodStreamsUrl(server, user, pass))?.let { body ->
+            val cats = get(XtreamApi.vodCategoriesUrl(server, user, pass))?.let(XtreamApi::parseCategories).orEmpty()
+            XtreamApi.parseVodStreams(body, cats)
+        }.orEmpty()
+        val series = get(XtreamApi.seriesListUrl(server, user, pass))?.let { body ->
+            val cats = get(XtreamApi.seriesCategoriesUrl(server, user, pass))?.let(XtreamApi::parseCategories).orEmpty()
+            XtreamApi.parseSeriesList(body, cats)
+        }.orEmpty()
+        val keepUa = ua.takeIf { it != DEFAULT_USER_AGENT }?.let { mapOf("User-Agent" to it) }.orEmpty()
+        return (films + series).map { it.copy(headers = keepUa) }
+    }
+
+    /** Episodes of a series, fetched on demand when a series channel is created or played. */
+    fun loadEpisodes(provider: Provider, seriesId: String, ua: String? = null): List<Episode>? {
+        val agent = ua ?: agentsFor(provider).first()
+        return try {
+            fetcher.get(
+                XtreamApi.seriesInfoUrl(provider.url, provider.username.orEmpty(), provider.password.orEmpty(), seriesId),
+                mapOf("User-Agent" to agent),
+            ).takeIf { it.ok }?.let { XtreamApi.parseSeriesEpisodes(it.body) }
+        } catch (e: IOException) {
+            null
+        }
+    }
+
+    /** "Test connection": the account check alone, in plain words. */
+    fun test(provider: Provider): Result = when (provider.kind) {
+        ProviderKind.M3U -> load(provider)
+        ProviderKind.XTREAM -> {
+            val user = provider.username.orEmpty()
+            val pass = provider.password.orEmpty()
+            if (user.isBlank() || pass.isEmpty()) Result.Failed("Enter the username and password from your provider.")
+            else {
+                var outcome: Result = Result.Failed(GENERIC)
+                for (ua in agentsFor(provider)) {
+                    val r = try {
+                        fetcher.get(XtreamApi.accountUrl(provider.url, user, pass), mapOf("User-Agent" to ua))
+                    } catch (e: IOException) {
+                        outcome = Result.Failed(FetchErrors.forNetwork(e)); break
+                    }
+                    if (!r.ok) { outcome = Result.Failed(FetchErrors.forHttp(r.code)); continue }
+                    val account = XtreamApi.parseAccount(r.body)
+                    if (account == null) {
+                        // No API on this server: fall back to whether the playlist downloads.
+                        outcome = load(provider); break
+                    }
+                    outcome = accountProblem(account)?.let { Result.Failed(it) }
+                        ?: Result.Loaded(emptyList(), SOURCE_API, account)
+                    break
+                }
+                outcome
+            }
+        }
+    }
+
     private fun loadXtream(provider: Provider): Result {
         val server = provider.url
         val user = provider.username.orEmpty()
@@ -38,7 +133,7 @@ class ProviderLoader(private val fetcher: TextFetcher) {
         if (user.isBlank() || pass.isEmpty()) return Result.Failed("Enter the username and password from your provider.")
 
         var failure: String? = null
-        for (ua in USER_AGENTS) {
+        for (ua in agentsFor(provider)) {
             val headers = mapOf("User-Agent" to ua)
             val auth = try {
                 fetcher.get(XtreamApi.accountUrl(server, user, pass), headers)
@@ -69,7 +164,7 @@ class ProviderLoader(private val fetcher: TextFetcher) {
             val categories = fetcher.get(XtreamApi.liveCategoriesUrl(server, user, pass), headers)
                 .takeIf { it.ok }?.let { XtreamApi.parseCategories(it.body) }.orEmpty()
             val channels = XtreamApi.parseLiveStreams(streams.body, server, user, pass, categories, account.formats)
-            if (channels.isEmpty()) null else Result.Loaded(withUserAgent(channels, ua), "Xtream API", account)
+            if (channels.isEmpty()) null else Result.Loaded(withUserAgent(channels, ua), SOURCE_API, account)
         } catch (e: IOException) {
             null
         }
@@ -78,7 +173,7 @@ class ProviderLoader(private val fetcher: TextFetcher) {
     private data class Attempt(val result: Result.Loaded?, val failure: String?)
 
     private fun loadPlaylist(provider: Provider, url: String, headers: Map<String, String>, ua: String? = null): Attempt {
-        val agents = if (ua != null) listOf(ua) else USER_AGENTS
+        val agents = if (ua != null) listOf(ua) else agentsFor(provider)
         var failure: String? = null
         for (agent in agents) {
             val response = try {
@@ -110,6 +205,11 @@ class ProviderLoader(private val fetcher: TextFetcher) {
         /** Recognised by most IPTV panels; used only when the provider refuses Simple TV's own name. */
         const val PLAYER_USER_AGENT = "VLC/3.0.20 LibVLC/3.0.20"
         val USER_AGENTS = listOf(DEFAULT_USER_AGENT, PLAYER_USER_AGENT)
+        const val SOURCE_API = "Xtream API"
+
+        /** The caregiver's "Identify as" override first, then Simple TV's own name, then a player's. */
+        fun agentsFor(provider: Provider): List<String> =
+            (listOfNotNull(provider.userAgent?.trim()?.takeIf { it.isNotEmpty() }) + USER_AGENTS).distinct()
         private const val GENERIC = "The channel list could not be downloaded."
 
         fun accountProblem(account: XtreamApi.Account, nowEpochSeconds: Long = System.currentTimeMillis() / 1000): String? = when {

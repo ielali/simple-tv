@@ -9,7 +9,12 @@ import com.ielali.simpletv.SimpleTvApp
 import com.ielali.simpletv.config.NetworkAddress
 import com.ielali.simpletv.data.Channel
 import com.ielali.simpletv.data.ChannelList
+import com.ielali.simpletv.data.QueuePlayback
+import com.ielali.simpletv.data.SecretsStore
 import com.ielali.simpletv.data.SourceType
+import com.ielali.simpletv.data.playsOnSimpleTv
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import com.ielali.simpletv.player.PlaybackEngine
 import com.ielali.simpletv.player.PlaybackState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +34,10 @@ data class TvUiState(
     val configUrl: String = "",
     /** The current YouTube channel plays in the YouTube app; this screen only shows a holding card. */
     val youtubeInApp: Boolean = false,
+    /** Film or episode now playing on a film/series channel. */
+    val nowTitle: String? = null,
+    /** The config page PIN, shown only on the TV's settings screen. */
+    val pin: String? = null,
 )
 
 /** Screen adapter: video surface and the settings overlay. Channel state lives in [TvController]. */
@@ -44,8 +53,11 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     val uiState: StateFlow<TvUiState> = combine(
         simpleTv.channels.channels, controller.current, controller.tuner.pendingDigits, controller.bannerVisible,
         settingsVisible, engine.state, simpleTv.settings.settings, controller.externalUnavailable,
+        simpleTv.queue.nowTitle, simpleTv.secrets.secrets,
     ) { values ->
         val current = values[1] as Channel?
+        @Suppress("UNCHECKED_CAST")
+        val now = values[8] as Pair<String, String>?
         TvUiState(
             channels = (values[0] as ChannelList).sorted(),
             current = current,
@@ -55,14 +67,71 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             playback = values[5] as PlaybackState,
             configUrl = NetworkAddress.configUrl(app, SimpleTvApp.CONFIG_PORT),
             youtubeInApp = controller.usesExternalPlayer(current),
+            nowTitle = now?.takeIf { it.first == current?.id && current.playlist != null }?.second,
+            pin = (values[9] as SecretsStore.Secrets).pin,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, TvUiState())
 
+    /** The film/series channel and item playing now, so progress is saved against the right one. */
+    private var queueItem: Pair<Channel, String>? = null
+
     init {
-        // Streams play on this screen; YouTube channels use the WebView or the YouTube app.
+        // Streams and film/series channels play on this screen; YouTube uses the WebView or the YouTube app.
         viewModelScope.launch {
-            controller.current.collect { ch -> if (ch?.type == SourceType.STREAM) engine.play(ch) else engine.stop() }
+            controller.current.collectLatest { ch ->
+                saveQueueProgress()
+                queueItem = null
+                when {
+                    ch == null -> engine.stop()
+                    ch.type == SourceType.STREAM -> engine.play(ch)
+                    ch.playlist != null && ch.playsOnSimpleTv -> playQueued(ch, simpleTv.queue.current(ch))
+                    else -> engine.stop()
+                }
+            }
         }
+        // A film or episode finished: move to the next one in the queue.
+        viewModelScope.launch {
+            engine.ended.collect {
+                val ch = controller.current.value ?: return@collect
+                if (ch.playlist != null) playQueued(ch, simpleTv.queue.advance(ch))
+            }
+        }
+        // Remember where a film or episode stopped, so the channel resumes there.
+        viewModelScope.launch {
+            while (true) {
+                delay(15_000)
+                if (engine.state.value == PlaybackState.PLAYING) saveQueueProgress()
+            }
+        }
+        // Flag channels that keep failing for the lineup page; clear the flag once they play.
+        viewModelScope.launch {
+            engine.state.collectLatest { st ->
+                val id = controller.current.value?.id ?: return@collectLatest
+                when (st) {
+                    PlaybackState.PLAYING -> simpleTv.catalog.reportPlayed(id)
+                    PlaybackState.ERROR -> {
+                        delay(20_000)
+                        if (controller.current.value?.id == id) simpleTv.catalog.reportFailed(id)
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    }
+
+    private fun playQueued(ch: Channel, item: QueuePlayback.Playable?) {
+        if (item == null) {
+            engine.stop()
+            return
+        }
+        queueItem = ch to item.itemId
+        engine.play(ch, item.url, item.headers, item.startPositionMs, live = false)
+    }
+
+    private suspend fun saveQueueProgress() {
+        val (ch, itemId) = queueItem ?: return
+        val pos = engine.positionMs()
+        if (pos > 0) simpleTv.queue.save(ch.id, itemId, pos)
     }
 
     /** Keys the TV owns. Everything else (volume, power, mute) must reach the system untouched. */
@@ -92,6 +161,10 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        queueItem?.let { (ch, itemId) ->
+            val pos = engine.positionMs()
+            if (pos > 0) simpleTv.appScope.launch { simpleTv.queue.save(ch.id, itemId, pos) }
+        }
         engine.release()
     }
 }

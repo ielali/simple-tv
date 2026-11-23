@@ -24,6 +24,18 @@ object YouTubeEmbed {
         data class ChannelLive(val channelId: String) : Target
     }
 
+    private val handleRegex = Regex("""^@[A-Za-z0-9._-]{3,30}$""")
+
+    /** "@name" or a youtube.com/@name link; needs the YouTube Data API to become a channel id. */
+    fun handleOf(source: String): String? {
+        val s = source.trim()
+        if (handleRegex.matches(s)) return s
+        val url = runCatching { java.net.URI(s) }.getOrNull() ?: return null
+        if (url.host?.lowercase()?.endsWith("youtube.com") != true) return null
+        val first = url.path?.split('/')?.getOrNull(1) ?: return null
+        return first.takeIf { handleRegex.matches(it) }
+    }
+
     fun parse(source: String): Target? {
         val s = source.trim()
         if (channelIdRegex.matches(s)) return Target.ChannelLive(s)

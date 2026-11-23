@@ -1,0 +1,66 @@
+package com.ielali.simpletv.data
+
+import kotlin.random.Random
+
+/** One thing a film or series channel will play, as shown in the editor's "What will play". */
+data class QueueEntry(
+    val id: String,
+    val title: String,
+    val detail: String,
+    val ext: String?,
+    val minutes: Int?,
+    val headers: Map<String, String> = emptyMap(),
+)
+
+/** Builds film and series queues from the cached catalog. Pure, so order rules are unit tested. */
+object PlaylistQueue {
+
+    fun films(catalog: Catalog?, spec: PlaylistSpec): List<QueueEntry> {
+        val all = catalog?.of(CatalogType.FILM).orEmpty()
+        val base = if (spec.titles.isNotEmpty()) {
+            val byId = all.associateBy { it.id }
+            spec.titles.mapNotNull(byId::get)
+        } else {
+            all.filter { it.group.orEmpty() in spec.categories }.sortedBy { it.name.lowercase() }
+        }
+        val ordered = if (spec.shuffle && spec.titles.isEmpty()) base.shuffled(Random(spec.seed)) else base
+        return finish(ordered.map { it.toEntry() }, spec)
+    }
+
+    fun episodes(all: List<Episode>, spec: PlaylistSpec, headers: Map<String, String> = emptyMap()): List<QueueEntry> =
+        all.map { e ->
+            QueueEntry(
+                id = e.id,
+                title = "Season ${e.season}, episode ${e.episode}" + if (e.title.isNotBlank()) " · ${e.title}" else "",
+                detail = e.minutes?.let { "$it min" }.orEmpty(),
+                ext = e.ext,
+                minutes = e.minutes,
+                headers = headers,
+            )
+        }.filterNot { it.id in spec.excluded }
+
+    /** Where to start: the item that was playing last, or the first one. */
+    fun resumeIndex(queue: List<QueueEntry>, lastItemId: String?): Int =
+        queue.indexOfFirst { it.id == lastItemId }.coerceAtLeast(0)
+
+    /** After the last item the channel starts again from the top. */
+    fun nextIndex(queue: List<QueueEntry>, current: Int): Int = if (queue.isEmpty()) 0 else (current + 1) % queue.size
+
+    private fun finish(entries: List<QueueEntry>, spec: PlaylistSpec): List<QueueEntry> {
+        val byId = entries.associateBy { it.id }
+        val pinned = spec.first.mapNotNull(byId::get)
+        val pinnedIds = pinned.map { it.id }.toSet()
+        return (pinned + entries.filterNot { it.id in pinnedIds }).filterNot { it.id in spec.excluded }
+    }
+
+    private fun CatalogItem.toEntry() = QueueEntry(
+        id = id,
+        title = name,
+        detail = listOfNotNull(year, minutes?.let(::formatMinutes)).joinToString(" · "),
+        ext = ext,
+        minutes = minutes,
+        headers = headers,
+    )
+
+    fun formatMinutes(m: Int): String = if (m >= 60) "${m / 60} h ${m % 60} min" else "$m min"
+}

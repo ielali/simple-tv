@@ -1,0 +1,152 @@
+package com.ielali.simpletv.youtube
+
+import com.ielali.simpletv.data.TextFetcher
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import java.io.IOException
+import java.net.URLEncoder
+
+/**
+ * Preview for "Add from YouTube" (ADR-014). Video and live links use YouTube's public oEmbed endpoint,
+ * no key needed. Channel names, `@handle` links and "Live now" need the household's optional YouTube
+ * Data API key, which the TV sends in the X-Goog-Api-Key header (never in a URL) and never returns.
+ */
+class YouTubeLookup(private val fetcher: TextFetcher) {
+
+    @Serializable
+    data class Preview(
+        /** What to store as the channel's source: a channel id (live stream) or a watch link. */
+        val source: String,
+        val kind: String, // "video" or "channel"
+        val title: String? = null,
+        val thumbnail: String? = null,
+        val author: String? = null,
+        /** null when unknown (no key). */
+        val live: Boolean? = null,
+        val channelId: String? = null,
+    )
+
+    sealed interface Result {
+        data class Found(val preview: Preview) : Result
+        /** Caregiver-readable reason; [code] lets the page offer the right next step. */
+        data class Problem(val code: String, val message: String) : Result
+    }
+
+    private val json = Json { ignoreUnknownKeys = true }
+
+    fun preview(input: String, apiKey: String?): Result {
+        val trimmed = input.trim()
+        if (trimmed.isEmpty()) return problem(INVALID, "Paste a YouTube link or a channel ID.")
+        YouTubeEmbed.handleOf(trimmed)?.let { handle ->
+            if (apiKey.isNullOrBlank()) {
+                return problem(NEEDS_KEY, "Links that start with @ need a YouTube API key. Add one in TV settings, or paste the channel's link instead.")
+            }
+            val id = when (val r = channelIdForHandle(handle, apiKey)) {
+                is Lookup.Ok -> r.value
+                is Lookup.Fail -> return r.problem
+            } ?: return problem(NOT_FOUND, "We couldn't find $handle on YouTube.")
+            return channel(id, apiKey)
+        }
+        return when (val target = YouTubeEmbed.parse(trimmed)) {
+            null -> problem(INVALID, "That doesn't look like a YouTube link or channel ID.")
+            is YouTubeEmbed.Target.ChannelLive -> channel(target.channelId, apiKey)
+            is YouTubeEmbed.Target.Video -> video(target.id, apiKey)
+        }
+    }
+
+    private fun video(id: String, apiKey: String?): Result {
+        val watch = "https://www.youtube.com/watch?v=$id"
+        val oembed = get("https://www.youtube.com/oembed?format=json&url=" + URLEncoder.encode(watch, "UTF-8"), null)
+        val o = (oembed as? Lookup.Ok)?.value?.let(::obj)
+        var preview = Preview(
+            source = watch, kind = "video",
+            title = o.str("title"), thumbnail = o.str("thumbnail_url"), author = o.str("author_name"),
+        )
+        if (!apiKey.isNullOrBlank()) {
+            when (val r = get("$API/videos?part=snippet&id=$id", apiKey)) {
+                is Lookup.Fail -> return r.problem
+                is Lookup.Ok -> {
+                    val snippet = (obj(r.value)?.get("items") as? JsonArray)?.firstOrNull()?.let { (it as? JsonObject)?.get("snippet") as? JsonObject }
+                        ?: return problem(NOT_FOUND, "That video isn't on YouTube, or it's private.")
+                    preview = preview.copy(
+                        title = preview.title ?: snippet.str("title"),
+                        author = preview.author ?: snippet.str("channelTitle"),
+                        live = snippet.str("liveBroadcastContent") == "live",
+                        channelId = snippet.str("channelId"),
+                    )
+                }
+            }
+        } else if (oembed is Lookup.Fail && o == null) {
+            // oEmbed refuses some videos (embedding off, private); the link may still play in the YouTube app.
+            preview = preview.copy(title = null)
+        }
+        return Result.Found(preview)
+    }
+
+    private fun channel(id: String, apiKey: String?): Result {
+        if (apiKey.isNullOrBlank()) return Result.Found(Preview(source = id, kind = "channel", channelId = id))
+        val snippet = when (val r = get("$API/channels?part=snippet&id=$id", apiKey)) {
+            is Lookup.Fail -> return r.problem
+            is Lookup.Ok -> (obj(r.value)?.get("items") as? JsonArray)?.firstOrNull()?.let { (it as? JsonObject)?.get("snippet") as? JsonObject }
+        } ?: return problem(NOT_FOUND, "We couldn't find that channel on YouTube.")
+        val thumb = ((snippet["thumbnails"] as? JsonObject)?.let { t -> (t["high"] ?: t["medium"] ?: t["default"]) as? JsonObject }).str("url")
+        // "Live now" costs 100 of the 10,000 free daily units, so it is checked once, when adding.
+        val live = when (val r = get("$API/search?part=id&type=video&eventType=live&maxResults=1&channelId=$id", apiKey)) {
+            is Lookup.Ok -> ((obj(r.value)?.get("items") as? JsonArray)?.isNotEmpty() == true)
+            is Lookup.Fail -> null
+        }
+        return Result.Found(Preview(source = id, kind = "channel", title = snippet.str("title"), thumbnail = thumb, live = live, channelId = id))
+    }
+
+    private fun channelIdForHandle(handle: String, apiKey: String): Lookup<String?> =
+        when (val r = get("$API/channels?part=id&forHandle=" + URLEncoder.encode(handle, "UTF-8"), apiKey)) {
+            is Lookup.Fail -> r
+            is Lookup.Ok -> Lookup.Ok(((obj(r.value)?.get("items") as? JsonArray)?.firstOrNull() as? JsonObject).str("id"))
+        }
+
+    private sealed interface Lookup<out T> {
+        data class Ok<T>(val value: T) : Lookup<T>
+        data class Fail(val problem: Result.Problem) : Lookup<Nothing>
+    }
+
+    private fun get(url: String, apiKey: String?): Lookup<String> {
+        val headers = buildMap {
+            put("User-Agent", "SimpleTV/0.1 (Android TV)")
+            if (!apiKey.isNullOrBlank()) put("X-Goog-Api-Key", apiKey)
+        }
+        val r = try {
+            fetcher.get(url, headers)
+        } catch (e: IOException) {
+            return Lookup.Fail(problem(OFFLINE, "The TV couldn't reach YouTube. Check its internet connection."))
+        }
+        if (r.ok) return Lookup.Ok(r.body)
+        val reason = r.body.lowercase()
+        return Lookup.Fail(
+            when {
+                "quota" in reason -> problem(QUOTA, "YouTube's daily limit was reached. Try again tomorrow.")
+                "api key" in reason || "keyinvalid" in reason || "api_key_invalid" in reason || r.code == 400 && apiKey != null ->
+                    problem(KEY_REJECTED, "The YouTube API key was not accepted. Check it in TV settings.")
+                r.code == 404 || r.code == 401 -> problem(NOT_FOUND, "That isn't on YouTube, or it's private.")
+                else -> problem(OFFLINE, "YouTube didn't answer properly (HTTP ${r.code}). Try again in a moment.")
+            }
+        )
+    }
+
+    private fun obj(body: String): JsonObject? = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull()
+    private fun JsonObject?.str(key: String): String? = (this?.get(key) as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+    private fun problem(code: String, message: String) = Result.Problem(code, message)
+
+    companion object {
+        private const val API = "https://www.googleapis.com/youtube/v3"
+        const val INVALID = "invalid"
+        const val NEEDS_KEY = "needs_key"
+        const val NOT_FOUND = "not_found"
+        const val KEY_REJECTED = "key_rejected"
+        const val QUOTA = "quota"
+        const val OFFLINE = "offline"
+    }
+}
