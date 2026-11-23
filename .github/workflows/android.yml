@@ -1,8 +1,8 @@
 name: Android CI
 
 on:
+  # Every branch builds and tests; only main publishes the "latest" release (see below).
   push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
