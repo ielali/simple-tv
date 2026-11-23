@@ -1,0 +1,468 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-11-23T12:10:00Z"
+ },
+ "title": "Simple TV caregiver app",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 300,
+   "w": 1440,
+   "h": 980,
+   "title": "Home \u00b7 laptop",
+   "expand": "fill"
+  },
+  "Home-laptop-dark.dc.html": {
+   "x": 1520,
+   "y": 300,
+   "w": 1440,
+   "h": 980,
+   "title": "Home \u00b7 laptop \u00b7 dark",
+   "expand": "fill"
+  },
+  "Home-phone.dc.html": {
+   "x": 3040,
+   "y": 300,
+   "w": 390,
+   "h": 1500,
+   "title": "Home \u00b7 phone",
+   "expand": "fill"
+  },
+  "Home-phone-dark.dc.html": {
+   "x": 3510,
+   "y": 300,
+   "w": 390,
+   "h": 1500,
+   "title": "Home \u00b7 phone \u00b7 dark",
+   "expand": "fill"
+  },
+  "Home-phone-unreachable.dc.html": {
+   "x": 3980,
+   "y": 300,
+   "w": 390,
+   "h": 1100,
+   "title": "Home \u00b7 TV not reachable \u00b7 phone",
+   "expand": "fill"
+  },
+  "Home-laptop-unreachable.dc.html": {
+   "x": 4450,
+   "y": 300,
+   "w": 1440,
+   "h": 900,
+   "title": "Home \u00b7 TV not reachable \u00b7 laptop",
+   "expand": "fill"
+  },
+  "Lineup-laptop.dc.html": {
+   "x": 0,
+   "y": 2220,
+   "w": 1440,
+   "h": 1400,
+   "title": "Lineup \u00b7 laptop",
+   "expand": "fill"
+  },
+  "Lineup-laptop-dark.dc.html": {
+   "x": 1520,
+   "y": 2220,
+   "w": 1440,
+   "h": 1400,
+   "title": "Lineup \u00b7 laptop \u00b7 dark",
+   "expand": "fill"
+  },
+  "Lineup-tablet.dc.html": {
+   "x": 3040,
+   "y": 2220,
+   "w": 820,
+   "h": 1450,
+   "title": "Lineup \u00b7 tablet",
+   "expand": "fill"
+  },
+  "Lineup-phone.dc.html": {
+   "x": 3940,
+   "y": 2220,
+   "w": 390,
+   "h": 1900,
+   "title": "Lineup \u00b7 phone",
+   "expand": "fill"
+  },
+  "Lineup-phone-dark.dc.html": {
+   "x": 4410,
+   "y": 2220,
+   "w": 390,
+   "h": 1900,
+   "title": "Lineup \u00b7 phone \u00b7 dark",
+   "expand": "fill"
+  },
+  "Add-catalog-laptop.dc.html": {
+   "x": 0,
+   "y": 4540,
+   "w": 1440,
+   "h": 1250,
+   "title": "Add \u00b7 my subscription \u00b7 laptop",
+   "expand": "fill"
+  },
+  "Add-films-laptop.dc.html": {
+   "x": 1520,
+   "y": 4540,
+   "w": 1440,
+   "h": 1350,
+   "title": "Add \u00b7 films category \u00b7 laptop",
+   "expand": "fill"
+  },
+  "Add-catalog-tablet.dc.html": {
+   "x": 3040,
+   "y": 4540,
+   "w": 820,
+   "h": 1500,
+   "title": "Add \u00b7 my subscription \u00b7 tablet",
+   "expand": "fill"
+  },
+  "Add-catalog-phone.dc.html": {
+   "x": 3940,
+   "y": 4540,
+   "w": 390,
+   "h": 2200,
+   "title": "Add \u00b7 my subscription \u00b7 phone",
+   "expand": "fill"
+  },
+  "Add-catalog-phone-dark.dc.html": {
+   "x": 4410,
+   "y": 4540,
+   "w": 390,
+   "h": 2200,
+   "title": "Add \u00b7 my subscription \u00b7 phone \u00b7 dark",
+   "expand": "fill"
+  },
+  "Add-youtube-laptop.dc.html": {
+   "x": 4880,
+   "y": 4540,
+   "w": 1440,
+   "h": 900,
+   "title": "Add \u00b7 YouTube \u00b7 laptop",
+   "expand": "fill"
+  },
+  "Add-youtube-phone.dc.html": {
+   "x": 6400,
+   "y": 4540,
+   "w": 390,
+   "h": 1500,
+   "title": "Add \u00b7 YouTube \u00b7 phone",
+   "expand": "fill"
+  },
+  "Add-link-laptop.dc.html": {
+   "x": 6870,
+   "y": 4540,
+   "w": 1440,
+   "h": 900,
+   "title": "Add \u00b7 from a link \u00b7 laptop",
+   "expand": "fill"
+  },
+  "Subs-laptop.dc.html": {
+   "x": 0,
+   "y": 7160,
+   "w": 1440,
+   "h": 1900,
+   "title": "Subscriptions \u00b7 laptop",
+   "expand": "fill"
+  },
+  "Subs-laptop-dark.dc.html": {
+   "x": 1520,
+   "y": 7160,
+   "w": 1440,
+   "h": 1900,
+   "title": "Subscriptions \u00b7 laptop \u00b7 dark",
+   "expand": "fill"
+  },
+  "Subs-phone.dc.html": {
+   "x": 3040,
+   "y": 7160,
+   "w": 390,
+   "h": 2900,
+   "title": "Subscriptions \u00b7 phone",
+   "expand": "fill"
+  },
+  "Film-laptop.dc.html": {
+   "x": 0,
+   "y": 10480,
+   "w": 1440,
+   "h": 1100,
+   "title": "Film channel editor \u00b7 laptop",
+   "expand": "fill"
+  },
+  "Series-laptop.dc.html": {
+   "x": 1520,
+   "y": 10480,
+   "w": 1440,
+   "h": 1100,
+   "title": "Series channel editor \u00b7 laptop",
+   "expand": "fill"
+  },
+  "Film-phone.dc.html": {
+   "x": 3040,
+   "y": 10480,
+   "w": 390,
+   "h": 2100,
+   "title": "Film channel editor \u00b7 phone",
+   "expand": "fill"
+  },
+  "Series-phone.dc.html": {
+   "x": 3510,
+   "y": 10480,
+   "w": 390,
+   "h": 1900,
+   "title": "Series channel editor \u00b7 phone",
+   "expand": "fill"
+  },
+  "Settings-laptop.dc.html": {
+   "x": 0,
+   "y": 13000,
+   "w": 1440,
+   "h": 1300,
+   "title": "TV settings \u00b7 laptop \u00b7 guard paused",
+   "expand": "fill"
+  },
+  "Settings-laptop-dark.dc.html": {
+   "x": 1520,
+   "y": 13000,
+   "w": 1440,
+   "h": 1300,
+   "title": "TV settings \u00b7 laptop \u00b7 dark",
+   "expand": "fill"
+  },
+  "Settings-phone.dc.html": {
+   "x": 3040,
+   "y": 13000,
+   "w": 390,
+   "h": 3150,
+   "title": "TV settings \u00b7 phone",
+   "expand": "fill"
+  },
+  "Settings-phone-dark.dc.html": {
+   "x": 3510,
+   "y": 13000,
+   "w": 390,
+   "h": 3150,
+   "title": "TV settings \u00b7 phone \u00b7 dark",
+   "expand": "fill"
+  },
+  "FirstRun-laptop.dc.html": {
+   "x": 0,
+   "y": 16120,
+   "w": 1440,
+   "h": 800,
+   "title": "First run \u00b7 step 1 \u00b7 laptop",
+   "expand": "fill"
+  },
+  "FirstRun1-phone.dc.html": {
+   "x": 1520,
+   "y": 16120,
+   "w": 390,
+   "h": 844,
+   "title": "First run \u00b7 step 1 \u00b7 phone",
+   "expand": "fill"
+  },
+  "FirstRun2-phone.dc.html": {
+   "x": 1990,
+   "y": 16120,
+   "w": 390,
+   "h": 1000,
+   "title": "First run \u00b7 step 2 \u00b7 phone",
+   "expand": "fill"
+  },
+  "FirstRun3-phone.dc.html": {
+   "x": 2460,
+   "y": 16120,
+   "w": 390,
+   "h": 900,
+   "title": "First run \u00b7 step 3 \u00b7 phone",
+   "expand": "fill"
+  },
+  "States-laptop.dc.html": {
+   "x": 0,
+   "y": 17540,
+   "w": 1440,
+   "h": 1900,
+   "title": "States \u00b7 laptop",
+   "expand": "fill"
+  },
+  "States-laptop-dark.dc.html": {
+   "x": 1520,
+   "y": 17540,
+   "w": 1440,
+   "h": 1900,
+   "title": "States \u00b7 laptop \u00b7 dark",
+   "expand": "fill"
+  },
+  "States-phone.dc.html": {
+   "x": 3040,
+   "y": 17540,
+   "w": 390,
+   "h": 3700,
+   "title": "States \u00b7 phone",
+   "expand": "fill"
+  },
+  "Login-phone.dc.html": {
+   "x": 0,
+   "y": 21660,
+   "w": 390,
+   "h": 844,
+   "title": "Sign in \u00b7 phone",
+   "expand": "fill"
+  },
+  "Login-phone-wrong.dc.html": {
+   "x": 470,
+   "y": 21660,
+   "w": 390,
+   "h": 844,
+   "title": "Sign in \u00b7 wrong PIN \u00b7 phone",
+   "expand": "fill"
+  },
+  "Login-phone-locked.dc.html": {
+   "x": 940,
+   "y": 21660,
+   "w": 390,
+   "h": 844,
+   "title": "Sign in \u00b7 locked out \u00b7 phone",
+   "expand": "fill"
+  },
+  "Login-phone-dark.dc.html": {
+   "x": 1410,
+   "y": 21660,
+   "w": 390,
+   "h": 844,
+   "title": "Sign in \u00b7 phone \u00b7 dark",
+   "expand": "fill"
+  },
+  "Login-laptop.dc.html": {
+   "x": 1880,
+   "y": 21660,
+   "w": 1440,
+   "h": 800,
+   "title": "Sign in \u00b7 laptop",
+   "expand": "fill"
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "Home-laptop-dark.dc.html",
+  "Home-phone.dc.html",
+  "Home-phone-dark.dc.html",
+  "Home-phone-unreachable.dc.html",
+  "Home-laptop-unreachable.dc.html",
+  "Lineup-laptop.dc.html",
+  "Lineup-laptop-dark.dc.html",
+  "Lineup-tablet.dc.html",
+  "Lineup-phone.dc.html",
+  "Lineup-phone-dark.dc.html",
+  "Add-catalog-laptop.dc.html",
+  "Add-films-laptop.dc.html",
+  "Add-catalog-tablet.dc.html",
+  "Add-catalog-phone.dc.html",
+  "Add-catalog-phone-dark.dc.html",
+  "Add-youtube-laptop.dc.html",
+  "Add-youtube-phone.dc.html",
+  "Add-link-laptop.dc.html",
+  "Subs-laptop.dc.html",
+  "Subs-laptop-dark.dc.html",
+  "Subs-phone.dc.html",
+  "Film-laptop.dc.html",
+  "Series-laptop.dc.html",
+  "Film-phone.dc.html",
+  "Series-phone.dc.html",
+  "Settings-laptop.dc.html",
+  "Settings-laptop-dark.dc.html",
+  "Settings-phone.dc.html",
+  "Settings-phone-dark.dc.html",
+  "FirstRun-laptop.dc.html",
+  "FirstRun1-phone.dc.html",
+  "FirstRun2-phone.dc.html",
+  "FirstRun3-phone.dc.html",
+  "States-laptop.dc.html",
+  "States-laptop-dark.dc.html",
+  "States-phone.dc.html",
+  "Login-phone.dc.html",
+  "Login-phone-wrong.dc.html",
+  "Login-phone-locked.dc.html",
+  "Login-phone-dark.dc.html",
+  "Login-laptop.dc.html"
+ ],
+ "notes": {
+  "t1": {
+   "x": 0,
+   "y": 40,
+   "text": "Home",
+   "kind": "title1",
+   "maxW": 1800
+  },
+  "t2": {
+   "x": 0,
+   "y": 1960,
+   "text": "Lineup",
+   "kind": "title1",
+   "maxW": 1800
+  },
+  "t3": {
+   "x": 0,
+   "y": 4280,
+   "text": "Add channel",
+   "kind": "title1",
+   "maxW": 1800
+  },
+  "t4": {
+   "x": 0,
+   "y": 6900,
+   "text": "Subscriptions",
+   "kind": "title1",
+   "maxW": 1800
+  },
+  "t5": {
+   "x": 0,
+   "y": 10220,
+   "text": "Film and series channels",
+   "kind": "title1",
+   "maxW": 1800
+  },
+  "t6": {
+   "x": 0,
+   "y": 12740,
+   "text": "TV settings",
+   "kind": "title1",
+   "maxW": 1800
+  },
+  "t7": {
+   "x": 0,
+   "y": 15860,
+   "text": "First-run setup",
+   "kind": "title1",
+   "maxW": 1800
+  },
+  "t8": {
+   "x": 0,
+   "y": 17280,
+   "text": "States",
+   "kind": "title1",
+   "maxW": 1800
+  },
+  "t9": {
+   "x": 0,
+   "y": 21400,
+   "text": "Sign in (PIN)",
+   "kind": "title1",
+   "maxW": 1800
+  }
+ },
+ "designSystems": [
+  {
+   "title": "Nizam UI",
+   "namespace": "nizam-ui",
+   "artifact": "https://claude.ai/code/artifact/d17e45ed-b512-4468-96b4-51c5412d421e",
+   "version": null,
+   "copiedAt": "2026-11-23T12:10:00Z"
+  }
+ ]
+}
