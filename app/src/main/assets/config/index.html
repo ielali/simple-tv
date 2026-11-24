@@ -159,6 +159,12 @@ button,input,select{font:inherit;color:inherit}
 .htile:hover .htlogo{border-color:var(--primary)}
 .htile:focus-visible{outline:2px solid var(--primary);outline-offset:3px;border-radius:12px}
 .htile:disabled{opacity:.5;cursor:default}
+.ytlive{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.ytl{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;min-width:0}
+.ytav{position:relative;width:48px;height:48px;flex:none;border-radius:50%;background:var(--tint);display:grid;place-items:center;color:var(--muted)}
+.ytav img{width:100%;height:100%;border-radius:50%;object-fit:cover}
+.ytav .livetag{position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);background:#d6202a;color:#fff;font-size:9px;line-height:13px;font-weight:800;letter-spacing:.04em;padding:0 4px;border-radius:4px;border:2px solid var(--card)}
+.phone .ytlive{grid-template-columns:minmax(0,1fr)}
 .tvlogo{width:96px;height:60px;object-fit:contain;border-radius:10px;background:#fff;padding:6px;margin-top:6px}
 body.rowdrag{user-select:none;-webkit-user-select:none;cursor:grabbing}
 body.rowdrag .grip{cursor:grabbing}
@@ -784,6 +790,54 @@ function tvCard() {
   </section>`;
 }
 
+/*
+ * "Live now on YouTube" on Home: subscriptions that are live right now (a service, the news, a match),
+ * with Play on TV and Add. Hidden when the TV isn't signed in to YouTube or nothing is live. The TV
+ * checks which are live at most every 30 minutes; the page asks it at most once a minute.
+ */
+let homeYt = null; let homeYtAt = 0;
+async function loadYtLive() {
+  if (homeYt && Date.now() - homeYtAt < 60000) { paintYtLive(); return; }
+  try { homeYt = await GET('/api/youtube/suggestions'); homeYtAt = Date.now(); } catch (e) { /* offline or signed out */ }
+  paintYtLive();
+}
+function paintYtLive() {
+  const box = $('#ytLiveHome'); if (!box) return;
+  const all = homeYt && homeYt.connected ? (homeYt.items || []).filter((s) => s.live) : [];
+  if (!all.length || !state.online) { box.className = 'hide'; box.innerHTML = ''; return; }
+  const live = all.slice(0, 4);
+  const lineupYt = ((state.lineup && state.lineup.channels) || []).filter((c) => c.type === 'YOUTUBE');
+  const inLineup = (s) => lineupYt.find((c) => (c.source || '').includes(s.channelId));
+  box.className = '';
+  box.innerHTML = `<section class="card col g12">
+    <div class="f fw g8" style="align-items:baseline"><h2 class="sec grow">Live now on YouTube</h2><span class="cap">From your subscriptions</span></div>
+    <div class="ytlive">${live.map((s) => {
+      const ch = inLineup(s);
+      return `<div class="ytl">
+        <span class="ytav">${s.thumbnail ? `<img src="${esc(s.thumbnail)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ico('yt', 24)}<span class="livetag">LIVE</span></span>
+        <div class="grow" style="min-width:0"><div class="ell" style="font-weight:700" dir="auto">${esc(s.title)}</div>${s.liveTitle ? `<div class="cap ell" dir="auto">${esc(s.liveTitle)}</div>` : ''}</div>
+        ${ch || s.lineupNumber ? `<span class="pill ok">Channel ${esc(ch ? ch.number : s.lineupNumber)}</span>` : `<button class="btn" type="button" data-hyadd="${esc(s.channelId)}">Add</button>`}
+        <button class="ibtn bd" type="button" data-hyplay="${esc(s.channelId)}" aria-label="Play ${esc(s.title)} on the TV" title="Play on TV">${ico('play', 18)}</button>
+      </div>`;
+    }).join('')}</div>
+    ${all.length > live.length ? `<a class="btn ghost" href="#/add/youtube" style="align-self:flex-start">See all ${fmtN(all.length)} live</a>` : ''}
+  </section>`;
+  $$('[data-hyplay]', box).forEach((b) => b.onclick = () => {
+    const s = all.find((x) => x.channelId === b.dataset.hyplay); const ch = inLineup(s);
+    if (ch) playOnTv({ channelId: ch.id }, ch.name); else playOnTv({ youtube: s.channelId, name: s.title }, s.title);
+  });
+  $$('[data-hyadd]', box).forEach((b) => b.onclick = async () => {
+    const s = all.find((x) => x.channelId === b.dataset.hyadd);
+    b.disabled = true;
+    try {
+      const r = await saving(() => POST('/api/channels/youtube', { source: s.channelId, name: s.title.slice(0, 60) }), null);
+      state.lineup = r.lineup; snapshot(); s.lineupNumber = r.channel.number;
+      toast(`${r.channel.name} is channel ${r.channel.number} now.`, { label: 'Open lineup', run: () => go('#/lineup') });
+      paintYtLive();
+    } catch (e) { b.disabled = false; }
+  });
+}
+
 /* ---------- Home ---------- */
 screens.home = {
   async render(el, seq) {
@@ -824,6 +878,7 @@ screens.home = {
         <div class="grow" style="min-width:200px"><div class="sec" dir="auto">${esc(urgent.p.name)} ${urgent.ex.ended ? 'has ended' : 'ends in ' + plural(urgent.ex.days, 'day')}</div><div>Renew it with your provider so its ${plural(urgent.p.channelCount, 'channel')} keep playing.</div></div>
         <a class="btn" href="#/subs/${encodeURIComponent(urgent.p.id)}">See subscription</a>
       </section>` : ''}
+      <div id="ytLiveHome" class="hide"></div>
       <div class="f fw g8">
         <a class="btn pri ${off ? 'dis' : ''}" href="#/add">${ico('plus', 18, 2)}Add channel</a>
         <button class="btn ${off || !subs.length ? 'dis' : ''}" id="refreshAll">${ico('refresh', 18)}Refresh channel lists</button>
@@ -854,6 +909,7 @@ screens.home = {
       </div>`;
     bindTvCard();
     const r = $('#retry', el); if (r) r.onclick = () => { state.status = null; render(); };
+    if (!off) loadYtLive(); else paintYtLive();
     $$('[data-hplay]', el).forEach((b) => b.onclick = () => { const c = lineup.find((x) => x.id === b.dataset.hplay); if (c) playOnTv({ channelId: c.id }, c.name); });
     const ra = $('#refreshAll', el);
     if (ra) ra.onclick = async () => {

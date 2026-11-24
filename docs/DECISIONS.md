@@ -386,6 +386,10 @@ Decision:
   `search.list`. Cached YouTube data is dropped after 30 days and on disconnect (token revoked).
 - No watch-history import (declined by the caregiver).
 
+Update: Home shows "Live now on YouTube": up to four subscriptions that are live, with Play on TV
+(the lineup channel when it is in the lineup) and Add. Hidden when the TV isn't signed in or nothing
+is live; the page asks at most once a minute, and the TV checks live state at most every 30 minutes.
+
 Consequences: Suggestions only cover channels the household already follows. Whether every live
 stream shows in its channel's uploads playlist is unconfirmed; check on real channels.
 
