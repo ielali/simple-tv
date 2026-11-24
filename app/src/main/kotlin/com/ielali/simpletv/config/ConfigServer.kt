@@ -74,6 +74,12 @@ class ConfigServer(
     data class ErrorBody(val error: String, val code: String? = null)
 
     @Serializable
+    data class EraseRequest(val confirm: String = "")
+
+    @Serializable
+    data class Done(val ok: Boolean = true)
+
+    @Serializable
     data class Status(
         val appVersion: String,
         val channelCount: Int,
@@ -304,6 +310,23 @@ class ConfigServer(
                     call.respond(guardStatus())
                 }
                 get("/api/keys") { call.respond(keyRows()) }
+                // "Erase Simple TV" (ADR-024): signs out of YouTube, deletes everything Simple TV keeps on the
+                // box, then restarts the app so nothing in memory writes it back. The PIN guards this route.
+                post("/api/erase") {
+                    if (call.receive<EraseRequest>().confirm != "ERASE") {
+                        call.respond(HttpStatusCode.BadRequest, ErrorBody("Confirm the erase first."))
+                        return@post
+                    }
+                    runCatching { app.ytSuggestions.forgetClient() }
+                    call.respond(Done())
+                    app.appScope.launch(Dispatchers.IO) {
+                        kotlinx.coroutines.delay(500)
+                        appContext.filesDir.listFiles()?.forEach { it.deleteRecursively() }
+                        java.io.File(appContext.applicationInfo.dataDir, "shared_prefs").listFiles()?.forEach { it.delete() }
+                        appContext.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+                        android.os.Process.killProcess(android.os.Process.myPid())
+                    }
+                }
                 post("/api/keys/clear") {
                     KeyLog.shared.clear()
                     call.respond(keyRows())

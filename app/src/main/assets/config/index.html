@@ -141,6 +141,12 @@ button,input,select{font:inherit;color:inherit}
 .divider{height:1px;background:var(--line);margin:4px 0}
 .list>*+*{border-top:1px solid var(--line)}
 .li{display:flex;align-items:center;gap:12px;padding:12px 4px;min-height:56px}
+.grp{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 -12px}
+details.advanced{margin-top:24px}
+details.advanced>summary{display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:17px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--card);list-style:none}
+details.advanced>summary::-webkit-details-marker{display:none}
+details.limits>summary{display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;list-style:none}
+details.limits>summary::-webkit-details-marker{display:none}
 .inp.jobpick{width:auto;flex:0 1 250px;min-width:0}
 .phone .inp.jobpick{flex:1 1 100%}
 .chips{display:flex;gap:8px;flex-wrap:wrap}
@@ -531,7 +537,7 @@ window.addEventListener('beforeunload', (e) => { if (screens.lineup.dirty()) { e
 
 const TITLES = {
   home: ['Home', 'Everything is set up. Here is how the TV is doing.'],
-  lineup: ['Your lineup', 'The numbers your viewer types on the remote.'],
+  lineup: ['Your lineup', 'Channel up and down move through this list. The blue Live TV button shows it on the TV.'],
   add: ['Add a channel', 'It gets the next free number. You can change it.'],
   subs: ['Subscriptions', 'Where your channel lists come from.'],
   film: ['New film channel', 'A numbered channel that plays films one after another.'],
@@ -682,6 +688,9 @@ function trackNote(n) {
 }
 const FLAG_TEXT = { missing: 'Your provider doesn’t offer this channel any more', failed: 'Didn’t play last time you tried it' };
 async function playOnTv(body, name) {
+  // Whoever is watching loses their programme: say what goes and ask first.
+  const on = state.now && state.now.channel;
+  if (on && !(await dialog({ title: `Play ${name || 'this'} on the TV?`, text: `This replaces what’s on the TV now: ${on.name}${state.now.title ? ' · ' + state.now.title : ''}.`, ok: 'Play it now' }))) return;
   try {
     state.now = await POST('/api/play', body);
     renderShellBits(); patchNowPlaying();
@@ -1043,9 +1052,14 @@ screens.lineup = (() => {
 const nextNumber = () => (state.lineup && state.lineup.nextNumber) || 1;
 const numbersWords = (start, n) => n <= 0 ? '' : n === 1 ? `It'll get number ${start}.` : n <= 3
   ? `They'll get numbers ${listWords(Array.from({ length: n }, (_, i) => String(start + i)))}.` : `They'll get numbers ${start} to ${start + n - 1}.`;
-async function confirmMany(n, start) {
-  if (n <= 30) return true;
-  return dialog({ title: `Add ${fmtN(n)} channels?`, text: `That's a lot for one TV. The lineup works best with 10 to 30 channels. They'd get numbers ${start} to ${start + n - 1}.`, ok: `Add ${fmtN(n)} channels` });
+/** Names that suggest adult content; the film filter doesn't cover live channels. */
+const ADULT_RX = /(^|[^a-z])(adult|xxx|porn|erotic|18\s*\+|\+\s*18|for adults)([^a-z]|$)/i;
+async function confirmMany(n, start, names = []) {
+  if (names.some((x) => ADULT_RX.test(x || ''))) {
+    if (!(await dialog({ title: 'This looks like adult content', text: 'The name suggests these channels are for adults. Simple TV’s adult filter only covers film channels, so these would play for anyone pressing channel up.', ok: 'Add them anyway', danger: true }))) return false;
+  }
+  if (n <= 10) return true;
+  return dialog({ title: `Add ${fmtN(n)} channels?`, text: `They’d all be on channel up and down, numbers ${start} to ${start + n - 1}. The lineup is easiest with 10 to 30 channels; the Live TV button shows the whole list.`, ok: `Add ${fmtN(n)} channels` });
 }
 screens.add = (() => {
   const cat = { pid: null, type: 'live', category: null, q: '', items: [], total: 0, selected: new Map(), cats: null, catsShown: 60, loaded: false, refreshing: false };
@@ -1213,11 +1227,11 @@ screens.add = (() => {
     });
     infinite('catalog', 'moreItems', () => loadItems(true));
     const cs = $('#clearSel', el); if (cs) cs.onclick = () => { cat.selected.clear(); paintItems(); };
-    const as = $('#addSel', el); if (as) as.onclick = () => addItems({ itemIds: [...cat.selected.keys()] }, n);
-    const aa = $('#addAll', el); if (aa) aa.onclick = () => addItems({ categories: [c.id] }, c.count);
+    const as = $('#addSel', el); if (as) as.onclick = () => addItems({ itemIds: [...cat.selected.keys()] }, n, [c && c.name].concat([...cat.selected.values()].map((x) => (x && x.name) || '')));
+    const aa = $('#addAll', el); if (aa) aa.onclick = () => addItems({ categories: [c.id] }, c.count, [c.name]);
   }
-  async function addItems(sel, n) {
-    if (!(await confirmMany(n, nextNumber()))) return;
+  async function addItems(sel, n, names) {
+    if (!(await confirmMany(n, nextNumber(), names))) return;
     try {
       const r = await saving(() => POST('/api/channels/catalog', { providerId: cat.pid, ...sel }), null);
       state.lineup = r.lineup; snapshot(); cat.selected.clear();
@@ -1704,7 +1718,7 @@ screens.film = (() => {
               ${sp.seriesId && f.seriesInfo ? `<div class="f g12 card" style="padding:12px">${posterHtml({ name: f.seriesName || f.name, poster: f.seriesDetails && f.seriesDetails.poster }, 'sm')}<div class="grow"><div style="font-weight:700" dir="auto">${esc(f.seriesName || f.name)}</div><div class="cap">${plural(f.seriesInfo.seasons, 'season')} · ${plural(f.seriesInfo.episodes, 'episode')}</div></div>${f.id ? '<span class="pill ok">Selected</span>' : '<button class="btn ghost" id="otherSeries">Choose another</button>'}</div>`
                 : sp.seriesId ? '<div class="skel" style="height:80px"></div>' : `${yearsField(f.yrFrom, f.yrTo, false)}<label class="field"><span>Series</span><span class="inp big">${ico('search', 20)}<input id="fQ" type="search" value="${esc(f.q)}" placeholder="Search series" autocomplete="off" dir="auto"></span></label><div id="fResults" class="col g4"></div>`}
               ${f.progress ? `<div class="f fw g12 card" style="padding:12px"><span class="icobox ok">${ico('check', 20, 2.2)}</span><div class="grow" style="min-width:160px"><div style="font-weight:600">Stopped at ${esc(f.progress.resume.split(' · ')[0].replace(/^S/, 's'))}</div><div class="cap">The TV picks up from here next time.</div></div><button class="btn" id="restart">Start again</button></div>` : ''}`}
-            ${isFilm ? yearsField(sp.minYear, sp.maxYear, true, sp.skipNoYear) + ratingRules(sp) : seriesRating()}
+            ${isFilm ? `<details class="limits" ${sp.minYear || sp.maxYear || sp.maxRating || sp.minScore || f.limitsOpen ? 'open' : ''}><summary>${ico('right', 18)}<span class="grow">Limit what plays</span><span class="cap">${esc(limitsSummary(sp))}</span></summary><div class="col g16" style="padding-top:12px">${yearsField(sp.minYear, sp.maxYear, true, sp.skipNoYear) + ratingRules(sp)}</div></details>` : seriesRating()}
             <div class="field"><span>Subtitles</span><div class="seg full" role="radiogroup">${SUB_CHOICES.map(([k, l]) => `<button data-sub="${k}" class="${(sp.subtitles || '') === k ? 'on' : ''}" role="radio" aria-checked="${(sp.subtitles || '') === k}" ${k === 'ar' ? 'lang="ar"' : ''}>${l}</button>`).join('')}</div>
               <span class="hint">Shown large on the TV. If ${isFilm ? 'a film doesn’t' : 'an episode doesn’t'} have them, it plays without.</span></div>
             <div class="field"><span>Soundtrack</span><div class="seg full" role="radiogroup">${AUDIO_CHOICES.map(([k, l]) => `<button data-audio="${k}" class="${(sp.audio || '') === k ? 'on' : ''}" role="radio" aria-checked="${(sp.audio || '') === k}" ${k === 'ar' ? 'lang="ar"' : ''}>${l}</button>`).join('')}</div>
@@ -1720,6 +1734,7 @@ screens.film = (() => {
         <section class="card col g8" id="queuePanel"></section>
       </div>`;
     bind(el); paintResults(); paintQueue();
+    const lim = $('details.limits', el); if (lim) lim.ontoggle = () => { f.limitsOpen = lim.open; };
   }
   /**
    * Category chips: chosen ones first, then the biggest few, or everything matching the lookup.
@@ -1748,6 +1763,14 @@ screens.film = (() => {
     $$('[data-title]', box).forEach((c) => c.onchange = () => { const id = c.dataset.title; const t = f.spec.titles; if (c.checked) { if (!t.includes(id)) t.push(id); } else t.splice(t.indexOf(id), 1); loadQueue(); });
     $$('[data-pick-series]', box).forEach((b) => b.onclick = () => { f.spec.seriesId = b.dataset.pickSeries; f.seriesName = b.dataset.name; if (!f.name.trim()) f.name = b.dataset.name.slice(0, 60); f.seriesInfo = null; paint(); loadSide(); });
     infinite('results', 'moreResults', () => search(true));
+  }
+  /** One line saying which limits are on, shown on the closed "Limit what plays". */
+  function limitsSummary(sp) {
+    const parts = [];
+    if (sp.minYear || sp.maxYear) parts.push(sp.minYear && sp.maxYear ? `${sp.minYear}–${sp.maxYear}` : sp.minYear ? `${sp.minYear} or later` : `up to ${sp.maxYear}`);
+    if (sp.maxRating) parts.push('up to ' + sp.maxRating);
+    if (sp.minScore) parts.push(`score ${sp.minScore}+`);
+    return parts.length ? parts.join(' · ') : 'Years, rating, score';
   }
   /** Quick choices for the years; the From and To boxes take any year. */
   const YEAR_PRESETS = [['', '', 'Any year'], ['', '1999', 'Before 2000'], ['2000', '2014', '2000 to 2014'], ['2015', '', '2015 or later']];
@@ -2036,7 +2059,7 @@ screens.settings = (() => {
     };
     return `<section class="card col g8">
       <div class="f g12"><div class="grow"><h2 class="sec">Remote buttons</h2><p class="cap">Press a button on the remote, then refresh.</p></div><button class="btn" id="kRefresh">${ico('refresh', 18)}Refresh</button></div>
-      <div class="muted" style="line-height:22px">On the TV, the <b>Live TV</b> button opens the channel list. Up and down choose a channel and show it in the preview window; OK watches it; Back goes back to the channel that was on. Pressing <b>0</b> on its own goes back to the previous channel. You can give these jobs to other buttons below.</div>
+      <div class="muted" style="line-height:22px">On the TV, <b>channel up and down</b> change channel. The blue <b>Live TV</b> button opens the channel list: up and down choose, OK watches, Back goes back to the channel that was on. Holding <b>Back</b> for 5 seconds pauses Simple TV and opens the TV’s Wi-Fi settings. For “previous channel” on one press, give a spare button that job below.</div>
       ${latest.length ? `<div class="list">${latest.map((k) => { const r = result(k);
         const extra = k.action === 'PASS' || k.action === 'SYSTEM' ? ' · opened another app' : '';
         const right = k.assignable ? picker(k) : k.blocked ? `<button class="btn" data-unblock="${k.keyCode}">Unblock</button>` : r ? `<span class="pill ${r[0]}"><span class="dot"></span>${r[1]}</span>` : k.blockable ? `<button class="btn" data-block="${k.keyCode}">Block this button</button>` : '<span class="pill info">Passed on</span>';
@@ -2050,28 +2073,28 @@ screens.settings = (() => {
     const s = S(); const st = state.status; const theme = store.get('stv.theme', 'system');
     const lang = s.language || '';
     const host = st.configUrl;
+    const adv = store.get('stv.settingsAdvanced', false);
     el.innerHTML = `<div class="g2">
       <div class="col g24">
+        <h2 class="grp">Viewing</h2>
         <section class="card col g12"><h2 class="sec">TV language</h2>
           <div class="seg full" role="radiogroup">${[['', 'Same as the TV'], ['en', 'English'], ['ar', 'العربية']].map(([k, l]) => `<button data-lang="${k}" class="${lang === k ? 'on' : ''}" role="radio" aria-checked="${lang === k}" ${k === 'ar' ? 'lang="ar" dir="rtl"' : ''}>${l}</button>`).join('')}</div>
           <p class="hint">Changes the words on the TV screen, like the channel banner. This page stays in English.</p></section>
-        <section class="card col g12"><h2 class="sec">Appearance of this page</h2>
-          <div class="seg full" role="radiogroup">${[['system', 'Same as my device'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-theme="${k}" class="${theme === k ? 'on' : ''}" role="radio" aria-checked="${theme === k}">${l}</button>`).join('')}</div>
-          <p class="hint">Applies on this phone or computer only.</p></section>
-        <section class="card col g12"><h2 class="sec">Daily channel list update</h2>
-          <p class="muted">The TV refreshes your subscriptions' channel lists once a day.</p>
-          <label class="field"><span>Update at</span><span class="inp" style="max-width:200px"><input id="rTime" type="time" value="${esc(s.catalogRefreshTime || '21:00')}" step="300"></span></label>
-          <p class="hint">Pick a time when nobody is watching. You can also refresh any subscription now.${st.nextRefresh ? ' Next update ' + esc(whenNext(st.nextRefresh)) + '.' : ''}</p></section>
-        ${guideCard()}
+        <section class="card col g12"><h2 class="sec">On the TV</h2>
+          <div class="f g12"><div class="grow"><div style="font-weight:600" id="clockH">Clock in the corner</div><div class="cap">The time stays in the top corner while watching.</div></div><button class="sw ${s.showClock !== false ? 'on' : ''}" id="clockSw" role="switch" aria-checked="${s.showClock !== false}" aria-labelledby="clockH"></button></div>
+          <p class="cap">${s.hideAdult !== false ? 'Adult films are left out of film channels.' : 'Adult films are not filtered.'} <a href="#/settings" id="toRatings">Change in Advanced</a></p></section>
         <section class="card col g12"><h2 class="sec">How YouTube plays</h2>
           ${[['EMBEDDED', 'Inside Simple TV', 'Simplest. Shows ads, and doesn’t use any account.'], ['YOUTUBE_APP', 'In the YouTube app', 'Uses the account signed in on the TV. With Premium there are no ads. Up and down still change channel.']].map(([k, t, d]) => `<button class="opt ${s.youtubePlayback === k ? 'on' : ''}" data-yt="${k}" role="radio" aria-checked="${s.youtubePlayback === k}"><span class="radio"></span><div><div style="font-weight:600">${t}</div><div class="muted">${d}</div></div></button>`).join('')}
-          <details ${st.hasYoutubeKey ? '' : ''}><summary>${ico('right', 18)}<span class="grow">YouTube key (optional)</span><span class="pill ${st.hasYoutubeKey ? 'ok' : 'info'}">${st.hasYoutubeKey ? 'Saved' : 'Not added'}</span></summary><div class="col g8">
-            <p class="muted">With your own free YouTube Data API key, links that start with @ work and the page can tell whether a channel is live. It stays on the TV and is never shown again.</p>
-            ${st.hasYoutubeKey ? `<div class="f fw g8"><span class="pill ok">${ico('check', 14, 2.4)}Saved</span><button class="btn ghost" id="keyRemove">Remove key</button></div>` : ''}
-            <div class="f fw g8"><label class="inp grow" style="min-width:200px"><span class="sr">YouTube key</span><input id="ytKey" type="password" autocomplete="off" spellcheck="false" dir="ltr" placeholder="${st.hasYoutubeKey ? 'Paste a new key to replace it' : 'Paste your key'}"></label><button class="btn" id="keySave">Save key</button></div>
-          </div></details>
-          <details ${ytAcc && (ytAcc.pending || ytEdit) ? 'open' : ''}><summary>${ico('right', 18)}<span class="grow">Suggestions from your YouTube account</span><span class="pill info" id="ytAccPill"><span id="ytAccHead">${esc(ytState(ytAcc))}</span></span></summary><div class="col g8" id="ytAccount"><div class="skel"></div></div></details></section>
-        ${ratingsCard()}
+          <p class="hint">Playlist channels always play inside Simple TV, signed out, so the remote can move through them. They can show ads.</p></section>
+        ${guardCard()}
+      </div>
+      <div class="col g24">
+        <h2 class="grp">This TV</h2>
+        <section class="card f g16 fw">
+          <div class="qr">${qrSvg()}</div>
+          <div class="grow col g8" style="min-width:180px"><h2 class="sec">This TV</h2><div>Open this page on any phone on the same Wi-Fi:</div><div style="font-weight:700" dir="ltr">${esc(host)}</div><div class="cap">Simple TV version ${esc(st.appVersion)}</div>
+          ${st.pinSet && state.token ? '<div><button class="btn ghost" id="signOut" style="padding:0">Sign out on this device</button></div>' : ''}</div>
+        </section>
         <section class="card col g12">
           <div class="f g12"><h2 class="sec grow" id="pinH">Lock this page with a PIN</h2><button class="sw ${st.pinSet ? 'on' : ''}" id="pinSw" role="switch" aria-checked="${st.pinSet}" aria-labelledby="pinH"></button></div>
           <p class="muted">${st.pinSet ? 'This page asks for the PIN. It also shows on the TV’s settings screen (press MENU on the remote).' : 'Anyone on your Wi-Fi can open this page today. A PIN of 4 to 6 digits keeps it to you. It also shows on the TV’s settings screen.'}</p>
@@ -2081,18 +2104,49 @@ screens.settings = (() => {
             <div class="f fw g8"><button class="btn pri" id="pinSave" ${pinDraft.length >= 4 ? '' : 'disabled'}>Save PIN</button><button class="btn" id="pinCancel">Cancel</button></div>`
             : st.pinSet ? '<div><button class="btn" id="pinChange">Change PIN</button></div>' : ''}
         </section>
-      </div>
-      <div class="col g24">
-        ${guardCard()}
         ${keysCard()}
-        <section class="card f g16 fw">
-          <div class="qr">${qrSvg()}</div>
-          <div class="grow col g8" style="min-width:180px"><h2 class="sec">This TV</h2><div>Open this page on any phone on the same Wi-Fi:</div><div style="font-weight:700" dir="ltr">${esc(host)}</div><div class="cap">Simple TV version ${esc(st.appVersion)}</div>
-          ${st.pinSet && state.token ? '<div><button class="btn ghost" id="signOut" style="padding:0">Sign out on this device</button></div>' : ''}</div>
-        </section>
+        <section class="card col g12"><h2 class="sec">Appearance of this page</h2>
+          <div class="seg full" role="radiogroup">${[['system', 'Same as my device'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-theme="${k}" class="${theme === k ? 'on' : ''}" role="radio" aria-checked="${theme === k}">${l}</button>`).join('')}</div>
+          <p class="hint">Applies on this phone or computer only.</p></section>
       </div>
-    </div>`;
+    </div>
+    <details class="advanced" ${adv ? 'open' : ''}><summary>${ico('right', 18)}<span class="grow">Advanced</span><span class="cap">Keys, film details, TV guide, daily update, erase</span></summary>
+      <div class="g2" style="margin-top:16px">
+        <div class="col g24">
+          <section class="card col g12"><h2 class="sec">Daily channel list update</h2>
+          <p class="muted">The TV refreshes your subscriptions' channel lists once a day.</p>
+          <label class="field"><span>Update at</span><span class="inp" style="max-width:200px"><input id="rTime" type="time" value="${esc(s.catalogRefreshTime || '04:00')}" step="300"></span></label>
+          <p class="hint">Pick a time when nobody is watching. You can also refresh any subscription now.${st.nextRefresh ? ' Next update ' + esc(whenNext(st.nextRefresh)) + '.' : ''}</p></section>
+          ${guideCard()}
+        </div>
+        <div class="col g24">
+          <section class="card col g12"><h2 class="sec">YouTube connections</h2>
+          <details ${st.hasYoutubeKey ? '' : ''}><summary>${ico('right', 18)}<span class="grow">YouTube key (optional)</span><span class="pill ${st.hasYoutubeKey ? 'ok' : 'info'}">${st.hasYoutubeKey ? 'Saved' : 'Not added'}</span></summary><div class="col g8">
+            <p class="muted">With your own free YouTube Data API key, links that start with @ work and the page can tell whether a channel is live. It stays on the TV and is never shown again.</p>
+            ${st.hasYoutubeKey ? `<div class="f fw g8"><span class="pill ok">${ico('check', 14, 2.4)}Saved</span><button class="btn ghost" id="keyRemove">Remove key</button></div>` : ''}
+            <div class="f fw g8"><label class="inp grow" style="min-width:200px"><span class="sr">YouTube key</span><input id="ytKey" type="password" autocomplete="off" spellcheck="false" dir="ltr" placeholder="${st.hasYoutubeKey ? 'Paste a new key to replace it' : 'Paste your key'}"></label><button class="btn" id="keySave">Save key</button></div>
+          </div></details>
+          <details ${ytAcc && (ytAcc.pending || ytEdit) ? 'open' : ''}><summary>${ico('right', 18)}<span class="grow">Suggestions from your YouTube account</span><span class="pill info" id="ytAccPill"><span id="ytAccHead">${esc(ytState(ytAcc))}</span></span></summary><div class="col g8" id="ytAccount"><div class="skel"></div></div></details></section>
+          ${ratingsCard()}
+          <section class="card col g12"><h2 class="sec">Erase Simple TV</h2>
+            <p class="muted">Before giving this TV box away: deletes every channel, subscription, key, sign-in and the PIN from it. Simple TV then starts as new.</p>
+            <div><button class="btn dng" id="eraseAll" type="button">Erase everything</button></div></section>
+        </div>
+      </div>
+    </details>`;
     bind(el);
+    const advEl = $('details.advanced', el); if (advEl) advEl.ontoggle = () => store.set('stv.settingsAdvanced', advEl.open);
+    const tr = $('#toRatings', el); if (tr) tr.onclick = (e) => { e.preventDefault(); if (advEl) { advEl.open = true; store.set('stv.settingsAdvanced', true); } const rc = $('#tmdbKey') || advEl; if (rc) rc.scrollIntoView({ block: 'center' }); };
+    const cs = $('#clockSw', el); if (cs) cs.onclick = () => setSetting({ showClock: !(s.showClock !== false) }, s.showClock !== false ? 'The clock is hidden.' : 'The clock shows in the corner.');
+    const er = $('#eraseAll', el); if (er) er.onclick = async () => {
+      if (!(await dialog({ title: 'Erase everything on this TV?', text: 'All channels, subscriptions, keys, the YouTube sign-in and the PIN are deleted from the TV. This can’t be undone.', ok: 'Erase everything', danger: true }))) return;
+      if (!(await dialog({ title: 'Are you sure?', text: 'Simple TV will start again as new, with no channels.', ok: 'Yes, erase it', danger: true }))) return;
+      try {
+        await POST('/api/erase', { confirm: 'ERASE' });
+        toast('Erasing… Simple TV restarts on the TV in a few seconds.', null, 8000);
+        setTimeout(() => { try { localStorage.clear(); } catch (x) { /* private mode */ } location.href = location.pathname; }, 7000);
+      } catch (e) { if (e.status !== 401) toast(e.message, null, 6000); }
+    };
     paintGuideCard(); paintYtAccount();
   }
   function bind(el) {

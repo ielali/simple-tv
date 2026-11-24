@@ -494,6 +494,20 @@ Decision (TV):
   early, Simple TV comes back. The PIN on the settings card is 48sp.
 - The daily catalog update defaults to 04:00, when nobody watches (existing choices are kept).
 
+Decision (page):
+- Words for a remote without number keys: the lineup is "what channel up and down move through";
+  Remote buttons explains channel up/down, Live TV, holding Back, and giving a spare button
+  "previous channel".
+- "Play on TV" says what it replaces on the TV and asks first.
+- Adding more than 10 channels at once asks first; categories whose names look adult get their own
+  warning, since the adult filter only covers film channels.
+- TV settings are grouped: Viewing (language, the clock switch and whether adult films are left
+  out, how YouTube plays, home guard), This TV (address, PIN, remote buttons, page appearance) and a
+  closed Advanced section (daily update, TV guide, YouTube key and account, film details and
+  ratings, erase). The film editor's years, rating and score sit behind "Limit what plays".
+- "Erase Simple TV" (Advanced, asked twice, behind the PIN) signs out of YouTube, deletes all of
+  Simple TV's data on the box and restarts it as new.
+
 Not adopted: Back as "previous channel" (it stays close/cancel; previous channel goes on a spare
 button the caregiver chooses), keeping channel up/down to live channels only (film channels stay
 in the order, like film channels on a real TV), spoken channel names (later).
