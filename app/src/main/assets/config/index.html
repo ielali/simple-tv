@@ -157,6 +157,9 @@ button,input,select{font:inherit;color:inherit}
 .toast .btn{background:none;color:var(--bg);border-color:transparent;text-decoration:underline;min-height:32px;padding:0 10px}
 .catlayout{display:grid;gap:24px;grid-template-columns:300px minmax(0,1fr);align-items:start}
 .phone .catlayout,.tablet .catlayout{grid-template-columns:minmax(0,1fr);gap:16px}
+.desktop .catlayout #catPanel{position:sticky;top:16px;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden}
+.desktop .catlayout #catPanel .inp{flex:none}
+.desktop #catListBox{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;margin-inline:-6px;padding:0 6px 4px;scrollbar-width:thin}
 .catitem{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;border-radius:12px;font-weight:600;width:100%;border:0;background:none;text-align:start}
 .catitem span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .catitem.on{background:var(--tint)}
@@ -433,7 +436,7 @@ const scrollWatchers = new Map();
  * long lists grow as you scroll. One watcher per [key]; drawing the list again re-arms it. Browsers
  * without IntersectionObserver get a "Show more" button inside the sentinel instead.
  */
-function infinite(key, sentinelId, load) {
+function infinite(key, sentinelId, load, root) {
   const old = scrollWatchers.get(key); if (old) old.disconnect();
   const el = document.getElementById(sentinelId); if (!el) { scrollWatchers.delete(key); return; }
   if (!('IntersectionObserver' in window)) {
@@ -441,7 +444,7 @@ function infinite(key, sentinelId, load) {
     el.querySelector('button').onclick = load;
     return;
   }
-  const io = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) load(); }, { rootMargin: '600px 0px' });
+  const io = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) load(); }, { root: root || null, rootMargin: root ? '200px 0px' : '600px 0px' });
   io.observe(el); scrollWatchers.set(key, io);
 }
 /** The line at the end of a growing list: a spinner while loading, then how many there are. */
@@ -1039,7 +1042,7 @@ async function confirmMany(n, start) {
   return dialog({ title: `Add ${fmtN(n)} channels?`, text: `That's a lot for one TV. The lineup works best with 10 to 30 channels. They'd get numbers ${start} to ${start + n - 1}.`, ok: `Add ${fmtN(n)} channels` });
 }
 screens.add = (() => {
-  const cat = { pid: null, type: 'live', category: null, q: '', items: [], total: 0, selected: new Map(), cats: null, catsShown: 20, loaded: false, refreshing: false };
+  const cat = { pid: null, type: 'live', category: null, q: '', items: [], total: 0, selected: new Map(), cats: null, catsShown: 60, loaded: false, refreshing: false };
   let yt = { input: '', preview: null, problem: null, busy: false, number: '', name: '' };
   let link = { url: '', number: '', name: '', logo: '' };
   let pollT = null; let searchT = null; let ytT = null;
@@ -1077,7 +1080,7 @@ screens.add = (() => {
     const t = route.q.get('type'); if (t && ['live', 'film', 'series'].includes(t) && t !== cat.type) { cat.type = t; cat.category = null; cat.cats = null; }
     await loadCats(seq);
   }
-  function reset(pid) { Object.assign(cat, { pid, category: null, q: '', items: [], total: 0, cats: null, catsShown: 20, catFind: '' }); cat.selected.clear(); }
+  function reset(pid) { Object.assign(cat, { pid, category: null, q: '', items: [], total: 0, cats: null, catsShown: 60, catFind: '' }); cat.selected.clear(); }
   const provider = () => state.providers.providers.find((p) => p.id === cat.pid);
   async function loadCats(seq) {
     const r = await GET(`/api/catalog/${encodeURIComponent(cat.pid)}/categories?type=${cat.type}`);
@@ -1140,10 +1143,10 @@ screens.add = (() => {
       try { state.providers = await POST(`/api/providers/${encodeURIComponent(cat.pid)}/refresh`); cat.refreshing = true; paintCatalog(); pollProviders(); clearTimeout(pollT); pollT = setTimeout(() => loadCats(), 4000); }
       catch (e) { if (e.status !== 401) toast(e.message, null, 6000); }
     };
-    $$('[data-type]').forEach((b) => b.onclick = () => { cat.type = b.dataset.type; cat.category = null; cat.q = ''; cat.catsShown = 20; cat.catFind = ''; cat.selected.clear(); loadCats(); });
+    $$('[data-type]').forEach((b) => b.onclick = () => { cat.type = b.dataset.type; cat.category = null; cat.q = ''; cat.catsShown = 60; cat.catFind = ''; cat.selected.clear(); loadCats(); });
     paintCats();
     const cf = $('#catFind');
-    if (cf) cf.oninput = () => { cat.catFind = cf.value; cat.catsShown = 20; paintCats(); };
+    if (cf) cf.oninput = () => { cat.catFind = cf.value; cat.catsShown = 60; paintCats(); };
 
     const q = $('#catQ');
     if (q) q.oninput = () => { cat.q = q.value; $('#catPanel').classList.toggle('hide', !!cat.q.trim()); clearTimeout(searchT); searchT = setTimeout(() => loadItems(false), 250); };
@@ -1152,13 +1155,19 @@ screens.add = (() => {
   function paintCats() {
     const box = $('#catListBox'); if (!box || !cat.cats) return;
     const found = cat.catFind && cat.catFind.trim() ? cat.cats.filter((c) => matchesAll(c.name, cat.catFind)) : cat.cats;
-    const shown = currentSize !== 'desktop' ? found : found.slice(0, cat.catsShown || 20);
+    const shown = currentSize !== 'desktop' ? found : found.slice(0, cat.catsShown || 60);
     box.innerHTML = found.length
       ? `<div class="catlist col g4">${shown.map((c) => `<button class="catitem ${c.id === cat.category ? 'on' : ''}" data-cat="${esc(c.id)}" aria-pressed="${c.id === cat.category}"><span dir="auto">${esc(c.name)}</span><span class="c">${fmtN(c.count)}</span></button>`).join('')}</div>
         ${moreLine('moreCats', false, shown.length, found.length, 'categories')}`
       : `<p class="cap" style="padding:8px 12px">No category matches “${esc(cat.catFind.trim())}”.</p>`;
-    $$('[data-cat]', box).forEach((b) => b.onclick = () => { cat.category = b.dataset.cat; $$('[data-cat]', box).forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); loadItems(false); });
-    infinite('categories', 'moreCats', () => { cat.catsShown = (cat.catsShown || 20) + 20; paintCats(); });
+    $$('[data-cat]', box).forEach((b) => b.onclick = () => {
+      cat.category = b.dataset.cat;
+      $$('[data-cat]', box).forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); });
+      const ip = $('#itemsPanel');
+      if (ip && ip.getBoundingClientRect().top < 0) ip.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      loadItems(false);
+    });
+    infinite('categories', 'moreCats', () => { cat.catsShown = (cat.catsShown || 60) + 40; paintCats(); }, currentSize === 'desktop' ? box : null);
   }
   function paintItems() {
     const el = $('#itemsPanel'); if (!el) return;
