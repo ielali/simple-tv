@@ -12,7 +12,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -86,7 +88,7 @@ fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
         val inPreview = listOpen && previewBox != null
         val videoOn = if (listOpen) state.previewOn else current?.playsOnSimpleTv == true
         // One call site, so the same video view (and its picture) moves between full screen and the window.
-        if (videoOn) VideoSurface(vm, if (inPreview) Modifier.placedAt(previewBox!!, density).zIndex(1f) else Modifier.fillMaxSize())
+        if (videoOn) VideoSurface(vm, if (inPreview) placedAt(previewBox!!, density).zIndex(1f) else Modifier.fillMaxSize())
         when {
             state.channels.isEmpty() -> NoChannels(state.configUrl)
             current == null || listOpen -> Unit // YouTube stops while the list is open; it reloads after
@@ -134,7 +136,7 @@ fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
             ChannelListOverlay(state, vm, onPreviewBox = { previewBox = it })
             val box = previewBox
             if (box != null && state.previewOn && state.playback != PlaybackState.PLAYING && state.playback != PlaybackState.IDLE) {
-                Box(Modifier.placedAt(box, density).zIndex(2f), contentAlignment = Alignment.Center) {
+                Box(placedAt(box, density).zIndex(2f), contentAlignment = Alignment.Center) {
                     if (state.playback == PlaybackState.ERROR) {
                         Text(stringResource(R.string.no_signal_retrying), color = Fg, fontSize = 32.sp, fontWeight = FontWeight.Bold)
                     } else {
@@ -336,9 +338,14 @@ private fun PreviewCard(channel: Channel) {
     }
 }
 
-/** Places a view at a window's position and size measured elsewhere on the screen (pixels, root coordinates). */
-private fun Modifier.placedAt(box: Rect, d: Density): Modifier = this
-    .offset { IntOffset(box.left.roundToInt(), box.top.roundToInt()) }
+/**
+ * Places a view at a window's position and size measured elsewhere on the screen (pixels, root
+ * coordinates). Absolute left/top on purpose: in Arabic the layout runs right to left, and a mirrored
+ * offset would put the picture on the wrong side of the screen.
+ */
+private fun BoxScope.placedAt(box: Rect, d: Density): Modifier = Modifier
+    .align(AbsoluteAlignment.TopLeft)
+    .absoluteOffset { IntOffset(box.left.roundToInt(), box.top.roundToInt()) }
     .size(with(d) { box.width.toDp() }, with(d) { box.height.toDp() })
 
 private val HeaderHeight = 64.dp

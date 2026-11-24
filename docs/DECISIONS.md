@@ -419,6 +419,8 @@ channel that was on back (a film resumes where it stopped). YouTube, film and se
 their logo (Coil) and kind instead of a picture; the embedded YouTube player stops while the list
 is open. Left untouched for a minute, the list closes, and when it rests on another live channel
 that channel stays on, since the viewer has been watching it.
+The video view is placed at the window's absolute screen position (left/top), never a start/end
+offset: in Arabic the screen runs right to left and a mirrored offset put the picture over the list.
 
 Consequences: Rule 1 now allows this one list besides the video and the banner. Which code the
 Kogan remote's Live TV button sends is unconfirmed; the key log shows it. While a YouTube-app
