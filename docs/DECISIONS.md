@@ -667,13 +667,14 @@ Decision:
 - The picture still starts with 1 s buffered and resumes after a stall with 2 s.
 - `PlaybackStats` (pure) times each channel's first picture and every freeze; the engine logs them
   under `SimpleTvPlayback` with the channel number and no address, so the next change to these
-  numbers can be measured on the TV instead of guessed. "First picture" is the tuning card going
-  away, which is what the viewer waits for: the card covers the video until the player is ready, and
-  with a video track on screen Media3 is not ready before its first frame is drawn. The moment that
-  frame is drawn is logged beside it ("first frame"); the gap between the two is the start buffer
-  filling. Paused time does not count, whether the viewer paused a film or the TV is in standby (the
-  player stays ready through both), and a freeze shorter than a quarter of a second is ignored, as
-  in the audio log's figures.
+  numbers can be measured on the TV instead of guessed. "First picture" needs both the player ready
+  (the tuning card, which covers the video, goes away) and a video frame drawn. With the screen on
+  Media3 draws the frame first ("first frame" in the log) and is ready once the start buffer has
+  filled. With the screen off, the app behind another one, or a channel with sound only, it gets
+  ready without drawing anything; the log then says "ready, no frame drawn" and the stay's summary
+  "no picture". Paused time does not count, whether the viewer paused a film or the TV went to
+  standby while playing (the player stays ready through both), and a freeze shorter than a quarter
+  of a second is ignored, as in the audio log's figures.
 
 Consequences: Live channels run about 30 s behind the broadcast instead of about 10. The first
 picture comes no later: either way it needs the redirect, the playlist and the start of one segment,
@@ -699,6 +700,11 @@ Whether the TV's HTTP stack reuses connections has not been measured, so the sec
 cautious figure: the change still removes most freezes, with a thinner buffer. The first picture took
 3.6 to 8.8 s under every setting. It is a model, not the player: the build has not yet run on the
 Kogan (backlog item 0a).
+
+First run on the Kogan (build 0.1.88, 25 November, TV in standby, channels changed from a laptop):
+four channels were ready after 7.5, 4.0, 3.3 and 3.0 s, and the one left on played 35 s without a
+stall. No frame was drawn, as the decoder's own records confirm, because the screen was off. It
+shows the streams load on the TV with the new settings; it is not yet the viewing check of item 0a.
 
 Still open: when the first segment arrives slowly, the picture starts with its 1 s and can freeze
 for a couple of seconds straight after (twice in seven model runs). A larger start threshold would

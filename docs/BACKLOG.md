@@ -23,7 +23,8 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    YouTube playlist channel: add a public playlist; check it plays in order, Right/Left/OK work,
    the banner names the video, it resumes after a channel change and a restart, and that
    embed-blocked videos are skipped. Check whether ads appear.
-0a. **Check the buffering change on the Kogan (ADR-028).** Install the build, run
+0a. **Check the buffering change on the Kogan (ADR-028).** With the TV on (with the screen off the
+   log says "no frame drawn" and proves only that streams load), install the build, run
    `adb logcat -s SimpleTvPlayback` and watch IPTV channels for an evening: change channel twenty
    times and stay ten minutes on three of them. Record in ADR-028 the first-frame and first-picture
    times, the number of freezes and the frozen share of viewing time, against the evening before the
@@ -64,6 +65,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    keeps its buffer and keeps asking the provider for the playlist, so the TV holds the account's one
    stream while nobody watches, and on wake it plays up to 30 s of stale video and then has to
    recover. Stop the player in `onStop` and tune again in `onStart` (films keep their position).
+   Seen on the Kogan: a channel change while the TV is in standby (Play on TV from the page, for
+   one) starts the stream and plays it with the screen off, because every tune tells the player to
+   play. Decide what a tune in standby should do: wake the TV, or wait until it is on.
 12. **Audio-only fallback.** If the box cannot decode video for a stream, keep audio and show the
     logo/name large (radio behaviour) instead of "No signal".
 13. **Tune at once when the number is complete.** After a digit the tuner waits 1.5 s for another

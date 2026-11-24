@@ -5,8 +5,13 @@ package com.ielali.simpletv.player
  * and how long the picture freezes afterwards. Fed with the states [TuneTracker] produces; pure, so
  * it is unit tested on the JVM. [PlaybackEngine] writes the results to the log (ADR-028).
  *
- * Only time someone can be watching counts: while playback is paused (the viewer paused a film, or
- * the screen is off) this class's clock stands still, so standby adds neither played nor frozen time.
+ * A picture needs two things: the player ready (the tuning card goes away) and a video frame drawn.
+ * With the screen on the frame comes first and the picture arrives when the player is ready. With the
+ * screen off, the app behind another one, or a channel with sound only, the player gets ready without
+ * drawing anything, and that is reported as ready, not as a picture.
+ *
+ * While playback is paused (the viewer paused a film, or the screen went off) this class's clock
+ * stands still, so that time adds neither played nor frozen time.
  */
 class PlaybackStats(
     private val clock: () -> Long,
@@ -18,21 +23,22 @@ class PlaybackStats(
     sealed interface Event {
         fun line(): String
 
-        /** The first video frame was drawn. The tuning card can still be covering it. */
+        /** The first video frame was drawn; the tuning card still covers it until the player is ready. */
         data class FirstFrame(val afterMs: Long) : Event {
             override fun line() = "first frame drawn after ${seconds(afterMs)}"
         }
 
-        /**
-         * The tuning card went away: what the viewer sees as the picture arriving. With a video track
-         * on screen the player is not ready before its first frame is drawn, so this is never earlier
-         * than [FirstFrame]; it is later by the time the start buffer takes to fill.
-         */
+        /** The player is ready and nothing has been drawn: screen off, app not in front, or sound only. */
+        data class ReadyWithoutPicture(val afterMs: Long) : Event {
+            override fun line() = "ready after ${seconds(afterMs)}, no frame drawn (screen off or sound only)"
+        }
+
+        /** A frame is drawn and the tuning card has gone: what the viewer sees as the picture arriving. */
         data class FirstPicture(val afterMs: Long) : Event {
             override fun line() = "first picture after ${seconds(afterMs)}"
         }
 
-        /** The picture is back after freezing; [playedMs] is how long it had played before it froze. */
+        /** Playback is moving again after freezing; [playedMs] is how long it had played before it froze. */
         data class StallEnded(val lastedMs: Long, val playedMs: Long) : Event {
             override fun line() = "picture froze for ${seconds(lastedMs)} after playing ${seconds(playedMs)}"
         }
@@ -40,11 +46,13 @@ class PlaybackStats(
 
     /** One channel's stay, reported when the viewer leaves it. Times leave out paused time. */
     data class Summary(
-        /** Null when no video frame was drawn (no picture, or a channel with sound only). */
+        /** Null when no video frame was drawn: the screen was off, or the channel has sound only. */
         val firstFrameMs: Long?,
-        /** Null when the picture never came. */
+        /** Null when the player never got ready. */
+        val readyMs: Long?,
+        /** When the player was ready with a frame drawn; null when that never happened. */
         val firstPictureMs: Long?,
-        /** Time the picture was moving. */
+        /** Time playback was moving. */
         val playedMs: Long,
         val stalls: Int,
         val stalledMs: Long,
@@ -52,9 +60,13 @@ class PlaybackStats(
         val errors: Int,
     ) {
         fun line(): String {
-            val frame = firstFrameMs?.let { "first frame after ${seconds(it)}" } ?: "no frame"
-            val picture = firstPictureMs?.let { "first picture after ${seconds(it)}" } ?: "no picture"
-            return "$frame, $picture, played ${seconds(playedMs)}, stalls $stalls, frozen ${seconds(stalledMs)} " +
+            val start = when {
+                firstPictureMs != null && firstFrameMs != null ->
+                    "first frame after ${seconds(firstFrameMs)}, first picture after ${seconds(firstPictureMs)}"
+                readyMs != null -> "no picture (ready after ${seconds(readyMs)}, no frame drawn)"
+                else -> "no picture (never ready)"
+            }
+            return "$start, played ${seconds(playedMs)}, stalls $stalls, frozen ${seconds(stalledMs)} " +
                 "(longest ${seconds(longestStallMs)}), errors $errors"
         }
     }
@@ -65,6 +77,7 @@ class PlaybackStats(
     private var tuned = false
     private var tunedAt = 0L
     private var firstFrameMs: Long? = null
+    private var readyMs: Long? = null
     private var firstPictureMs: Long? = null
     private var playingSince: Long? = null
     private var frozenSince: Long? = null
@@ -107,7 +120,11 @@ class PlaybackStats(
         if (!tuned || firstFrameMs != null) return null
         val after = now() - tunedAt
         firstFrameMs = after
-        return Event.FirstFrame(after)
+        // Usually the frame is drawn under the tuning card. Drawn after the player was ready (the
+        // screen came on later), it is the picture arriving.
+        if (readyMs == null) return Event.FirstFrame(after)
+        firstPictureMs = after
+        return Event.FirstPicture(after)
     }
 
     /** The state the viewer sees changed (or was repeated; repeats are ignored). */
@@ -124,14 +141,17 @@ class PlaybackStats(
             playingSince = null
         }
         when (state) {
-            // After the first picture, a stall or a failure is a freeze until the picture is back.
+            // Once playback has started, a stall or a failure is a freeze until it is moving again.
             PlaybackState.REBUFFERING, PlaybackState.ERROR ->
-                if (firstPictureMs != null && frozenSince == null) frozenSince = now
+                if (readyMs != null && frozenSince == null) frozenSince = now
             PlaybackState.PLAYING -> {
                 playingSince = now
-                if (firstPictureMs == null) {
-                    firstPictureMs = now - tunedAt
-                    return Event.FirstPicture(now - tunedAt)
+                if (readyMs == null) {
+                    val after = now - tunedAt
+                    readyMs = after
+                    if (firstFrameMs == null) return Event.ReadyWithoutPicture(after)
+                    firstPictureMs = after
+                    return Event.FirstPicture(after)
                 }
                 val since = frozenSince ?: return null
                 frozenSince = null
@@ -158,9 +178,10 @@ class PlaybackStats(
         playingSince?.let { playedMs += now - it }
         // Left while frozen: the freeze counts up to the moment the viewer gave up on it.
         frozenSince?.let { countStall(now - it) }
-        val summary = Summary(firstFrameMs, firstPictureMs, playedMs, stalls, stalledMs, longestStallMs, errors)
+        val summary = Summary(firstFrameMs, readyMs, firstPictureMs, playedMs, stalls, stalledMs, longestStallMs, errors)
         tuned = false
         firstFrameMs = null
+        readyMs = null
         firstPictureMs = null
         playingSince = null
         frozenSince = null

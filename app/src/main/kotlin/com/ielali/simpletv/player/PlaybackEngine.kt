@@ -99,7 +99,8 @@ class PlaybackEngine(context: Context) {
                 // log's clock stops (the player stays ready the whole time).
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = stats.onPaused(!playWhenReady)
 
-                // Logged beside "first picture" (the tuning card going away), which cannot come sooner.
+                // A frame was drawn. With the screen off none ever is: the player still gets ready,
+                // and the log then says "ready, no frame drawn" instead of "first picture".
                 override fun onRenderedFirstFrame() = log(stats.onFirstFrame())
 
                 override fun onTracksChanged(tracks: Tracks) = applyWish(tracks)
