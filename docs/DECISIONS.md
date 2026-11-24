@@ -308,6 +308,12 @@ Consequences: Rating rules need a TMDB key. Older and foreign films often lack a
 country, hence the per-channel choice for them. Big film channels take minutes to check the first
 time. TMDB is free for non-commercial use with attribution.
 
+Update: Film channels can also keep to production years ("From" and "To", either open, with quick
+choices such as "Before 2000"). A film's year comes from the catalog, then its details, then its
+name ("Heat (1995)"); films of unknown year play unless the channel leaves them out, and then their
+details are looked up for a year. Hand-picked films always play. The page's film and series search
+takes the same years (`Years`).
+
 ## ADR-019 Moving within film and series channels with the remote
 
 Context: Film and series channels played their queue with no way to skip, go back or pause. The

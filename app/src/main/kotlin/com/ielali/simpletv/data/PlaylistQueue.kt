@@ -22,7 +22,9 @@ object PlaylistQueue {
             val byId = all.associateBy { it.id }
             spec.titles.mapNotNull(byId::get)
         } else {
-            all.filter { it.group.orEmpty() in spec.categories }.sortedBy { it.name.lowercase() }
+            // Films from outside the channel's years are left out here; unknown years wait for the details.
+            all.filter { it.group.orEmpty() in spec.categories && Years.inRange(Years.of(it), spec.minYear, spec.maxYear) }
+                .sortedBy { it.name.lowercase() }
         }
     }
 

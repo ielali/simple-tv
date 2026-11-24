@@ -51,11 +51,16 @@ object CatalogQuery {
         providerId: String,
         details: (CatalogItem) -> FilmMeta? = { null },
         country: String = "",
+        minYear: Int? = null,
+        maxYear: Int? = null,
     ): Page {
         val words = q.orEmpty().lowercase().split(' ').map { it.trim() }.filter { it.isNotEmpty() }
+        val years = minYear != null || maxYear != null
         val matching = catalog?.of(type).orEmpty().filter { item ->
             (category == null || item.group.orEmpty() == category) &&
-                words.all { w -> item.name.lowercase().contains(w) || item.group.orEmpty().lowercase().contains(w) }
+                words.all { w -> item.name.lowercase().contains(w) || item.group.orEmpty().lowercase().contains(w) } &&
+                // With a year range, the search shows only titles known to be from those years.
+                (!years || Years.of(item, details(item)).let { it != null && Years.inRange(it, minYear, maxYear) })
         }
         val inLineup = lineup.filter { it.providerId == providerId && it.sourceId != null }
             .associate { it.sourceId!! to it.number }

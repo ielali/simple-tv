@@ -92,8 +92,12 @@ class MetadataService(
     }
 
     /** May this film play on a channel with [spec]'s rules? */
-    fun allowed(spec: PlaylistSpec, item: CatalogItem): Boolean =
-        RatingRules.allowed(cached(spec.providerId, item.type, item.id), spec, country(), lists(), settings.current().hideAdult)
+    fun allowed(spec: PlaylistSpec, item: CatalogItem): Boolean {
+        val meta = cached(spec.providerId, item.type, item.id)
+        if (!RatingRules.allowed(meta, spec, country(), lists(), settings.current().hideAdult)) return false
+        // Hand-picked films are played whatever their year; a category channel keeps to its years.
+        return spec.titles.isNotEmpty() || Years.inRange(Years.of(item, meta), spec.minYear, spec.maxYear, spec.skipNoYear)
+    }
 
     /** How many of a film channel's films have been checked (for "Checking ratings: 340 of 1,172"). */
     suspend fun progress(spec: PlaylistSpec): Pair<Int, Int> {
@@ -107,7 +111,8 @@ class MetadataService(
         val key = hasKey()
         for (ch in channels.current().channels) {
             val spec = ch.playlist ?: continue
-            if (spec.mode != PlaylistMode.FILM || !(RatingRules.hasRules(spec) || settings.current().hideAdult && key)) continue
+            // Films of unknown year are looked up too when the channel leaves them out: their details often have it.
+            if (spec.mode != PlaylistMode.FILM || !(RatingRules.hasRules(spec) || spec.skipNoYear || settings.current().hideAdult && key)) continue
             checkSpec(spec)
         }
     }

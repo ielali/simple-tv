@@ -1657,6 +1657,8 @@ screens.film = (() => {
     const sp = f.spec; const type = sp.mode === 'SERIES' ? 'series' : 'film';
     const qs = new URLSearchParams({ type, limit: 30, offset: more ? f.results.length : 0 });
     if (f.q.trim()) qs.set('q', f.q.trim()); else if (f.pickCat != null && type === 'film') qs.set('category', f.pickCat);
+    const [yf, yt] = type === 'series' ? [f.yrFrom, f.yrTo] : [sp.minYear, sp.maxYear];
+    if (yf) qs.set('from', yf); if (yt) qs.set('to', yt);
     const my = (search.seq = (search.seq || 0) + 1);
     if (more) { f.resultsLoading = true; paintResults(); }
     let r;
@@ -1688,9 +1690,9 @@ screens.film = (() => {
               ${f.source === 'cats' ? `<div class="field"><span>Order</span><div class="seg full" role="radiogroup"><button data-shuffle="0" class="${sp.shuffle ? '' : 'on'}" role="radio" aria-checked="${!sp.shuffle}">In order</button><button data-shuffle="1" class="${sp.shuffle ? 'on' : ''}" role="radio" aria-checked="${sp.shuffle}">Shuffled</button></div><span class="hint">Shuffled mixes the films once. The TV then plays them one after another.</span></div>` : ''}`
             : `
               ${sp.seriesId && f.seriesInfo ? `<div class="f g12 card" style="padding:12px">${posterHtml({ name: f.seriesName || f.name, poster: f.seriesDetails && f.seriesDetails.poster }, 'sm')}<div class="grow"><div style="font-weight:700" dir="auto">${esc(f.seriesName || f.name)}</div><div class="cap">${plural(f.seriesInfo.seasons, 'season')} · ${plural(f.seriesInfo.episodes, 'episode')}</div></div>${f.id ? '<span class="pill ok">Selected</span>' : '<button class="btn ghost" id="otherSeries">Choose another</button>'}</div>`
-                : sp.seriesId ? '<div class="skel" style="height:80px"></div>' : `<label class="field"><span>Series</span><span class="inp big">${ico('search', 20)}<input id="fQ" type="search" value="${esc(f.q)}" placeholder="Search series" autocomplete="off" dir="auto"></span></label><div id="fResults" class="col g4"></div>`}
+                : sp.seriesId ? '<div class="skel" style="height:80px"></div>' : `${yearsField(f.yrFrom, f.yrTo, false)}<label class="field"><span>Series</span><span class="inp big">${ico('search', 20)}<input id="fQ" type="search" value="${esc(f.q)}" placeholder="Search series" autocomplete="off" dir="auto"></span></label><div id="fResults" class="col g4"></div>`}
               ${f.progress ? `<div class="f fw g12 card" style="padding:12px"><span class="icobox ok">${ico('check', 20, 2.2)}</span><div class="grow" style="min-width:160px"><div style="font-weight:600">Stopped at ${esc(f.progress.resume.split(' · ')[0].replace(/^S/, 's'))}</div><div class="cap">The TV picks up from here next time.</div></div><button class="btn" id="restart">Start again</button></div>` : ''}`}
-            ${isFilm ? ratingRules(sp) : seriesRating()}
+            ${isFilm ? yearsField(sp.minYear, sp.maxYear, true, sp.skipNoYear) + ratingRules(sp) : seriesRating()}
             <div class="field"><span>Subtitles</span><div class="seg full" role="radiogroup">${SUB_CHOICES.map(([k, l]) => `<button data-sub="${k}" class="${(sp.subtitles || '') === k ? 'on' : ''}" role="radio" aria-checked="${(sp.subtitles || '') === k}" ${k === 'ar' ? 'lang="ar"' : ''}>${l}</button>`).join('')}</div>
               <span class="hint">Shown large on the TV. If ${isFilm ? 'a film doesn’t' : 'an episode doesn’t'} have them, it plays without.</span></div>
             <div class="field"><span>Soundtrack</span><div class="seg full" role="radiogroup">${AUDIO_CHOICES.map(([k, l]) => `<button data-audio="${k}" class="${(sp.audio || '') === k ? 'on' : ''}" role="radio" aria-checked="${(sp.audio || '') === k}" ${k === 'ar' ? 'lang="ar"' : ''}>${l}</button>`).join('')}</div>
@@ -1734,6 +1736,17 @@ screens.film = (() => {
     $$('[data-title]', box).forEach((c) => c.onchange = () => { const id = c.dataset.title; const t = f.spec.titles; if (c.checked) { if (!t.includes(id)) t.push(id); } else t.splice(t.indexOf(id), 1); loadQueue(); });
     $$('[data-pick-series]', box).forEach((b) => b.onclick = () => { f.spec.seriesId = b.dataset.pickSeries; f.seriesName = b.dataset.name; if (!f.name.trim()) f.name = b.dataset.name.slice(0, 60); f.seriesInfo = null; paint(); loadSide(); });
     infinite('results', 'moreResults', () => search(true));
+  }
+  /** Quick choices for the years; the From and To boxes take any year. */
+  const YEAR_PRESETS = [['', '', 'Any year'], ['', '1999', 'Before 2000'], ['2000', '2014', '2000 to 2014'], ['2015', '', '2015 or later']];
+  function yearsField(from, to, forFilm, skipNoYear) {
+    const on = (a, b) => String(from || '') === a && String(to || '') === b;
+    return `<div class="field"><span>Years</span>
+        <div class="selrow" role="radiogroup" aria-label="Years">${YEAR_PRESETS.map(([a, b, l]) => `<button class="chip ${on(a, b) ? 'on' : ''}" data-yp="${a}|${b}" role="radio" aria-checked="${on(a, b)}">${l}</button>`).join('')}</div>
+        <div class="f g12" style="align-items:flex-end"><label class="field numfield"><span>From</span><span class="inp"><input id="yFrom" inputmode="numeric" maxlength="4" placeholder="Any" value="${esc(from || '')}" aria-label="From year"></span></label><label class="field numfield"><span>To</span><span class="inp"><input id="yTo" inputmode="numeric" maxlength="4" placeholder="Any" value="${esc(to || '')}" aria-label="To year"></span></label></div>
+        <span class="hint">${forFilm ? 'Only films made in these years. Films you pick one by one always play.' : 'Shows only series from these years.'}</span></div>
+      ${forFilm && (from || to) ? `<div class="field"><span>Films with no known year</span><div class="seg full" role="radiogroup"><button data-noyear="play" class="${skipNoYear ? '' : 'on'}" role="radio" aria-checked="${!skipNoYear}">Play them</button><button data-noyear="skip" class="${skipNoYear ? 'on' : ''}" role="radio" aria-checked="${!!skipNoYear}">Leave them out</button></div>
+        <span class="hint">The TV looks up the year in each film’s details; some films still have none.</span></div>` : ''}`;
   }
   const MIN_SCORES = [['', 'Any'], ['6', '6 or more'], ['7', '7 or more'], ['8', '8 or more']];
   function ratingRules(sp) {
@@ -1804,6 +1817,24 @@ screens.film = (() => {
     $$('[data-maxr]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'maxRating', b.dataset.maxr); if (!sp.maxRating && !sp.minScore) Reflect.deleteProperty(sp, 'skipUnrated'); paint(); loadQueue(); });
     $$('[data-mins]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'minScore', b.dataset.mins ? Number(b.dataset.mins) : null); if (!sp.maxRating && !sp.minScore) Reflect.deleteProperty(sp, 'skipUnrated'); paint(); loadQueue(); });
     $$('[data-unrated]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'skipUnrated', b.dataset.unrated === 'skip'); paint(); loadQueue(); });
+    // Years: a film channel keeps them; for series they only narrow the search.
+    const setYears = (a, b) => {
+      const y = (v) => { const n = parseInt(v, 10); return n >= 1900 && n <= 2100 ? n : null; };
+      let lo = y(a); let hi = y(b); if (lo && hi && lo > hi) [lo, hi] = [hi, lo];
+      if (sp.mode === 'FILM') { setOpt(sp, 'minYear', lo); setOpt(sp, 'maxYear', hi); if (!lo && !hi) Reflect.deleteProperty(sp, 'skipNoYear'); loadQueue(); }
+      else { f.yrFrom = lo; f.yrTo = hi; }
+      // Redraw once the cursor has moved on (From to To), and put it back in the same box.
+      setTimeout(() => {
+        const fid = document.activeElement && document.activeElement.id;
+        paint();
+        if (fid) { const e2 = $('#' + fid); if (e2) e2.focus(); }
+        if ($('#fResults')) search();
+      }, 0);
+    };
+    $$('[data-yp]', el).forEach((b) => b.onclick = () => { const [a, c] = b.dataset.yp.split('|'); setYears(a, c); });
+    const yF = $('#yFrom', el); const yT = $('#yTo', el);
+    if (yF && yT) { yF.onchange = yT.onchange = () => setYears(yF.value, yT.value); }
+    $$('[data-noyear]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'skipNoYear', b.dataset.noyear === 'skip'); paint(); loadQueue(); });
     const sa = $('#seriesAbout', el); if (sa) sa.onclick = () => showDetails(sp.providerId, 'SERIES', sp.seriesId, f.seriesName || f.name);
     $$('[data-sub]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'subtitles', b.dataset.sub); paint(); });
     $$('[data-audio]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'audio', b.dataset.audio); paint(); });

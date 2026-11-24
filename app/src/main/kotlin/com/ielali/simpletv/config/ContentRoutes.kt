@@ -1,6 +1,7 @@
 package com.ielali.simpletv.config
 
 import com.ielali.simpletv.SimpleTvApp
+import com.ielali.simpletv.data.Years
 import com.ielali.simpletv.data.CatalogQuery
 import com.ielali.simpletv.data.CatalogType
 import com.ielali.simpletv.data.Channel
@@ -221,8 +222,9 @@ class ContentRoutes(private val app: SimpleTvApp) {
         return QueueView(q.size, page.map(::entryView), resume?.title, resume?.id, check?.first, check?.second, start = from, remaining = q.size - base)
     }
 
-    private fun withSeed(spec: PlaylistSpec) =
-        if (spec.shuffle && spec.seed == 0L) spec.copy(seed = Random.nextLong(1, Long.MAX_VALUE)) else spec
+    private fun withSeed(spec: PlaylistSpec) = Years.sanitize(
+        if (spec.shuffle && spec.seed == 0L) spec.copy(seed = Random.nextLong(1, Long.MAX_VALUE)) else spec,
+    )
 
     fun Route.install() {
         lineupRoutes()
@@ -370,6 +372,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
                 qp["offset"]?.toIntOrNull() ?: 0, qp["limit"]?.toIntOrNull() ?: 50,
                 channels.current().channels, pid,
                 details = { app.meta.cached(pid, it.type, it.id) }, country = app.meta.country(),
+                minYear = Years.parse(qp["from"]), maxYear = Years.parse(qp["to"]),
             )
             call.respond(ItemsResponse(catalog != null, app.catalog.isRunning(pid), page))
         }
@@ -420,7 +423,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
         }
         post("/api/films/queue-preview") {
             val req = call.receive<QueuePreview>()
-            val spec = req.playlist
+            val spec = Years.sanitize(req.playlist)
             if (providers.find(spec.providerId) == null) return@post call.fail(HttpStatusCode.NotFound, "Choose a subscription first.")
             call.respond(queueView(spec, null, req.offset, req.limit))
         }

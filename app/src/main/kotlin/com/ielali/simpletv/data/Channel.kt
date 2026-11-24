@@ -51,6 +51,11 @@ data class PlaylistSpec(
     val minScore: Double? = null,
     /** With rating rules: leave out films that have no rating (or no score). */
     val skipUnrated: Boolean = false,
+    /** Production years to play, either end open (FILM mode, categories); null = any (Years). */
+    val minYear: Int? = null,
+    val maxYear: Int? = null,
+    /** With a year range: leave out films whose year is unknown. */
+    val skipNoYear: Boolean = false,
 )
 
 /**
