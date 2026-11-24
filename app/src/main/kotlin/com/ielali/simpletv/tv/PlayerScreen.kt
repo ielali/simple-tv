@@ -11,6 +11,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,7 +28,13 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -79,16 +88,28 @@ fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
 
         // The card already names the channel; the corner banner still shows digits being typed.
         val cardShown = streamCard != null || (current?.type == SourceType.YOUTUBE && state.youtubeInApp)
+        val bannerOn = state.channels.isNotEmpty() && state.listIndex == null &&
+            (state.pendingDigits.isNotEmpty() || (state.bannerVisible && !cardShown))
         AnimatedVisibility(
-            visible = state.channels.isNotEmpty() &&
-                (state.pendingDigits.isNotEmpty() || (state.bannerVisible && !cardShown)),
+            visible = bannerOn,
             enter = fadeIn(), exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopStart),
         ) {
             ChannelBanner(current = current, pendingDigits = state.pendingDigits, nowTitle = state.nowTitle, guide = state.guide)
         }
+        // The time, with the banner: easy to lose track of in the evening.
+        AnimatedVisibility(
+            visible = bannerOn && state.pendingDigits.isEmpty(),
+            enter = fadeIn(), exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopEnd),
+        ) {
+            Box(Modifier.padding(48.dp).background(BannerBg, RoundedCornerShape(16.dp)).padding(horizontal = 32.dp, vertical = 16.dp)) {
+                Clock(fontSize = 48)
+            }
+        }
 
-        if (state.paused && current != null) PausedCard(current, state.nowTitle)
+        if (state.paused && current != null && state.listIndex == null) PausedCard(current, state.nowTitle)
+        if (state.listIndex != null) ChannelListOverlay(state, vm)
         if (state.settingsVisible) SettingsOverlay(state.configUrl, state.pin)
     }
 }
@@ -201,8 +222,104 @@ private fun ChannelBanner(current: Channel?, pendingDigits: String, nowTitle: St
     }
 }
 
+/**
+ * The channel list (ADR-022): every channel by number, the highlighted one large on the other side
+ * with what is on it now and next. Up/Down move, channel up/down move a page, OK watches, BACK closes.
+ * It goes away by itself when left alone.
+ */
+@UnstableApi
 @Composable
-private fun GuideLines(guide: NowNext) {
+private fun ChannelListOverlay(state: TvUiState, vm: TvViewModel) {
+    val index = state.listIndex ?: return
+    val channels = state.channels
+    val highlighted = channels.getOrNull(index) ?: return
+    BoxWithConstraints(
+        Modifier.fillMaxSize().background(Color(0xF00B1220)).padding(horizontal = 48.dp, vertical = 32.dp),
+    ) {
+        val rows = ((maxHeight - HeaderHeight - 16.dp) / RowHeight).toInt().coerceIn(3, 9)
+        SideEffect { vm.controller.listPage = rows }
+        val start = com.ielali.simpletv.tv.ChannelListNav.windowStart(index, channels.size, rows)
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().height(HeaderHeight), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.channel_list_title), color = Fg, fontSize = 48.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(24.dp))
+                Text("${index + 1} / ${channels.size}", color = Fg.copy(alpha = 0.7f), fontSize = 32.sp)
+                Spacer(Modifier.weight(1f))
+                Clock(fontSize = 48)
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxSize()) {
+                Column(Modifier.weight(0.55f).fillMaxHeight()) {
+                    for (i in start until minOf(start + rows, channels.size)) {
+                        ListRow(channels[i], highlighted = i == index, watching = channels[i].id == state.current?.id)
+                    }
+                }
+                Spacer(Modifier.width(40.dp))
+                Column(Modifier.weight(0.45f).fillMaxHeight()) {
+                    if (highlighted.number > 0) {
+                        Text(highlighted.number.toString(), color = Accent, fontSize = 96.sp, fontWeight = FontWeight.Black)
+                    }
+                    Text(highlighted.name, color = Fg, fontSize = 48.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    val watching = highlighted.id == state.current?.id
+                    if (watching) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(stringResource(R.string.channel_list_watching), color = Accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                        if (!state.nowTitle.isNullOrBlank()) Text(state.nowTitle, color = Fg.copy(alpha = 0.85f), fontSize = 32.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    state.listGuide?.takeIf { it.now != null }?.let { GuideLines(it, Modifier.fillMaxWidth()) }
+                    Spacer(Modifier.weight(1f))
+                    Text(stringResource(R.string.channel_list_hint), color = Fg.copy(alpha = 0.8f), fontSize = 32.sp)
+                }
+            }
+        }
+    }
+}
+
+private val HeaderHeight = 72.dp
+private val RowHeight = 80.dp
+
+@Composable
+private fun ListRow(channel: Channel, highlighted: Boolean, watching: Boolean) {
+    val ink = if (highlighted) Color(0xFF0B1220) else Fg
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(RowHeight)
+            .background(if (highlighted) Accent else Color.Transparent, RoundedCornerShape(12.dp))
+            .padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (channel.number > 0) channel.number.toString() else "",
+            color = if (highlighted) ink else Accent, fontSize = 48.sp, fontWeight = FontWeight.Black,
+            modifier = Modifier.width(128.dp),
+        )
+        Text(
+            channel.name, color = ink, fontSize = 48.sp, fontWeight = FontWeight.SemiBold,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        )
+        // The channel on now.
+        if (watching) Text("●", color = if (highlighted) ink else Accent, fontSize = 32.sp)
+    }
+}
+
+/** The time in the TV's own 12- or 24-hour style, turning over on the minute. */
+@Composable
+private fun Clock(fontSize: Int) {
+    val ctx = LocalContext.current
+    val fmt = remember { android.text.format.DateFormat.getTimeFormat(ctx) }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000L - now % 60_000L + 50L)
+            now = System.currentTimeMillis()
+        }
+    }
+    Text(fmt.format(java.util.Date(now)), color = Fg, fontSize = fontSize.sp, fontWeight = FontWeight.Bold)
+}
+
+@Composable
+private fun GuideLines(guide: NowNext, barModifier: Modifier = Modifier.width(560.dp)) {
     val ctx = LocalContext.current
     val fmt = remember { android.text.format.DateFormat.getTimeFormat(ctx) }
     val now = guide.now ?: return
@@ -212,11 +329,11 @@ private fun GuideLines(guide: NowNext) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(R.string.guide_now), color = Accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.width(16.dp))
-        Text("${fmt.format(java.util.Date(now.start))}–${fmt.format(java.util.Date(now.stop))}  ${now.title}", color = Fg, fontSize = 32.sp, maxLines = 1)
+        Text("${fmt.format(java.util.Date(now.start))}–${fmt.format(java.util.Date(now.stop))}  ${now.title}", color = Fg, fontSize = 32.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     LinearProgressIndicator(
         progress = { ((at - now.start).toFloat() / span).coerceIn(0f, 1f) },
-        modifier = Modifier.padding(vertical = 8.dp).width(560.dp).height(8.dp),
+        modifier = barModifier.padding(vertical = 8.dp).height(8.dp),
         color = Accent,
         trackColor = Fg.copy(alpha = 0.25f),
     )
@@ -224,7 +341,7 @@ private fun GuideLines(guide: NowNext) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.guide_next), color = Fg.copy(alpha = 0.8f), fontSize = 32.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(16.dp))
-            Text("${fmt.format(java.util.Date(next.start))}  ${next.title}", color = Fg.copy(alpha = 0.8f), fontSize = 32.sp, maxLines = 1)
+            Text("${fmt.format(java.util.Date(next.start))}  ${next.title}", color = Fg.copy(alpha = 0.8f), fontSize = 32.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

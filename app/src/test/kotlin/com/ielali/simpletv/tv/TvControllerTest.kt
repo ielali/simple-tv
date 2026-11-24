@@ -193,4 +193,91 @@ class TvControllerTest {
         r.controller.channelUp() // from a preview, up goes to the first channel
         assertEquals(1, r.controller.current.value?.number)
     }
+
+    @Test
+    fun `channel list opens on the channel being watched and ok watches the highlighted one`() = runTest {
+        val r = rig(last = 1)
+        r.controller.onAppVisible(true)
+        r.controller.toggleList()
+        assertEquals(0, r.controller.listIndex.value)
+        r.controller.onListKey(GuardKeys.DPAD_UP) // wraps to the last channel
+        assertEquals(3, r.controller.listIndex.value)
+        assertTrue(r.controller.onListKey(GuardKeys.DPAD_CENTER))
+        assertEquals(null, r.controller.listIndex.value)
+        assertEquals(4, r.controller.current.value?.number)
+        assertFalse("volume is not the list's", r.controller.onListKey(GuardKeys.VOLUME_UP))
+    }
+
+    @Test
+    fun `channel list closes by itself and sends a youtube-app channel back to youtube`() = runTest {
+        val r = rig(last = 2)
+        r.controller.onAppVisible(true)
+        assertEquals(listOf(2), r.launcher.opened)
+        r.controller.openList()
+        advanceTimeBy(29_000)
+        assertTrue(r.controller.isListOpen())
+        r.controller.onListKey(GuardKeys.DPAD_DOWN) // any key keeps it open longer
+        advanceTimeBy(29_000)
+        assertTrue(r.controller.isListOpen())
+        advanceTimeBy(1_001)
+        assertFalse(r.controller.isListOpen())
+        assertEquals(listOf(2, 2), r.launcher.opened)
+        assertEquals(2, r.controller.current.value?.number)
+    }
+
+    @Test
+    fun `the list button over youtube brings simple tv forward and youtube waits`() = runTest {
+        val r = rig(last = 2)
+        r.controller.toggleList()
+        assertEquals(1, r.launcher.broughtToFront)
+        r.controller.onAppVisible(true)
+        assertTrue("youtube stays closed while the list is up", r.launcher.opened.isEmpty())
+        r.controller.onRemoteKey(GuardKeys.BACK)
+        assertFalse(r.controller.isListOpen())
+        assertEquals(listOf(2), r.launcher.opened)
+    }
+
+    @Test
+    fun `a digit in the list closes it and types a number`() = runTest {
+        val r = rig(last = 1)
+        r.controller.onAppVisible(true)
+        r.controller.openList()
+        r.controller.onRemoteKey(GuardKeys.DIGIT_0 + 4)
+        assertFalse(r.controller.isListOpen())
+        assertEquals("4", r.controller.tuner.pendingDigits.value)
+        advanceTimeBy(1501)
+        assertEquals(4, r.controller.current.value?.number)
+    }
+
+    @Test
+    fun `a lone zero goes back to the previous channel and back again`() = runTest {
+        val r = rig(last = 1)
+        r.controller.onAppVisible(true)
+        r.controller.onRemoteKey(GuardKeys.DIGIT_0 + 4); advanceTimeBy(1501)
+        assertEquals(4, r.controller.current.value?.number)
+        r.controller.onRemoteKey(GuardKeys.DIGIT_0); advanceTimeBy(1501)
+        assertEquals(1, r.controller.current.value?.number)
+        r.controller.onRemoteKey(GuardKeys.DIGIT_0); advanceTimeBy(1501)
+        assertEquals(4, r.controller.current.value?.number)
+        assertTrue(r.controller.previousChannel())
+        assertEquals(1, r.controller.current.value?.number)
+    }
+
+    @Test
+    fun `with no previous channel a lone zero lands on the first channel`() = runTest {
+        val r = rig(last = 4)
+        r.controller.onAppVisible(true)
+        assertFalse(r.controller.previousChannel())
+        r.controller.onRemoteKey(GuardKeys.DIGIT_0); advanceTimeBy(1501)
+        assertEquals(1, r.controller.current.value?.number)
+    }
+
+    @Test
+    fun `buttons get their jobs from the settings`() = runTest {
+        val r = rig()
+        assertEquals(com.ielali.simpletv.guard.ButtonRoles.Role.CHANNEL_LIST, r.controller.roleOf(GuardKeys.GUIDE))
+        r.settings.value = r.settings.value.copy(listButtons = emptyList(), previousButtons = listOf(GuardKeys.BOOKMARK))
+        assertEquals(null, r.controller.roleOf(GuardKeys.GUIDE))
+        assertEquals(com.ielali.simpletv.guard.ButtonRoles.Role.PREVIOUS_CHANNEL, r.controller.roleOf(GuardKeys.BOOKMARK))
+    }
 }

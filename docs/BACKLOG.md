@@ -17,6 +17,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    TV guide: check the free guide presets download (their links were not reachable from the build
    sandbox), how long a guide takes to read on the Kogan, and which lineup channels match. YouTube:
    sign in with a household OAuth client and check that live subscriptions show as "Live now".
+   Channel list: press the blue Live TV button on the Kogan remote, from Simple TV and from YouTube;
+   check in Remote buttons which code it sends (TV or GUIDE), that the list reads from the sofa,
+   that holding Down scrolls, and that a lone 0 goes back to the previous channel.
 1. **First device run.** Build `assembleDebug`, sideload on an Android TV box, confirm: app opens
    fullscreen, empty state shows the config URL, config page loads from a phone, adding an HLS
    channel plays. Record device, Android version and remote model in DEPLOYMENT.md.
@@ -40,7 +43,6 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    request `youtube.readonly`, then let the caregiver pick channels from "My subscriptions" and
    "Live now" instead of pasting links. Quota: search costs 100 units of the 10,000/day default.
 7. **Channel logos in the banner.** Load `logoUrl` with Coil, fall back to the number when missing.
-8. **Clock in the banner.** Elderly viewers use the TV as a clock; show HH:MM in the banner corner.
 9. **Stream health check in the web UI.** "Test" button per channel that has the TV try the URL for
    5 s and report OK / failed with the ExoPlayer error code.
 10. **Hard kiosk (optional).** Device-owner receiver + lock task for fresh installs without a Google
@@ -99,6 +101,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- Channel list on the Live TV button with now and next for each channel, a lone 0 for the previous
+  channel, a clock beside the banner, and remote buttons that can be given these jobs (ADR-022).
 
 - TV guide: now and next in the banner and on the page, from the provider's guide with free XMLTV
   guides as a fallback, channel matching with manual fixes (ADR-020).

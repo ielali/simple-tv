@@ -33,6 +33,18 @@ class SettingsMergeTest {
     }
 
     @Test
+    fun `button jobs are sanitized and a button with a job is not blocked`() {
+        val merged = SettingsMerge.merge(
+            AppSettings(),
+            patch("""{"listButtons": [${GuardKeys.GUIDE}, ${GuardKeys.HOME}], "previousButtons": [${GuardKeys.GUIDE}, 1000], "guardBlockedKeys": [1000, 999]}"""),
+        )
+        assertEquals(listOf(GuardKeys.GUIDE), merged.listButtons)
+        assertEquals(listOf(1000), merged.previousButtons)
+        assertEquals(listOf(999), merged.guardBlockedKeys)
+        assertEquals(listOf(GuardKeys.TV, GuardKeys.GUIDE), AppSettings().listButtons)
+    }
+
+    @Test
     fun `negative pause is clamped`() {
         assertEquals(0L, SettingsMerge.merge(AppSettings(), patch("""{"guardPausedUntil": -5}""")).guardPausedUntil)
     }

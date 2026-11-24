@@ -6,6 +6,10 @@ enum class KeyAction {
     SWALLOW,
     /** Send to TvController: channel control while the YouTube app is in front. */
     ROUTE,
+    /** A button the caregiver gave the channel list (ADR-022): open or close it, from any screen. */
+    CHANNEL_LIST,
+    /** A button the caregiver gave "previous channel". */
+    PREVIOUS_CHANNEL,
 }
 enum class WindowAction { NONE, GO_HOME }
 
@@ -16,6 +20,9 @@ data class GuardConfig(
     val extraBlockedKeys: Set<Int> = emptySet(),
     /** Apps Simple TV opened on purpose (YouTube hand-off); they may stay in front. */
     val allowedExternalPackages: Set<String> = emptySet(),
+    /** Buttons that open the channel list, and that go back to the previous channel (ButtonRoles). */
+    val listKeys: Set<Int> = ButtonRoles.DEFAULT_LIST.toSet(),
+    val previousKeys: Set<Int> = emptySet(),
 )
 
 /**
@@ -48,6 +55,8 @@ object HomeGuardPolicy {
 
     fun onKey(keyCode: Int, config: GuardConfig, now: Long): KeyAction = when {
         !isActive(config, now) -> KeyAction.PASS
+        keyCode in config.listKeys -> KeyAction.CHANNEL_LIST
+        keyCode in config.previousKeys -> KeyAction.PREVIOUS_CHANNEL
         keyCode in GuardKeys.GO_HOME -> KeyAction.GO_HOME
         keyCode in GuardKeys.PROTECTED -> KeyAction.PASS
         keyCode in GuardKeys.DEFAULT_BLOCKED || keyCode in config.extraBlockedKeys -> KeyAction.SWALLOW
@@ -61,6 +70,8 @@ object HomeGuardPolicy {
      */
     fun onKeyDuringExternal(keyCode: Int, config: GuardConfig, now: Long, digitsPending: Boolean): KeyAction {
         if (!isActive(config, now)) return KeyAction.PASS
+        if (keyCode in config.listKeys) return KeyAction.CHANNEL_LIST
+        if (keyCode in config.previousKeys) return KeyAction.PREVIOUS_CHANNEL
         return when (keyCode) {
             in GuardKeys.DIGIT_0..GuardKeys.DIGIT_9, in GuardKeys.NUMPAD_0..GuardKeys.NUMPAD_9,
             GuardKeys.CHANNEL_UP, GuardKeys.CHANNEL_DOWN, GuardKeys.PAGE_UP, GuardKeys.PAGE_DOWN,

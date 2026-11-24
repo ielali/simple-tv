@@ -68,7 +68,9 @@ class MainActivity : ComponentActivity() {
             )
         }
         if (!vm.handles(event.keyCode)) return super.dispatchKeyEvent(event)
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) vm.onKeyDown(event.keyCode)
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            if (event.repeatCount == 0) vm.onKeyDown(event.keyCode) else vm.onKeyRepeat(event.keyCode)
+        }
         return true
     }
 

@@ -12,8 +12,33 @@ class HomeGuardPolicyTest {
 
     @Test
     fun `home and tv keys return to simple tv`() {
+        val noList = on.copy(listKeys = emptySet())
         assertEquals(KeyAction.GO_HOME, HomeGuardPolicy.onKey(GuardKeys.HOME, on, now))
-        assertEquals(KeyAction.GO_HOME, HomeGuardPolicy.onKey(GuardKeys.TV, on, now))
+        assertEquals(KeyAction.GO_HOME, HomeGuardPolicy.onKey(GuardKeys.TV, noList, now))
+    }
+
+    @Test
+    fun `the live tv button opens the channel list from anywhere, over youtube too`() {
+        assertEquals(KeyAction.CHANNEL_LIST, HomeGuardPolicy.onKey(GuardKeys.TV, on, now))
+        assertEquals(KeyAction.CHANNEL_LIST, HomeGuardPolicy.onKey(GuardKeys.GUIDE, on, now))
+        assertEquals(KeyAction.CHANNEL_LIST, HomeGuardPolicy.onKeyDuringExternal(GuardKeys.GUIDE, on, now, false))
+        assertEquals(KeyAction.CHANNEL_LIST, HomeGuardPolicy.onKeyDuringExternal(GuardKeys.TV, on, now, true))
+        // HOME keeps its job whatever the settings say
+        assertEquals(KeyAction.GO_HOME, HomeGuardPolicy.onKey(GuardKeys.HOME, on, now))
+    }
+
+    @Test
+    fun `a button given previous channel wins over blocking it`() {
+        val cfg = on.copy(previousKeys = setOf(GuardKeys.BOOKMARK))
+        assertEquals(KeyAction.SWALLOW, HomeGuardPolicy.onKey(GuardKeys.BOOKMARK, on, now))
+        assertEquals(KeyAction.PREVIOUS_CHANNEL, HomeGuardPolicy.onKey(GuardKeys.BOOKMARK, cfg, now))
+        assertEquals(KeyAction.PREVIOUS_CHANNEL, HomeGuardPolicy.onKeyDuringExternal(GuardKeys.BOOKMARK, cfg, now, false))
+    }
+
+    @Test
+    fun `button jobs do nothing while the guard is paused`() {
+        val paused = on.copy(pausedUntil = now + 1)
+        assertEquals(KeyAction.PASS, HomeGuardPolicy.onKey(GuardKeys.GUIDE, paused, now))
     }
 
     @Test

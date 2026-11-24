@@ -141,6 +141,8 @@ button,input,select{font:inherit;color:inherit}
 .divider{height:1px;background:var(--line);margin:4px 0}
 .list>*+*{border-top:1px solid var(--line)}
 .li{display:flex;align-items:center;gap:12px;padding:12px 4px;min-height:56px}
+.inp.jobpick{width:auto;flex:0 1 250px;min-width:0}
+.phone .inp.jobpick{flex:1 1 100%}
 .chips{display:flex;gap:8px;flex-wrap:wrap}
 .phone .chips.scroll{flex-wrap:nowrap;overflow-x:auto;margin-inline:-16px;padding-inline:16px;scrollbar-width:none}
 .chip{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);font-weight:600;white-space:nowrap}
@@ -1975,15 +1977,25 @@ screens.settings = (() => {
       </div></details>
     </section>`;
   }
+  /** What a button does now: its job, blocked, or its usual use. */
+  const keyJob = (k) => k.role === 'list' ? 'list' : k.role === 'previous' ? 'previous' : k.blocked ? 'blocked' : '';
   function keysCard() {
     const rows = state.keys || [];
     const seen = new Set(); const latest = rows.filter((k) => !seen.has(k.keyCode) && seen.add(k.keyCode)).slice(0, 8);
     const result = (k) => k.returnsHome ? ['ok', 'Back to Simple TV'] : (k.blocked || k.blockedByDefault || k.action === 'SWALLOW') ? ['ok', 'Blocked'] : k.needed || k.action === 'ROUTE' || k.action === 'HANDLED' ? ['info', 'Used by Simple TV'] : null;
+    const usual = (k) => k.returnsHome ? 'Back to Simple TV' : k.blockedByDefault ? 'Does nothing' : k.needed ? 'Its usual job' : 'Opens its app';
+    const picker = (k) => {
+      const job = keyJob(k);
+      const opts = [['', usual(k)], ['list', 'Opens the channel list'], ['previous', 'Previous channel']].concat(k.blockable && !k.blockedByDefault ? [['blocked', 'Does nothing']] : []);
+      return `<label class="inp jobpick"><select data-job="${k.keyCode}" aria-label="What ${esc(keyName(k.name))} does">${opts.map(([v, l]) => `<option value="${v}" ${v === job ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
+    };
     return `<section class="card col g8">
       <div class="f g12"><div class="grow"><h2 class="sec">Remote buttons</h2><p class="cap">Press a button on the remote, then refresh.</p></div><button class="btn" id="kRefresh">${ico('refresh', 18)}Refresh</button></div>
+      <div class="muted" style="line-height:22px">On the TV, the <b>Live TV</b> button opens the channel list: up and down to choose, OK to watch, Back to close. Pressing <b>0</b> on its own goes back to the previous channel. You can give these jobs to other buttons below.</div>
       ${latest.length ? `<div class="list">${latest.map((k) => { const r = result(k);
         const extra = k.action === 'PASS' || k.action === 'SYSTEM' ? ' · opened another app' : '';
-        return `<div class="li"><div class="grow"><div style="font-weight:600">${esc(keyName(k.name))}</div><div class="cap">${esc(cap1(ago(k.atMillis)))}${extra}</div></div>${k.blocked ? `<button class="btn" data-unblock="${k.keyCode}">Unblock</button>` : r ? `<span class="pill ${r[0]}"><span class="dot"></span>${r[1]}</span>` : k.blockable ? `<button class="btn" data-block="${k.keyCode}">Block this button</button>` : '<span class="pill info">Passed on</span>'}</div>`; }).join('')}</div>`
+        const right = k.assignable ? picker(k) : k.blocked ? `<button class="btn" data-unblock="${k.keyCode}">Unblock</button>` : r ? `<span class="pill ${r[0]}"><span class="dot"></span>${r[1]}</span>` : k.blockable ? `<button class="btn" data-block="${k.keyCode}">Block this button</button>` : '<span class="pill info">Passed on</span>';
+        return `<div class="li" style="flex-wrap:wrap"><div class="grow" style="min-width:140px"><div style="font-weight:600">${esc(keyName(k.name))}</div><div class="cap">${esc(cap1(ago(k.atMillis)))}${extra}</div></div>${right}</div>`; }).join('')}</div>`
         : '<p class="muted">No buttons pressed yet.</p>'}
       ${latest.length ? '<button class="btn ghost" id="kClear" style="align-self:flex-start">Clear list</button>' : ''}
     </section>`;
@@ -2099,6 +2111,17 @@ screens.settings = (() => {
     };
     $$('[data-block]', el).forEach((b) => b.onclick = () => setBlocked(+b.dataset.block, true));
     $$('[data-unblock]', el).forEach((b) => b.onclick = () => setBlocked(+b.dataset.unblock, false));
+    // One job per button: picking one takes the button out of the other lists.
+    $$('[data-job]', el).forEach((sel) => sel.onchange = async () => {
+      const code = +sel.dataset.job; const job = sel.value; const se = state.settings;
+      const without = (a) => (a || []).filter((c) => c !== code);
+      const patch = { listButtons: without(se.listButtons), previousButtons: without(se.previousButtons), guardBlockedKeys: without(se.guardBlockedKeys) };
+      if (job === 'list') patch.listButtons.push(code);
+      if (job === 'previous') patch.previousButtons.push(code);
+      if (job === 'blocked') patch.guardBlockedKeys.push(code);
+      const msg = { list: 'Done. That button opens the channel list.', previous: 'Done. That button goes back to the previous channel.', blocked: 'Blocked. That button does nothing now.', '': 'Done. That button does its usual job again.' }[job];
+      try { await setSetting(patch, msg); state.keys = await GET('/api/keys'); paint(); } catch (e) { paint(); }
+    });
     clearInterval(pauseTick);
     if (g && g.pausedUntil > g.now) {
       g.fetchedAt = g.fetchedAt || Date.now();

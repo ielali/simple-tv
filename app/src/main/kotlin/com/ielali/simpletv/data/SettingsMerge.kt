@@ -1,6 +1,6 @@
 package com.ielali.simpletv.data
 
-import com.ielali.simpletv.guard.HomeGuardPolicy
+import com.ielali.simpletv.guard.ButtonRoles
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -18,8 +18,12 @@ object SettingsMerge {
         return sanitize(json.decodeFromJsonElement(AppSettings.serializer(), merged))
     }
 
-    fun sanitize(settings: AppSettings): AppSettings = settings.copy(
-        guardBlockedKeys = HomeGuardPolicy.sanitizeBlockedKeys(settings.guardBlockedKeys),
+    fun sanitize(settings: AppSettings): AppSettings {
+        val buttons = ButtonRoles.sanitize(settings.listButtons, settings.previousButtons, settings.guardBlockedKeys)
+        return sanitizeRest(settings.copy(listButtons = buttons.list, previousButtons = buttons.previous, guardBlockedKeys = buttons.blocked))
+    }
+
+    private fun sanitizeRest(settings: AppSettings): AppSettings = settings.copy(
         guardPausedUntil = settings.guardPausedUntil.coerceAtLeast(0L),
         language = TvLanguage.normalise(settings.language),
         catalogRefreshTime = RefreshSchedule.normalise(settings.catalogRefreshTime),

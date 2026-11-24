@@ -10,8 +10,9 @@ This file is the contract for any AI agent working in this repository. Read it f
 ## Product rules (non-negotiable)
 
 1. **The viewer never sees a menu.** Every screen the viewer can reach with digits, channel up/down,
-   OK, BACK or INFO must be the video or a big banner over it. Settings live behind MENU and are a
-   single read-only overlay showing the config URL.
+   OK, BACK or INFO must be the video or a big banner over it. The one exception is the channel list
+   on the Live TV button (ADR-022): channels by number, big text, no settings, closes by itself.
+   Settings live behind MENU and are a single read-only overlay showing the config URL.
 2. **The remote is the only input.** No touch, no cursor, no on-screen keyboard for the viewer.
    Volume, mute and power keys must pass through to the system untouched (`TvViewModel.handles`).
 3. **BACK never exits.** It cancels pending digits, nothing more. HOME is handled by making the app
@@ -42,6 +43,8 @@ app/src/main/kotlin/com/ielali/simpletv/
   MainActivity.kt         Fullscreen activity; dispatchKeyEvent routes all remote keys to TvViewModel
   tv/ChannelTuner.kt      Pure Kotlin digit-entry state machine (timeout / max digits / OK)
   tv/ChannelNavigator.kt  Pure functions: resolve number, next, previous
+  tv/ChannelListNav.kt    Pure: the channel list's keys, wrap and paging, visible window (ADR-022)
+  guard/ButtonRoles.kt    Pure: which remote buttons open the list or go to the previous channel
   tv/TvController.kt      App-scoped TV state: current channel, digits, banner, YouTube-app hand-off.
                           Android-free; driven by the screen and, over YouTube, by the guard
   tv/ExternalPlayer.kt    Opens the YouTube app / brings Simple TV forward from app context

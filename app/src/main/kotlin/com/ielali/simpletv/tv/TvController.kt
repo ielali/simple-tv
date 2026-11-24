@@ -5,6 +5,7 @@ import com.ielali.simpletv.data.Channel
 import com.ielali.simpletv.data.ChannelList
 import com.ielali.simpletv.data.SourceType
 import com.ielali.simpletv.data.YouTubePlayback
+import com.ielali.simpletv.guard.ButtonRoles
 import com.ielali.simpletv.guard.GuardKeys
 import com.ielali.simpletv.guard.GuardState
 import com.ielali.simpletv.guard.HomeGuardPolicy
@@ -51,6 +52,7 @@ class TvController(
     entryTimeoutMs: Long = 1500L,
     private val bannerMs: Long = 3500L,
     private val reopenGraceMs: Long = 5000L,
+    private val listIdleMs: Long = 30_000L,
 ) {
     val tuner = ChannelTuner(scope, entryTimeoutMs)
 
@@ -77,10 +79,26 @@ class TvController(
     private var bannerJob: Job? = null
     private var lastExternalOpen: Long? = null
 
+    /** The channel list (ADR-022): the highlighted row, or null while it is closed. */
+    private val _listIndex = MutableStateFlow<Int?>(null)
+    val listIndex: StateFlow<Int?> = _listIndex.asStateFlow()
+    private var listJob: Job? = null
+
+    /** Rows the screen fits in the list; a page up or down moves this many. Set by the screen. */
+    @Volatile var listPage: Int = 5
+
+    /** The channel watched before this one, for "previous channel" (a lone 0, or a button the caregiver chose). */
+    @Volatile private var previousId: String? = null
+
     val sortedChannels: List<Channel> get() = channelList.value.sorted()
 
     init {
-        scope.launch { tuner.tuneRequests.collect { switchTo(ChannelNavigator.resolve(it, sortedChannels)) } }
+        scope.launch {
+            tuner.tuneRequests.collect { n ->
+                // A lone 0 (there is no channel 0) goes back to the previous channel, like a recall button.
+                if (n != 0 || !previousChannel()) switchTo(ChannelNavigator.resolve(n, sortedChannels))
+            }
+        }
         scope.launch { channelList.collect { reconcile(it.sorted()) } }
         // Switching the YouTube mode on the config page re-applies the current channel.
         scope.launch {
@@ -102,7 +120,7 @@ class TvController(
      * Remote keys for channel control, from Simple TV's screen or (via the guard) from over YouTube.
      * Returns true when consumed. MENU/SETTINGS are screen-specific and handled by the caller.
      */
-    fun onRemoteKey(keyCode: Int): Boolean = when (keyCode) {
+    fun onRemoteKey(keyCode: Int): Boolean = if (_listIndex.value != null) onListKey(keyCode) else when (keyCode) {
         in GuardKeys.DIGIT_0..GuardKeys.DIGIT_9 -> { tuner.onDigit(keyCode - GuardKeys.DIGIT_0); true }
         in GuardKeys.NUMPAD_0..GuardKeys.NUMPAD_9 -> { tuner.onDigit(keyCode - GuardKeys.NUMPAD_0); true }
         GuardKeys.CHANNEL_UP, GuardKeys.DPAD_UP, GuardKeys.PAGE_UP -> { channelUp(); true }
@@ -116,13 +134,81 @@ class TvController(
         else -> false
     }
 
+    /** The job the caregiver gave this button on the config page, if any. */
+    fun roleOf(keyCode: Int): ButtonRoles.Role? =
+        settings.value.let { ButtonRoles.roleOf(keyCode, it.listButtons, it.previousButtons) }
+
+    fun isListOpen(): Boolean = _listIndex.value != null
+
+    /** The list button: opens the list on the channel being watched, or closes it. */
+    fun toggleList() = if (isListOpen()) closeList() else openList()
+
+    fun openList() {
+        val sorted = sortedChannels
+        if (sorted.isEmpty()) return
+        tuner.onCancel()
+        bannerJob?.cancel()
+        bannerShown.value = false
+        _listIndex.value = ChannelListNav.start(_current.value, sorted)
+        armList()
+        // Over YouTube or another app: Simple TV comes forward to show the list.
+        if (!_appVisible.value) launcher.bringAppToFront()
+    }
+
+    /** Closes the list without changing channel; a channel that lives in the YouTube app goes back there. */
+    fun closeList() {
+        if (_listIndex.value == null) return
+        listJob?.cancel()
+        _listIndex.value = null
+        val ch = _current.value
+        if (_appVisible.value && ch != null && usesExternalPlayer(ch)) openExternal(ch)
+    }
+
+    /** A key while the list is open. Returns false for keys that are not the list's (volume, power...). */
+    fun onListKey(keyCode: Int): Boolean {
+        val index = _listIndex.value ?: return false
+        val sorted = sortedChannels
+        return when (val step = ChannelListNav.onKey(keyCode, index, sorted.size, listPage.coerceAtLeast(1))) {
+            is ChannelListNav.Step.Highlight -> { _listIndex.value = step.index; armList(); true }
+            is ChannelListNav.Step.Watch -> {
+                listJob?.cancel()
+                _listIndex.value = null
+                switchTo(sorted[step.index])
+                true
+            }
+            is ChannelListNav.Step.Digit -> { closeList(); tuner.onDigit(step.digit); true }
+            ChannelListNav.Step.Close -> { closeList(); true }
+            ChannelListNav.Step.Ignore -> { armList(); true }
+            ChannelListNav.Step.Pass -> false
+        }
+    }
+
+    /** The highlighted channel while the list is open. */
+    fun listChannel(): Channel? = _listIndex.value?.let { sortedChannels.getOrNull(it) }
+
+    private fun armList() {
+        listJob?.cancel()
+        listJob = scope.launch {
+            delay(listIdleMs)
+            closeList() // left alone: the list goes away by itself
+        }
+    }
+
+    /** Back to the channel watched before this one. False when there is none. */
+    fun previousChannel(): Boolean {
+        val prev = previousId?.let { id -> sortedChannels.firstOrNull { it.id == id } } ?: run { showBanner(); return false }
+        if (isListOpen()) { listJob?.cancel(); _listIndex.value = null }
+        switchTo(prev)
+        return true
+    }
+
     fun channelUp() = switchTo(ChannelNavigator.next(_current.value, sortedChannels))
     fun channelDown() = switchTo(ChannelNavigator.previous(_current.value, sortedChannels))
 
     /** MainActivity reports when its screen starts and stops being visible. */
     fun onAppVisible(visible: Boolean) {
         _appVisible.value = visible
-        if (!visible) return
+        if (!visible || _listIndex.value != null) return // the list is open over the channel
         val ch = _current.value
         // Back on Simple TV's screen while the channel lives in YouTube (boot, or YouTube closed itself):
         // reopen it, but not in a tight loop if YouTube keeps bouncing back.
@@ -142,6 +228,8 @@ class TvController(
 
     fun switchTo(channel: Channel?, launch: Boolean = true, fromApp: Boolean = false) {
         _externalUnavailable.value = false
+        val old = _current.value
+        if (old != null && old.number > 0 && channel?.id != old.id) previousId = old.id
         if (channel?.id != _current.value?.id || fromApp) {
             since = clock()
             startedFromApp = fromApp

@@ -9,6 +9,7 @@ import com.ielali.simpletv.data.M3uParser
 import com.ielali.simpletv.data.ProviderLoader
 import com.ielali.simpletv.data.SettingsMerge
 import com.ielali.simpletv.guard.GuardBridge
+import com.ielali.simpletv.guard.ButtonRoles
 import com.ielali.simpletv.guard.GuardKeys
 import com.ielali.simpletv.guard.GuardSetup
 import com.ielali.simpletv.guard.HomeGuardPolicy
@@ -147,6 +148,9 @@ class ConfigServer(
         val atMillis: Long, val keyCode: Int, val name: String, val source: String, val action: String,
         val needed: Boolean, val blockedByDefault: Boolean, val blocked: Boolean, val blockable: Boolean,
         val returnsHome: Boolean,
+        /** "list", "previous" or "" (ButtonRoles), and whether the button may be given a job. */
+        val role: String = "",
+        val assignable: Boolean = false,
     )
 
     private fun keyName(code: Int) = KeyName(code, android.view.KeyEvent.keyCodeToString(code))
@@ -168,7 +172,8 @@ class ConfigServer(
     }
 
     private fun keyRows(): List<KeyRow> {
-        val extra = settingsRepo.current().guardBlockedKeys.toSet()
+        val s = settingsRepo.current()
+        val extra = s.guardBlockedKeys.toSet()
         return KeyLog.shared.entries().map {
             KeyRow(
                 it.atMillis, it.keyCode, it.name, it.source, it.action,
@@ -177,6 +182,12 @@ class ConfigServer(
                 blocked = it.keyCode in extra,
                 blockable = HomeGuardPolicy.isBlockable(it.keyCode),
                 returnsHome = it.keyCode in GuardKeys.GO_HOME,
+                role = when (ButtonRoles.roleOf(it.keyCode, s.listButtons, s.previousButtons)) {
+                    ButtonRoles.Role.CHANNEL_LIST -> "list"
+                    ButtonRoles.Role.PREVIOUS_CHANNEL -> "previous"
+                    null -> ""
+                },
+                assignable = ButtonRoles.assignable(it.keyCode),
             )
         }
     }

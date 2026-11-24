@@ -76,6 +76,8 @@ class HomeGuardService : AccessibilityService() {
             pausedUntil = s.guardPausedUntil,
             extraBlockedKeys = s.guardBlockedKeys.toSet(),
             allowedExternalPackages = GuardState.allowedExternalPackages,
+            listKeys = s.listButtons.toSet(),
+            previousKeys = s.previousButtons.toSet(),
         )
     }
 
@@ -252,6 +254,15 @@ class HomeGuardService : AccessibilityService() {
             }
             KeyAction.ROUTE -> {
                 if (firstDown) tv.onRemoteKey(code)
+                true
+            }
+            // Works over YouTube and from any other screen: Simple TV comes forward with the list open.
+            KeyAction.CHANNEL_LIST -> {
+                if (firstDown) tv.toggleList()
+                true
+            }
+            KeyAction.PREVIOUS_CHANNEL -> {
+                if (firstDown) tv.previousChannel()
                 true
             }
         }

@@ -132,9 +132,16 @@ background-activity-start limits, which is what lets `BootReceiver` open the TV.
 
 While the current channel plays in the YouTube app (`TvController.isExternalFront`), keys go through
 `HomeGuardPolicy.onKeyDuringExternal`: digits, channel keys and up/down are routed to the controller;
-INFO/GUIDE/HOME show the banner; BACK and MENU do nothing so the viewer cannot wander into YouTube's
+INFO/HOME show the banner; BACK and MENU do nothing so the viewer cannot wander into YouTube's
 browse screens; OK (unless digits are pending), left/right, media and volume keys still reach YouTube.
 `BannerOverlay` draws the channel banner over YouTube as a TYPE_ACCESSIBILITY_OVERLAY window.
+
+Buttons given a job in settings (`listButtons`, `previousButtons`; `ButtonRoles`) are decided first,
+on every screen: the guard returns `CHANNEL_LIST` or `PREVIOUS_CHANNEL` and calls the controller.
+The channel list is app-scoped state in `TvController` (`listIndex`), so opening it over YouTube
+brings Simple TV forward, `onAppVisible` holds YouTube back while it is open, and closing it without
+choosing sends a YouTube-app channel back to YouTube (ADR-022). With the guard off, `MainActivity`
+reaches the same controller calls through `TvViewModel.onKeyDown`.
 
 Both the guard and `MainActivity` write key presses to `KeyLog`, served at `/api/keys` for the
 config page's remote audit.

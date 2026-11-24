@@ -378,3 +378,29 @@ Decision:
 Consequences: Suggestions only cover channels the household already follows. Whether every live
 stream shows in its channel's uploads playlist is unconfirmed; check on real channels.
 
+## ADR-022 A channel list on the TV, opened by the Live TV button
+
+Context: The caregiver asked for a way to browse the channels on the TV for quick access. Rule 1
+kept the viewer away from menus; typing numbers and channel up/down were the only ways to find a
+channel, which is hard once a lineup has dozens of channels.
+
+Decision:
+- One channel list, the kind old TVs had: every lineup channel by number and name, in large text
+  (48sp rows, 96sp number for the highlighted channel), with what is on it now and next from the
+  TV guide. Up and Down move one channel and wrap; channel up/down and Left/Right move a page; OK
+  watches; BACK closes; a digit closes it and starts typing a number. It closes by itself after
+  30 seconds untouched. It is the only list the viewer can reach, and it has no settings in it.
+- The blue "Live TV" button opens and closes it. Remotes send that button as KEYCODE_TV (170) or
+  KEYCODE_GUIDE (172), so both do it by default. The home guard handles these buttons before HOME,
+  so the list opens from YouTube or any other screen and brings Simple TV forward. HOME keeps its
+  job and can never be given another.
+- A lone 0 goes back to the previous channel (there is no channel 0); with no previous channel it
+  lands on the first channel as before.
+- On the config page's Remote buttons card the caregiver can give any spare button one job: open
+  the channel list, previous channel, or nothing (blocked). Buttons with a fixed job (digits,
+  arrows, OK, BACK, volume, power, Home, Menu, media keys) cannot take one (`ButtonRoles`).
+- A clock shows beside the banner and in the list header, in the TV's 12- or 24-hour style.
+
+Consequences: Rule 1 now allows this one list besides the video and the banner. Which code the
+Kogan remote's Live TV button sends is unconfirmed; the key log shows it. While a YouTube-app
+channel is on, the list shows over Simple TV and YouTube reopens when it closes.

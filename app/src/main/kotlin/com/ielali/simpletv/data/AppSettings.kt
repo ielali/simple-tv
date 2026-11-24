@@ -28,6 +28,10 @@ data class AppSettings(
     val guardPausedUntil: Long = 0L,
     /** Extra remote key codes to swallow, found with the key log on the config page. */
     val guardBlockedKeys: List<Int> = emptyList(),
+    /** Remote buttons that open the channel list on the TV (ADR-022). Live TV (TV or GUIDE) by default. */
+    val listButtons: List<Int> = com.ielali.simpletv.guard.ButtonRoles.DEFAULT_LIST,
+    /** Remote buttons that go back to the previous channel. A lone 0 always does. */
+    val previousButtons: List<Int> = emptyList(),
     /** Language of Simple TV's screens: "" follows the device, else a key of TvLanguage.SUPPORTED. */
     val language: String = TvLanguage.SYSTEM,
     /** When the TV refreshes every subscription's catalog each day, "HH:mm" in the TV's time zone. */
