@@ -152,6 +152,7 @@ object XtreamApi {
             score = score,
             trailer = trailer,
             providerRating = (o["age"] ?: o["mpaa_rating"] ?: o["mpaa"]).asString()?.trim(),
+            imdbId = TmdbApi.imdbId(o["imdb_id"].asString()),
             fetchedAt = now,
         )
     }

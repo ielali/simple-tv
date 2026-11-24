@@ -94,6 +94,10 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 ## Done
 
+- Long lists grow as you scroll (catalog items and categories, lineup, film and series search,
+  "What will play"); "Find a category" lookup in Add channel, the film editor and first run; IMDb
+  links in the details sheet (from TMDB).
+
 - Right, Left and OK move within film and series channels (next, start or previous, pause), with the
   same controls and "Play this now" on the config page (ADR-019).
 

@@ -25,6 +25,8 @@ data class FilmMeta(
     val score: Double? = null,
     /** YouTube video id of a trailer. */
     val trailer: String? = null,
+    /** IMDb title id ("tt0042546"), for a link to the film's IMDb page. */
+    val imdbId: String? = null,
     /** Official rating by country code (TMDB), e.g. "AU" -> "PG". */
     val certs: Map<String, String> = emptyMap(),
     /** The provider's own age label when it gives one ("16+"); shown, never used for rules. */
@@ -52,6 +54,7 @@ data class FilmMeta(
         year = d.year ?: year,
         score = d.score ?: score,
         trailer = d.trailer ?: trailer,
+        imdbId = d.imdbId ?: imdbId,
         certs = d.certs,
         adult = d.adult,
         tmdbAt = now,

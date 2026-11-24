@@ -402,6 +402,36 @@ async function refreshNow() {
   try { state.now = await GET('/api/nowplaying'); renderShellBits(); if (route.name === 'home' || route.name === 'lineup') patchNowPlaying(); } catch (e) { /* offline is shown elsewhere */ }
 }
 
+/* ---------- Finding a category ---------- */
+/** Lower case, separators ("·", "|", "-", ":") as spaces, so "uk news" finds "UK · News". */
+const normWords = (s) => String(s || '').toLowerCase().replace(/[·|\-_:/,.()\[\]]+/g, ' ').replace(/\s+/g, ' ').trim();
+/** Every typed word appears somewhere in the name. */
+const matchesAll = (name, q) => { const n = normWords(name); return normWords(q).split(' ').filter(Boolean).every((w) => n.includes(w)); };
+const findBox = (id, value, placeholder) => `<label class="inp" style="min-height:40px">${ico('search', 18)}<span class="sr">${esc(placeholder)}</span><input id="${id}" type="search" value="${esc(value || '')}" placeholder="${esc(placeholder)}" autocomplete="off" dir="auto"></label>`;
+
+/* ---------- Infinite scroll ---------- */
+const scrollWatchers = new Map();
+/**
+ * Calls [load] whenever the element with id [sentinelId] comes near the screen (600 px early), so
+ * long lists grow as you scroll. One watcher per [key]; drawing the list again re-arms it. Browsers
+ * without IntersectionObserver get a "Show more" button inside the sentinel instead.
+ */
+function infinite(key, sentinelId, load) {
+  const old = scrollWatchers.get(key); if (old) old.disconnect();
+  const el = document.getElementById(sentinelId); if (!el) { scrollWatchers.delete(key); return; }
+  if (!('IntersectionObserver' in window)) {
+    el.innerHTML = '<button class="btn ghost" type="button">Show more</button>';
+    el.querySelector('button').onclick = load;
+    return;
+  }
+  const io = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) load(); }, { rootMargin: '600px 0px' });
+  io.observe(el); scrollWatchers.set(key, io);
+}
+/** The line at the end of a growing list: a spinner while loading, then how many there are. */
+const moreLine = (id, loading, shown, total, unit) => shown < total
+  ? `<div id="${id}" class="f g8 cap" style="padding:8px 4px;min-height:36px" role="status">${loading ? '<span class="spin" style="width:14px;height:14px"></span>Loading more…' : `Showing ${fmtN(shown)} of ${fmtN(total)}. Scroll for more.`}</div>`
+  : (total > 10 ? `<div class="cap" style="padding:8px 4px">All ${fmtN(total)} ${unit} shown.</div>` : '');
+
 /* ---------- Toasts and dialogs ---------- */
 function toast(text, action, ms = 4000) {
   const el = document.createElement('div');
@@ -763,8 +793,8 @@ screens.lineup = (() => {
   let rows = null;     // the edited copy: [{id, number, name, logoUrl, ...}]
   let filter = 'all';
   let open = null;     // id of the row whose edit panel is open
-  let showAll = false;
-  const PAGE = 200;
+  let shownCount = 100;
+  const PAGE = 100;
   const byId = (id) => rows.find((r) => r.id === id);
   const dirty = () => !!rows && changeCount() > 0;
   function changeCount() {
@@ -839,7 +869,7 @@ screens.lineup = (() => {
     const f = FILTERS.find((x) => x[0] === filter) || FILTERS[0];
     const bad = conflicts();
     const visible = rows.filter(f[2]);
-    const shown = showAll ? visible : visible.slice(0, PAGE);
+    const shown = visible.slice(0, shownCount);
     const n = changeCount();
     const sortedByNumber = rows.every((r, i) => i === 0 || rows[i - 1].number < r.number);
     const blocked = bad.size > 0 || rows.some(invalid);
@@ -859,13 +889,13 @@ screens.lineup = (() => {
       </div>` : ''}
       ${rows.length ? `<section class="card" id="rows">
         ${shown.map((r) => rowHtml(r, bad.has(r.id))).join('') || `<p class="muted">No channels here.</p>`}
-        ${visible.length > shown.length ? `<div class="f fw g12" style="padding:8px 12px"><span class="cap grow">Showing ${fmtN(shown.length)} of ${fmtN(visible.length)} channels</span><button class="btn ghost" id="showAll">Show all</button></div>` : (visible.length > 10 ? `<div class="cap" style="padding:8px 12px">${plural(visible.length, 'channel')}</div>` : '')}
+        <div style="padding:0 8px">${moreLine('moreRows', false, shown.length, visible.length, 'channels')}</div>
       </section>` : `<section class="card col g12"><div class="icobox t">${ico('tv', 22)}</div><h2 class="sec">Nothing on the TV yet</h2><p class="muted">Add your first channel and it appears on the TV straight away.</p><div><a class="btn pri" href="#/add">Add channel</a></div></section>`}`;
     bind(el);
   }
   function bind(el) {
-    $$('[data-filter]', el).forEach((b) => b.onclick = () => { filter = b.dataset.filter; paint(); });
-    const sa = $('#showAll', el); if (sa) sa.onclick = () => { showAll = true; paint(); };
+    $$('[data-filter]', el).forEach((b) => b.onclick = () => { filter = b.dataset.filter; shownCount = PAGE; paint(); });
+    infinite('lineup', 'moreRows', () => { const y = window.scrollY; shownCount += PAGE; paint(); window.scrollTo(0, y); });
     $$('[data-edit]', el).forEach((b) => b.onclick = () => { open = open === b.dataset.edit ? null : b.dataset.edit; paint(); const i = $(`[data-panel="${CSS.escape(b.dataset.edit)}"] input[data-f="name"]`); if (i) i.focus(); });
     $$('[data-play]', el).forEach((b) => b.onclick = () => { const r = byId(b.dataset.play); playOnTv({ channelId: r.id }, r.name); });
     $$('[data-panel] input', el).forEach((inp) => {
@@ -939,7 +969,7 @@ async function confirmMany(n, start) {
   return dialog({ title: `Add ${fmtN(n)} channels?`, text: `That's a lot for one TV. The lineup works best with 10 to 30 channels. They'd get numbers ${start} to ${start + n - 1}.`, ok: `Add ${fmtN(n)} channels` });
 }
 screens.add = (() => {
-  const cat = { pid: null, type: 'live', category: null, q: '', items: [], total: 0, selected: new Map(), cats: null, catsAll: false, loaded: false, refreshing: false };
+  const cat = { pid: null, type: 'live', category: null, q: '', items: [], total: 0, selected: new Map(), cats: null, catsShown: 20, loaded: false, refreshing: false };
   let yt = { input: '', preview: null, problem: null, busy: false, number: '', name: '' };
   let link = { url: '', number: '', name: '', logo: '' };
   let pollT = null; let searchT = null; let ytT = null;
@@ -977,7 +1007,7 @@ screens.add = (() => {
     const t = route.q.get('type'); if (t && ['live', 'film', 'series'].includes(t) && t !== cat.type) { cat.type = t; cat.category = null; cat.cats = null; }
     await loadCats(seq);
   }
-  function reset(pid) { Object.assign(cat, { pid, category: null, q: '', items: [], total: 0, cats: null, catsAll: false }); cat.selected.clear(); }
+  function reset(pid) { Object.assign(cat, { pid, category: null, q: '', items: [], total: 0, cats: null, catsShown: 20, catFind: '' }); cat.selected.clear(); }
   const provider = () => state.providers.providers.find((p) => p.id === cat.pid);
   async function loadCats(seq) {
     const r = await GET(`/api/catalog/${encodeURIComponent(cat.pid)}/categories?type=${cat.type}`);
@@ -990,10 +1020,14 @@ screens.add = (() => {
     else if (cat.refreshing || !r.status.lastRefresh) pollT = setTimeout(() => loadCats(), 4000);
   }
   async function loadItems(more) {
+    if (more && (cat.loadingMore || cat.items.length >= cat.total)) return;
+    if (more) { cat.loadingMore = true; paintItems(); }
     const qs = new URLSearchParams({ type: cat.type, offset: more ? cat.items.length : 0, limit: 50 });
     if (cat.q.trim()) qs.set('q', cat.q.trim()); else if (cat.category != null) qs.set('category', cat.category);
     const my = (loadItems.seq = (loadItems.seq || 0) + 1);
-    const r = await GET(`/api/catalog/${encodeURIComponent(cat.pid)}/items?${qs}`);
+    let r;
+    try { r = await GET(`/api/catalog/${encodeURIComponent(cat.pid)}/items?${qs}`); }
+    finally { if (my === loadItems.seq) cat.loadingMore = false; }
     if (my !== loadItems.seq) return; // a newer search or category won
     cat.items = more ? cat.items.concat(r.page.items) : r.page.items; cat.total = r.page.total;
     paintItems();
@@ -1004,7 +1038,7 @@ screens.add = (() => {
     const subs = state.providers.providers;
     const counts = { live: s.live, film: s.films, series: s.series };
     const body = $('#addBody'); if (!body) return;
-    const catsShown = cat.cats ? (cat.catsAll || currentSize !== 'desktop' ? cat.cats : cat.cats.slice(0, 10)) : [];
+
     body.innerHTML = `
       <div class="card f fw g12">
         <div class="icobox t">${ico('server', 22)}</div>
@@ -1026,8 +1060,8 @@ screens.add = (() => {
       ${cat.cats && cat.cats.length ? `<div class="catlayout">
         <section class="card col g4 ${cat.q.trim() ? 'hide' : ''}" id="catPanel">
           <div class="cap" style="padding:0 12px 4px">CATEGORIES</div>
-          <div class="catlist col g4">${catsShown.map((c) => `<button class="catitem ${c.id === cat.category ? 'on' : ''}" data-cat="${esc(c.id)}" aria-pressed="${c.id === cat.category}"><span dir="auto">${esc(c.name)}</span><span class="c">${fmtN(c.count)}</span></button>`).join('')}</div>
-          ${cat.cats.length > catsShown.length ? `<button class="btn ghost" id="moreCats" style="align-self:flex-start">…and ${fmtN(cat.cats.length - catsShown.length)} more categories</button>` : ''}
+          ${cat.cats.length > 8 ? findBox('catFind', cat.catFind, `Find a category (${fmtN(cat.cats.length)})`) : ''}
+          <div id="catListBox" class="col g4"></div>
         </section>
         <section class="card col g8" id="itemsPanel"></section>
       </div>` : `<section class="card"><p class="muted">This subscription has no ${unit()[1]}.</p></section>`}`}`;
@@ -1036,11 +1070,25 @@ screens.add = (() => {
       try { state.providers = await POST(`/api/providers/${encodeURIComponent(cat.pid)}/refresh`); cat.refreshing = true; paintCatalog(); pollProviders(); clearTimeout(pollT); pollT = setTimeout(() => loadCats(), 4000); }
       catch (e) { if (e.status !== 401) toast(e.message, null, 6000); }
     };
-    $$('[data-type]').forEach((b) => b.onclick = () => { cat.type = b.dataset.type; cat.category = null; cat.q = ''; cat.catsAll = false; cat.selected.clear(); loadCats(); });
-    $$('[data-cat]').forEach((b) => b.onclick = () => { cat.category = b.dataset.cat; $$('[data-cat]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); loadItems(false); });
-    const mc = $('#moreCats'); if (mc) mc.onclick = () => { cat.catsAll = true; paintCatalog(); paintItems(); };
+    $$('[data-type]').forEach((b) => b.onclick = () => { cat.type = b.dataset.type; cat.category = null; cat.q = ''; cat.catsShown = 20; cat.catFind = ''; cat.selected.clear(); loadCats(); });
+    paintCats();
+    const cf = $('#catFind');
+    if (cf) cf.oninput = () => { cat.catFind = cf.value; cat.catsShown = 20; paintCats(); };
+
     const q = $('#catQ');
     if (q) q.oninput = () => { cat.q = q.value; $('#catPanel').classList.toggle('hide', !!cat.q.trim()); clearTimeout(searchT); searchT = setTimeout(() => loadItems(false), 250); };
+  }
+  /** The category list on its own, so typing in the lookup never loses the cursor. */
+  function paintCats() {
+    const box = $('#catListBox'); if (!box || !cat.cats) return;
+    const found = cat.catFind && cat.catFind.trim() ? cat.cats.filter((c) => matchesAll(c.name, cat.catFind)) : cat.cats;
+    const shown = currentSize !== 'desktop' ? found : found.slice(0, cat.catsShown || 20);
+    box.innerHTML = found.length
+      ? `<div class="catlist col g4">${shown.map((c) => `<button class="catitem ${c.id === cat.category ? 'on' : ''}" data-cat="${esc(c.id)}" aria-pressed="${c.id === cat.category}"><span dir="auto">${esc(c.name)}</span><span class="c">${fmtN(c.count)}</span></button>`).join('')}</div>
+        ${moreLine('moreCats', false, shown.length, found.length, 'categories')}`
+      : `<p class="cap" style="padding:8px 12px">No category matches “${esc(cat.catFind.trim())}”.</p>`;
+    $$('[data-cat]', box).forEach((b) => b.onclick = () => { cat.category = b.dataset.cat; $$('[data-cat]', box).forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); loadItems(false); });
+    infinite('categories', 'moreCats', () => { cat.catsShown = (cat.catsShown || 20) + 20; paintCats(); });
   }
   function paintItems() {
     const el = $('#itemsPanel'); if (!el) return;
@@ -1067,7 +1115,7 @@ screens.add = (() => {
       <div class="f fw g12"><div class="grow" style="min-width:180px"><h2 class="sec" dir="auto">${esc(title)}</h2><div class="cap">${esc(sub)}</div></div>${allBtn}</div>
       ${callout}
       ${cat.items.length ? list : `<p class="muted" style="padding:12px 0">${searching ? 'Nothing matches. Try fewer letters.' : 'Nothing in this category.'}</p>`}
-      ${cat.total ? `<div class="f fw g12"><span class="cap grow">Showing 1–${fmtN(cat.items.length)} of ${fmtN(cat.total)}.${cat.items.length < cat.total ? ' Search or scroll to see more.' : ''}</span>${cat.items.length < cat.total ? '<button class="btn ghost" id="more50">Show 50 more</button>' : ''}</div>` : ''}
+      ${moreLine('moreItems', cat.loadingMore, cat.items.length, cat.total, unit()[1])}
       ${n ? `<div class="addbar"><div class="grow"><div style="font-weight:700">${fmtN(n)} selected</div><div class="cap">${numbersWords(start, n)} You can change them next.</div></div><button class="btn ghost" id="clearSel">Clear</button><button class="btn pri" id="addSel">Add ${plural(n, 'channel')}</button></div>` : ''}`;
     $$('[data-item]', el).forEach((b) => b.onchange = () => { const it = cat.items.find((x) => x.id === b.dataset.item); if (b.checked) cat.selected.set(it.id, it); else cat.selected.delete(it.id); paintItems(); });
     $$('[data-try]', el).forEach((b) => b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); const it = cat.items.find((x) => x.id === b.dataset.try); playOnTv({ providerId: cat.pid, itemId: it.id, name: it.name }, it.name); });
@@ -1078,7 +1126,7 @@ screens.add = (() => {
         : null;
       showDetails(pid, cat.type === 'series' ? 'SERIES' : 'FILM', id, name, action);
     });
-    const m = $('#more50', el); if (m) m.onclick = () => loadItems(true);
+    infinite('catalog', 'moreItems', () => loadItems(true));
     const cs = $('#clearSel', el); if (cs) cs.onclick = () => { cat.selected.clear(); paintItems(); };
     const as = $('#addSel', el); if (as) as.onclick = () => addItems({ itemIds: [...cat.selected.keys()] }, n);
     const aa = $('#addAll', el); if (aa) aa.onclick = () => addItems({ categories: [c.id] }, c.count);
@@ -1383,6 +1431,7 @@ async function showDetails(pid, type, itemId, name, action) {
     <div id="trailerBox"></div>
     <div class="f fw g8">
       ${action ? `<button class="btn pri" data-main>${esc(action.label)}</button>` : ''}
+      ${d.imdbUrl ? `<a class="btn" href="${esc(d.imdbUrl)}" target="_blank" rel="noopener noreferrer">IMDb ${ico('right', 16)}</a>` : ''}
       ${d.trailer ? `<button class="btn" data-watch>${ico('play', 18)}Watch the trailer here</button><button class="btn" data-tv>${ico('tv', 18)}Trailer on the TV</button>` : ''}
     </div>
     ${d.fromTmdb ? `<p class="cap">Details from TMDB${d.matchedByTitle ? ', matched by title and year' : ''}. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>` : ''}`;
@@ -1435,15 +1484,33 @@ screens.film = (() => {
     } catch (e) { if (e.status !== 401) toast(e.message, null, 6000); }
     await loadQueue();
   }
+  /** The saved channel's queue (its own progress) or a preview of the edited one, a page at a time. */
+  function queuePage(offset) {
+    const sp = f.spec;
+    const saved = f.id && state.lineup.channels.find((c) => c.id === f.id);
+    const same = saved && JSON.stringify(saved.playlist) === JSON.stringify(sp);
+    return { same, req: same
+      ? GET(`/api/channels/${encodeURIComponent(f.id)}/queue?offset=${offset}&limit=50${sp.mode === 'SERIES' ? '&fromResume=1' : ''}`)
+      : POST('/api/films/queue-preview', { playlist: sp, offset, limit: 50 }) };
+  }
+  async function moreQueue() {
+    const q = f.queue; if (!q || q.error || f.queueMore) return;
+    const offset = q.entries.length; const have = q.start + offset;
+    if (have >= q.total || (f.spec.mode === 'SERIES' && offset >= q.remaining)) return;
+    f.queueMore = true; paintQueue();
+    const my = loadQueue.seq;
+    try { const { req } = queuePage(offset); const r = await req; if (my === loadQueue.seq && f.queue === q) q.entries = q.entries.concat(r.entries); }
+    catch (e) { /* the next scroll tries again */ }
+    f.queueMore = false; paintQueue();
+  }
   async function loadQueue() {
     const sp = f.spec; const my = (loadQueue.seq = (loadQueue.seq || 0) + 1);
     const empty = sp.mode === 'SERIES' ? !sp.seriesId : !(sp.categories.length || sp.titles.length);
     if (empty) { f.queue = null; paintQueue(); return; }
     f.queueBusy = true; paintQueue();
     try {
-      const saved = f.id && state.lineup.channels.find((c) => c.id === f.id);
-      const same = saved && JSON.stringify(saved.playlist) === JSON.stringify(sp);
-      const r = same ? await GET(`/api/channels/${encodeURIComponent(f.id)}/queue`) : await POST('/api/films/queue-preview', { playlist: sp });
+      const { same, req } = queuePage(0);
+      const r = await req;
       if (my !== loadQueue.seq) return;
       const hadProgress = !!f.progress;
       f.queue = r; if (same) f.progress = r.resumeItemId ? r : null;
@@ -1454,14 +1521,18 @@ screens.film = (() => {
     clearTimeout(f.checkT);
     if (f.queue && f.queue.toCheck && f.queue.checked < f.queue.toCheck && route.name === 'film') f.checkT = setTimeout(loadQueue, 5000);
   }
-  async function search() {
+  async function search(more) {
+    if (more && (f.resultsLoading || f.results.length >= (f.resultsTotal || 0))) return;
     const sp = f.spec; const type = sp.mode === 'SERIES' ? 'series' : 'film';
-    const qs = new URLSearchParams({ type, limit: 30 });
+    const qs = new URLSearchParams({ type, limit: 30, offset: more ? f.results.length : 0 });
     if (f.q.trim()) qs.set('q', f.q.trim()); else if (f.pickCat != null && type === 'film') qs.set('category', f.pickCat);
     const my = (search.seq = (search.seq || 0) + 1);
-    const r = await GET(`/api/catalog/${encodeURIComponent(sp.providerId)}/items?${qs}`);
+    if (more) { f.resultsLoading = true; paintResults(); }
+    let r;
+    try { r = await GET(`/api/catalog/${encodeURIComponent(sp.providerId)}/items?${qs}`); }
+    finally { if (my === search.seq) f.resultsLoading = false; }
     if (my !== search.seq) return;
-    f.results = r.page.items; f.resultsTotal = r.page.total; f.loaded = r.loaded; paintResults();
+    f.results = more ? f.results.concat(r.page.items) : r.page.items; f.resultsTotal = r.page.total; f.loaded = r.loaded; paintResults();
   }
   const titleOf = () => f.spec.mode === 'SERIES' ? (f.id ? 'Edit series channel' : 'New series channel') : (f.id ? 'Edit film channel' : 'New film channel');
   function paint() {
@@ -1470,7 +1541,7 @@ screens.film = (() => {
     setTitle(titleOf(), isFilm ? 'A numbered channel that plays films one after another.' : 'Plays one series, episode by episode, and remembers where it stopped.');
     const num = parseInt(f.number, 10);
     const clash = state.lineup.channels.find((c) => c.number === num && c.id !== f.id);
-    const catsShown = f.cats ? (f.catsAll ? f.cats : f.cats.slice(0, 8).concat(f.cats.filter((c, i) => i >= 8 && sp.categories.includes(c.id)))) : [];
+
     el.innerHTML = `
       ${f.id ? '' : `<div class="seg" role="radiogroup"><button data-mode="FILM" class="${isFilm ? 'on' : ''}" role="radio" aria-checked="${isFilm}">Film channel</button><button data-mode="SERIES" class="${isFilm ? '' : 'on'}" role="radio" aria-checked="${!isFilm}">Series channel</button></div>`}
       <div class="cols">
@@ -1481,7 +1552,7 @@ screens.film = (() => {
             ${clash ? `<div class="hint err">Number ${num} is already ${esc(clash.name)}. Pick another number.</div>` : ''}
             ${isFilm ? `
               <div class="field"><span>Where the films come from</span><div class="seg full" role="radiogroup"><button data-src="cats" class="${f.source === 'cats' ? 'on' : ''}" role="radio" aria-checked="${f.source === 'cats'}">Categories</button><button data-src="pick" class="${f.source === 'pick' ? 'on' : ''}" role="radio" aria-checked="${f.source === 'pick'}">Hand-picked</button></div></div>
-              ${f.source === 'cats' ? (f.cats ? (f.cats.length ? `<div class="chips">${catsShown.map((c) => `<button class="chip ${sp.categories.includes(c.id) ? 'on' : ''}" data-fcat="${esc(c.id)}" aria-pressed="${sp.categories.includes(c.id)}"><span dir="auto">${esc(c.name)}</span> <span class="c">${fmtN(c.count)}</span></button>`).join('')}${!f.catsAll && f.cats.length > 8 ? '<button class="chip" id="moreFCats">+ More categories</button>' : ''}</div>` : `<p class="muted">${f.catLoaded ? 'This subscription has no films.' : 'The film list isn’t on the TV yet. Refresh the subscription first.'}</p>`) : '<div class="skel" style="height:44px"></div>')
+              ${f.source === 'cats' ? (f.cats ? (f.cats.length ? `${f.cats.length > 8 ? findBox('fCatFind', f.catFind, `Find a category (${fmtN(f.cats.length)})`) : ''}<div id="fCatChips"></div>` : `<p class="muted">${f.catLoaded ? 'This subscription has no films.' : 'The film list isn’t on the TV yet. Refresh the subscription first.'}</p>`) : '<div class="skel" style="height:44px"></div>')
                 : `<label class="inp big">${ico('search', 20)}<span class="sr">Search films</span><input id="fQ" type="search" value="${esc(f.q)}" placeholder="Search films to add" autocomplete="off" dir="auto"></label><div id="fResults" class="col g4"></div>`}
               ${f.source === 'cats' ? `<div class="field"><span>Order</span><div class="seg full" role="radiogroup"><button data-shuffle="0" class="${sp.shuffle ? '' : 'on'}" role="radio" aria-checked="${!sp.shuffle}">In order</button><button data-shuffle="1" class="${sp.shuffle ? 'on' : ''}" role="radio" aria-checked="${sp.shuffle}">Shuffled</button></div><span class="hint">Shuffled mixes the films once. The TV then plays them one after another.</span></div>` : ''}`
             : `
@@ -1505,6 +1576,22 @@ screens.film = (() => {
       </div>`;
     bind(el); paintResults(); paintQueue();
   }
+  /**
+   * Category chips: chosen ones first, then the biggest few, or everything matching the lookup.
+   * Drawn on their own so typing in the lookup keeps the cursor.
+   */
+  function paintFilmCats() {
+    const box = $('#fCatChips'); if (!box || !f.cats) return;
+    const sp = f.spec; const q = (f.catFind || '').trim();
+    const chosen = f.cats.filter((c) => sp.categories.includes(c.id));
+    const rest = f.cats.filter((c) => !sp.categories.includes(c.id) && (!q || matchesAll(c.name, q)));
+    const shown = chosen.concat(q || f.catsAll ? rest : rest.slice(0, Math.max(0, 8 - chosen.length)));
+    const hidden = q ? 0 : f.cats.length - shown.length;
+    box.innerHTML = `<div class="chips">${shown.map((c) => `<button class="chip ${sp.categories.includes(c.id) ? 'on' : ''}" data-fcat="${esc(c.id)}" aria-pressed="${sp.categories.includes(c.id)}"><span dir="auto">${esc(c.name)}</span> <span class="c">${fmtN(c.count)}</span></button>`).join('')}${hidden > 0 ? `<button class="chip" id="moreFCats">+ ${fmtN(hidden)} more categories</button>` : ''}</div>
+      ${q && !rest.length ? `<p class="cap">No category matches “${esc(q)}”.</p>` : ''}`;
+    $$('[data-fcat]', box).forEach((b) => b.onclick = () => { const id = b.dataset.fcat; const c = sp.categories; if (c.includes(id)) c.splice(c.indexOf(id), 1); else c.push(id); paintFilmCats(); paintQueue(); loadQueue(); });
+    const mf = $('#moreFCats', box); if (mf) mf.onclick = () => { f.catsAll = true; paintFilmCats(); };
+  }
   function paintResults() {
     const box = $('#fResults'); if (!box) return;
     const sp = f.spec;
@@ -1512,9 +1599,10 @@ screens.film = (() => {
     box.innerHTML = f.results.map((it) => sp.mode === 'SERIES'
       ? `<button class="chk" style="border:0;background:none;width:100%;text-align:start" data-pick-series="${esc(it.id)}" data-name="${esc(it.name)}">${logoBox(it.name, it.logo)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span><span class="cap">${esc([it.year, it.group].filter(Boolean).join(' · '))}</span></span>${ico('right', 18)}</button>`
       : `<label class="chk"><input type="checkbox" data-title="${esc(it.id)}" ${sp.titles.includes(it.id) ? 'checked' : ''}>${logoBox(it.name, it.logo)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span><span class="cap">${esc([it.year, it.group].filter(Boolean).join(' · '))}</span></span></label>`).join('')
-      + (f.resultsTotal > f.results.length ? `<div class="cap" style="padding:4px 8px">Showing ${fmtN(f.results.length)} of ${fmtN(f.resultsTotal)}. Search to find more.</div>` : '');
+      + moreLine('moreResults', f.resultsLoading, f.results.length, f.resultsTotal || 0, sp.mode === 'SERIES' ? 'series' : 'films');
     $$('[data-title]', box).forEach((c) => c.onchange = () => { const id = c.dataset.title; const t = f.spec.titles; if (c.checked) { if (!t.includes(id)) t.push(id); } else t.splice(t.indexOf(id), 1); loadQueue(); });
     $$('[data-pick-series]', box).forEach((b) => b.onclick = () => { f.spec.seriesId = b.dataset.pickSeries; f.seriesName = b.dataset.name; if (!f.name.trim()) f.name = b.dataset.name.slice(0, 60); f.seriesInfo = null; paint(); loadSide(); });
+    infinite('results', 'moreResults', () => search(true));
   }
   const MIN_SCORES = [['', 'Any'], ['6', '6 or more'], ['7', '7 or more'], ['8', '8 or more']];
   function ratingRules(sp) {
@@ -1536,7 +1624,6 @@ screens.film = (() => {
     if (!i) return '';
     return `<div class="f fw g8" style="align-items:center">${i.rating ? rbadge(i.rating) + `<span class="cap">${esc(i.ratingMeaning || 'Rated ' + i.rating)}</span>` : '<span class="cap">No official rating</span>'}${i.score ? `<span class="cap">· ${esc(scoreText(i.score))}</span>` : ''}<button class="btn ghost" id="seriesAbout">About this series</button></div>`;
   }
-  const SHOW = 12;
   /** "Play this now" needs the saved channel (an edited one is saved first). */
   const canPick = () => !!(f && f.id && !changed());
   const onTv = (e) => !!(state.now && state.now.channel && f && state.now.channel.id === f.id && state.now.itemId === e.id);
@@ -1548,21 +1635,20 @@ screens.film = (() => {
       if (isFilm) {
         const from = sp.titles.length ? 'your hand-picked list' : listWords(sp.categories.map((id) => (f.cats || []).find((c) => c.id === id)?.name || id));
         sub = `${plural(q.total, 'film')} from ${from}${sp.shuffle && !sp.titles.length ? ' · shuffled' : ''}`;
-        more = q.total > SHOW ? `…and ${fmtN(q.total - SHOW)} more. Use the arrows to change what plays first.` : 'Use the arrows to change what plays first.';
+        more = 'Use the arrows to change what plays first.';
       } else {
-        const at = q.resumeItemId ? q.entries.findIndex((e) => e.id === q.resumeItemId) : 0;
-        const left = q.total - Math.max(0, at);
-        sub = `${plural(left, 'episode')} left · then it starts again`;
-        more = (entries => entries > SHOW ? `…and ${fmtN(entries - SHOW)} more. ` : '')(q.entries.length - Math.max(0, at)) + 'Episodes you’ve seen are left out of the queue.';
+        sub = `${plural(q.remaining || q.total, 'episode')} left · then it starts again`;
+        more = 'Episodes you’ve seen are left out of the queue.';
       }
     }
-    const startAt = q && q.resumeItemId ? Math.max(0, q.entries.findIndex((e) => e.id === q.resumeItemId)) : 0;
-    const entries = q && q.entries ? (isFilm ? q.entries : q.entries.slice(startAt)) : [];
+    const entries = q && q.entries ? q.entries : [];
+    const listTotal = q ? (isFilm ? q.total - (q.start || 0) : (q.remaining || q.total)) : 0;
     el.innerHTML = `<div class="f g8"><div class="grow"><h2 class="sec">What will play</h2><div class="cap">${esc(sub)}</div></div>${f.queueBusy ? '<span class="spin"></span>' : ''}</div>
       ${q && q.error ? `<p class="hint err">${esc(q.error)}</p>` : !q ? `<p class="muted">${isFilm ? 'Pick a category or some films to see the queue.' : 'Pick a series to see its episodes.'}</p>`
         : !entries.length ? '<p class="muted">Nothing to play yet.</p>'
-        : `<div class="list">${entries.slice(0, SHOW).map((e, i) => `<div class="qitem"><span class="cap i">${i + 1}</span><div class="grow"><div dir="auto" class="ell" style="font-weight:600">${esc(e.title)}</div><div class="cap">${esc(onTv(e) ? 'On the TV now' + (state.now.paused ? ', paused' : '') : i === 0 && !isFilm && q.resumeItemId ? 'Plays next · ' + (e.detail || '') : (e.detail || ''))}</div></div>${canPick() && !onTv(e) ? `<button class="ibtn bd" data-pick="${esc(e.id)}" aria-label="Play ${esc(e.title)} now" title="Play this now">${ico('play', 16)}</button>` : ''}${isFilm ? `<button class="ibtn" data-first="${esc(e.id)}" aria-label="Play ${esc(e.title)} first" title="Play first" ${i === 0 ? 'disabled' : ''}>${ico('up', 18)}</button><button class="ibtn" data-skip="${esc(e.id)}" aria-label="Leave out ${esc(e.title)}" title="Leave out">${ico('close', 18)}</button>` : ''}</div>`).join('')}</div>`}
+        : `<div class="list">${entries.map((e, i) => `<div class="qitem"><span class="cap i">${i + 1}</span><div class="grow"><div dir="auto" class="ell" style="font-weight:600">${esc(e.title)}</div><div class="cap">${esc(onTv(e) ? 'On the TV now' + (state.now.paused ? ', paused' : '') : i === 0 && !isFilm && q.resumeItemId ? 'Plays next · ' + (e.detail || '') : (e.detail || ''))}</div></div>${canPick() && !onTv(e) ? `<button class="ibtn bd" data-pick="${esc(e.id)}" aria-label="Play ${esc(e.title)} now" title="Play this now">${ico('play', 16)}</button>` : ''}${isFilm ? `<button class="ibtn" data-first="${esc(e.id)}" aria-label="Play ${esc(e.title)} first" title="Play first" ${i === 0 ? 'disabled' : ''}>${ico('up', 18)}</button><button class="ibtn" data-skip="${esc(e.id)}" aria-label="Leave out ${esc(e.title)}" title="Leave out">${ico('close', 18)}</button>` : ''}</div>`).join('')}</div>`}
       ${q && q.toCheck ? `<div class="f g8 cap" role="status">${q.checked < q.toCheck ? '<span class="spin" style="width:14px;height:14px"></span>' : ico('check', 14, 2.4)}<span>${q.checked < q.toCheck ? `Checking ratings: ${fmtN(q.checked)} of ${fmtN(q.toCheck)} films so far. Films wait until they’re checked.` : `All ${fmtN(q.toCheck)} films checked; ${fmtN(q.total)} fit the rules.`}</span></div>` : ''}
+      ${entries.length ? moreLine('moreQueue', f.queueMore, entries.length, listTotal, isFilm ? 'films' : 'episodes') : ''}
       <div class="cap">${esc(more)}</div>
       ${isFilm && sp.excluded.length ? `<button class="btn ghost" id="unskip" style="align-self:flex-start">Put back ${plural(sp.excluded.length, 'left-out film')}</button>` : ''}`;
     $$('[data-pick]', el).forEach((b) => b.onclick = async () => {
@@ -1573,6 +1659,7 @@ screens.film = (() => {
     $$('[data-first]', el).forEach((b) => b.onclick = () => { const id = b.dataset.first; if (sp.titles.length) { sp.titles.splice(sp.titles.indexOf(id), 1); sp.titles.unshift(id); } else { sp.first = [id].concat(sp.first.filter((x) => x !== id)); } loadQueue(); });
     $$('[data-skip]', el).forEach((b) => b.onclick = () => { const id = b.dataset.skip; if (sp.titles.includes(id)) sp.titles.splice(sp.titles.indexOf(id), 1); else sp.excluded.push(id); sp.first = sp.first.filter((x) => x !== id); paintResults(); loadQueue(); });
     const u = $('#unskip', el); if (u) u.onclick = () => { sp.excluded = []; loadQueue(); };
+    infinite('queue', 'moreQueue', moreQueue);
   }
   function bind(el) {
     const sp = f.spec;
@@ -1581,8 +1668,8 @@ screens.film = (() => {
     const n = $('#fNum', el); n.oninput = () => { n.value = n.value.replace(/\D/g, ''); f.number = n.value; }; n.onchange = paint;
     $('#fName', el).oninput = (e) => { f.name = e.target.value; };
     $$('[data-src]', el).forEach((b) => b.onclick = () => { if (f.source === b.dataset.src) return; f.source = b.dataset.src; if (f.source === 'pick') { sp.categories = []; } else { sp.titles = []; } paint(); loadSide(); });
-    $$('[data-fcat]', el).forEach((b) => b.onclick = () => { const id = b.dataset.fcat; const c = sp.categories; if (c.includes(id)) c.splice(c.indexOf(id), 1); else c.push(id); paint(); loadQueue(); });
-    const mf = $('#moreFCats', el); if (mf) mf.onclick = () => { f.catsAll = true; paint(); };
+    paintFilmCats();
+    const fcf = $('#fCatFind', el); if (fcf) fcf.oninput = () => { f.catFind = fcf.value; paintFilmCats(); };
     $$('[data-maxr]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'maxRating', b.dataset.maxr); if (!sp.maxRating && !sp.minScore) Reflect.deleteProperty(sp, 'skipUnrated'); paint(); loadQueue(); });
     $$('[data-mins]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'minScore', b.dataset.mins ? Number(b.dataset.mins) : null); if (!sp.maxRating && !sp.minScore) Reflect.deleteProperty(sp, 'skipUnrated'); paint(); loadQueue(); });
     $$('[data-unrated]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'skipUnrated', b.dataset.unrated === 'skip'); paint(); loadQueue(); });
@@ -1592,7 +1679,7 @@ screens.film = (() => {
     $$('[data-shuffle]', el).forEach((b) => b.onclick = () => { sp.shuffle = b.dataset.shuffle === '1'; if (!sp.shuffle) sp.seed = 0; paint(); loadQueue(); });
     const q = $('#fQ', el); if (q) q.oninput = () => { f.q = q.value; clearTimeout(sT); sT = setTimeout(search, 250); };
     const os = $('#otherSeries', el); if (os) os.onclick = () => { sp.seriesId = null; f.seriesInfo = null; f.queue = null; paint(); loadSide(); };
-    const rs = $('#restart', el); if (rs) rs.onclick = async () => { try { f.queue = await saving(() => POST(`/api/channels/${encodeURIComponent(f.id)}/restart`), 'It starts from the first episode next time.'); f.progress = null; paint(); } catch (e) { /* toast */ } };
+    const rs = $('#restart', el); if (rs) rs.onclick = async () => { try { await saving(() => POST(`/api/channels/${encodeURIComponent(f.id)}/restart`), 'It starts from the first episode next time.'); f.progress = null; paint(); loadQueue(); } catch (e) { /* toast */ } };
     $('#fPlay', el).onclick = () => playOnTv(f.id && !changed() ? { channelId: f.id } : { playlist: sp, name: f.name.trim() || (sp.mode === 'SERIES' ? 'Series' : 'Films') }, f.name.trim());
     $('#fSave', el).onclick = save;
   }
@@ -1816,7 +1903,7 @@ screens.settings = (() => {
 /* ---------- First run ---------- */
 screens.first = (() => {
   let form = { name: '', kind: 'XTREAM', url: '', username: '', password: '' };
-  let picked = new Set(); let pollT = null; let err = '';
+  let picked = new Set(); let pollT = null; let err = ''; let fcats = []; let fFind = ''; let fShown = 30;
   function frame(step, inner) {
     const st = (n) => n === step ? 'on' : n < step ? 'done' : '';
     $('#app').className = 'app ' + currentSize;
@@ -1880,21 +1967,38 @@ screens.first = (() => {
       pollT = setTimeout(() => { if (route.name === 'first' && route.parts[0] === '2') render(renderSeq); }, 4000);
       return;
     }
-    const cats = r.categories;
+    const cats = r.categories; fcats = cats;
     const total = cats.filter((c) => picked.has(c.id)).reduce((n, c) => n + c.count, 0);
     frame(2, `<div><h1 class="h1">Add a few channels</h1><p class="muted">Start small. Six to ten is plenty. You can add more any time.</p></div>
       <section class="card col g4">
         <div class="cap" style="padding:0 8px 4px">FROM ${esc((p ? p.name : '').toUpperCase())} · ${fmtN(r.status.live)} CHANNELS</div>
-        ${cats.slice(0, 40).map((c) => `<label class="chk"><input type="checkbox" data-c="${esc(c.id)}" ${picked.has(c.id) ? 'checked' : ''}><span class="grow"><span class="nm" dir="auto">${esc(c.name)}</span><span class="cap">${plural(c.count, 'channel')}</span></span></label>`).join('')}
-        ${cats.length > 40 ? `<div class="cap" style="padding:8px">…and ${fmtN(cats.length - 40)} more categories. Find them later under Add channel.</div>` : ''}
+        ${cats.length > 8 ? `<div style="padding:4px 0 8px">${findBox('fsFind', fFind, `Find a category, like news or arabic (${fmtN(cats.length)})`)}</div>` : ''}
+        <div id="fsCats"></div>
       </section>
       <div class="hint">Choosing a whole category adds all its channels. You'll tidy the list next.</div>
       <button class="btn pri block" id="fsAdd" ${total ? '' : 'disabled'}>${total ? 'Add ' + plural(total, 'channel') : 'Pick a category'}</button>`);
-    $$('[data-c]').forEach((c) => c.onchange = () => { if (c.checked) picked.add(c.dataset.c); else picked.delete(c.dataset.c); const y = window.scrollY; step2(renderSeq).then(() => window.scrollTo(0, y)); });
+    paintFirstCats();
+    const ff = $('#fsFind'); if (ff) ff.oninput = () => { fFind = ff.value; fShown = 30; paintFirstCats(); };
     $('#fsAdd').onclick = async () => {
-      if (!(await confirmMany(total, nextNumber()))) return;
+      const n = fcats.filter((x) => picked.has(x.id)).reduce((s, x) => s + x.count, 0);
+      if (!n || !(await confirmMany(n, nextNumber()))) return;
       try { const a = await saving(() => POST('/api/channels/catalog', { providerId: pid, categories: [...picked] }), null); state.lineup = a.lineup; snapshot(); picked.clear(); go('#/first/3'); } catch (e) { /* toast */ }
     };
+  }
+  /** The category list on its own: ticking a box or typing in the lookup only redraws this. */
+  function paintFirstCats() {
+    const box = $('#fsCats'); if (!box) return;
+    const found = fFind.trim() ? fcats.filter((c) => matchesAll(c.name, fFind)) : fcats;
+    const shown = found.slice(0, fShown);
+    box.innerHTML = found.length ? shown.map((c) => `<label class="chk"><input type="checkbox" data-c="${esc(c.id)}" ${picked.has(c.id) ? 'checked' : ''}><span class="grow"><span class="nm" dir="auto">${esc(c.name)}</span><span class="cap">${plural(c.count, 'channel')}</span></span></label>`).join('')
+      + moreLine('fsMore', false, shown.length, found.length, 'categories')
+      : `<p class="cap" style="padding:8px">No category matches “${esc(fFind.trim())}”.</p>`;
+    $$('[data-c]', box).forEach((c) => c.onchange = () => {
+      if (c.checked) picked.add(c.dataset.c); else picked.delete(c.dataset.c);
+      const total = fcats.filter((x) => picked.has(x.id)).reduce((n, x) => n + x.count, 0);
+      const b = $('#fsAdd'); b.disabled = !total; b.textContent = total ? 'Add ' + plural(total, 'channel') : 'Pick a category';
+    });
+    infinite('firstrun', 'fsMore', () => { fShown += 30; paintFirstCats(); });
   }
   function step3() {
     const first = state.lineup && state.lineup.channels[0];

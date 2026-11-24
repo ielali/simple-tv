@@ -62,6 +62,8 @@ class ContentRoutes(private val app: SimpleTvApp) {
         val total: Int, val entries: List<EntryView>, val resume: String? = null, val resumeItemId: String? = null,
         /** Film channels with rating rules: how many of their films have been checked so far. */
         val checked: Int? = null, val toCheck: Int? = null,
+        /** Position of the first entry in the whole queue, and how many are left from where it stopped. */
+        val start: Int = 0, val remaining: Int = 0,
     )
     @Serializable data class DetailsView(
         val itemId: String, val type: CatalogType, val title: String,
@@ -71,6 +73,8 @@ class ContentRoutes(private val app: SimpleTvApp) {
         /** Official rating in the household's country, and what it means. */
         val rating: String? = null, val ratingMeaning: String? = null, val providerRating: String? = null,
         val country: String, val fromTmdb: Boolean = false, val matchedByTitle: Boolean = false,
+        /** The title's IMDb page, when its IMDb id is known. */
+        val imdbUrl: String? = null,
     )
     @Serializable data class RatingsView(
         val country: String, val tvRegion: String, val chosen: String, val hasTmdbKey: Boolean,
@@ -80,7 +84,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
     @Serializable data class Control(val action: String = "")
     @Serializable data class PlayItem(val itemId: String = "")
     @Serializable data class TmdbKeyState(val hasTmdbKey: Boolean)
-    @Serializable data class QueuePreview(val playlist: PlaylistSpec)
+    @Serializable data class QueuePreview(val playlist: PlaylistSpec, val offset: Int = 0, val limit: Int = QUEUE_PAGE)
 
     @Serializable data class YouTubeInput(val input: String = "")
     @Serializable data class YouTubeKey(val key: String = "")
@@ -174,15 +178,22 @@ class ContentRoutes(private val app: SimpleTvApp) {
 
     private fun entryView(e: QueueEntry) = EntryView(e.id, e.title, e.detail)
 
-    private suspend fun queueView(spec: PlaylistSpec, channelId: String?): QueueView {
+    /**
+     * A page of a channel's queue. [fromResume]: count [offset] from where the channel stopped (series
+     * lists show what is still to come).
+     */
+    private suspend fun queueView(spec: PlaylistSpec, channelId: String?, offset: Int = 0, limit: Int = QUEUE_PAGE, fromResume: Boolean = false): QueueView {
         val q = app.queue.queue(spec)
         val progress = channelId?.let { app.queue.progress(it) }
         val resume = progress?.itemId?.let { id -> q.firstOrNull { it.id == id } }
+        val base = if (fromResume && resume != null) q.indexOf(resume).coerceAtLeast(0) else 0
+        val from = (base + offset.coerceAtLeast(0)).coerceAtMost(q.size)
+        val page = q.drop(from).take(limit.coerceIn(1, 200))
         val check = if (spec.mode == PlaylistMode.FILM && com.ielali.simpletv.data.RatingRules.hasRules(spec)) {
             app.appScope.launch { app.meta.checkSpec(spec) }
             app.meta.progress(spec)
         } else null
-        return QueueView(q.size, q.take(QUEUE_PAGE).map(::entryView), resume?.title, resume?.id, check?.first, check?.second)
+        return QueueView(q.size, page.map(::entryView), resume?.title, resume?.id, check?.first, check?.second, start = from, remaining = q.size - base)
     }
 
     private fun withSeed(spec: PlaylistSpec) =
@@ -378,12 +389,14 @@ class ContentRoutes(private val app: SimpleTvApp) {
             val id = call.parameters["id"].orEmpty()
             val ch = channels.current().channels.firstOrNull { it.id == id && it.playlist != null }
                 ?: return@get call.fail(HttpStatusCode.NotFound, "That channel isn't on the TV any more.")
-            call.respond(queueView(ch.playlist!!, ch.id))
+            val qp = call.request.queryParameters
+            call.respond(queueView(ch.playlist!!, ch.id, qp["offset"]?.toIntOrNull() ?: 0, qp["limit"]?.toIntOrNull() ?: QUEUE_PAGE, qp["fromResume"] == "1"))
         }
         post("/api/films/queue-preview") {
-            val spec = call.receive<QueuePreview>().playlist
+            val req = call.receive<QueuePreview>()
+            val spec = req.playlist
             if (providers.find(spec.providerId) == null) return@post call.fail(HttpStatusCode.NotFound, "Choose a subscription first.")
-            call.respond(queueView(spec, null))
+            call.respond(queueView(spec, null, req.offset, req.limit))
         }
         post("/api/channels/{id}/restart") {
             val id = call.parameters["id"].orEmpty()
@@ -414,6 +427,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
                     trailer = m?.trailer, rating = cert, ratingMeaning = meaning?.takeIf { it.isNotBlank() },
                     providerRating = m?.providerRating, country = country,
                     fromTmdb = (m?.tmdbAt ?: 0L) > 0 && m?.tmdbId != null, matchedByTitle = m?.matched == "title",
+                    imdbUrl = m?.imdbId?.let { "https://www.imdb.com/title/$it/" },
                 )
             )
         }

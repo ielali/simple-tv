@@ -97,7 +97,7 @@ class FilmDetailsTest {
         assertNull(XtreamApi.parseInfoMeta("[]", "1", CatalogType.FILM, 0L))
     }
 
-    private val movieJson = """{"id":1234,"title":"Harvey","adult":false,"overview":"Elwood and his friend.","poster_path":"/p.jpg","backdrop_path":"/b.jpg",
+    private val movieJson = """{"id":1234,"imdb_id":"tt0042546","title":"Harvey","adult":false,"overview":"Elwood and his friend.","poster_path":"/p.jpg","backdrop_path":"/b.jpg",
         "release_date":"1950-10-13","vote_average":7.9,"vote_count":900,"genres":[{"id":35,"name":"Comedy"}],
         "release_dates":{"results":[{"iso_3166_1":"AU","release_dates":[{"certification":"","type":1},{"certification":"PG","type":3}]},
           {"iso_3166_1":"US","release_dates":[{"certification":"NR","type":4}]}]},
@@ -117,13 +117,17 @@ class FilmDetailsTest {
         assertEquals("Elwood and his friend.", merged.plot)
         assertEquals("PG", RatingRules.certOf(merged, "au"))
         assertEquals(9L, merged.tmdbAt)
+        assertEquals("tt0042546", merged.imdbId)
     }
 
     @Test
     fun `tmdb tv details use content ratings`() {
         val tv = """{"id":5,"name":"Fawlty Towers","first_air_date":"1975-09-19","content_ratings":{"results":[{"iso_3166_1":"AU","rating":"PG"}]},
-            "created_by":[{"name":"John Cleese"}],"videos":{"results":[]}}"""
+            "created_by":[{"name":"John Cleese"}],"videos":{"results":[]},"external_ids":{"imdb_id":"tt0072500"}}"""
         val d = TmdbApi.parseDetails(tv, CatalogType.SERIES)!!
+        assertEquals("tt0072500", d.imdbId)
+        assertNull(TmdbApi.imdbId("nm0001234"))
+        assertNull(TmdbApi.imdbId("tt12"))
         assertEquals(mapOf("AU" to "PG"), d.certs)
         assertEquals("John Cleese", d.director)
         assertNull(d.trailer)

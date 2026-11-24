@@ -36,7 +36,7 @@ object TmdbApi {
 
     fun checkUrl(key: String) = url("/configuration", key)
     fun movieUrl(id: Long, key: String) = url("/movie/$id", key, mapOf("append_to_response" to "release_dates,videos,credits", "language" to "en-US"))
-    fun tvUrl(id: Long, key: String) = url("/tv/$id", key, mapOf("append_to_response" to "content_ratings,videos,credits", "language" to "en-US"))
+    fun tvUrl(id: Long, key: String) = url("/tv/$id", key, mapOf("append_to_response" to "content_ratings,videos,credits,external_ids", "language" to "en-US"))
     fun searchUrl(type: CatalogType, title: String, year: String?, key: String): String =
         if (type == CatalogType.SERIES) url("/search/tv", key, mapOf("query" to title) + (year?.let { mapOf("first_air_date_year" to it) } ?: emptyMap()))
         else url("/search/movie", key, mapOf("query" to title) + (year?.let { mapOf("year" to it) } ?: emptyMap()))
@@ -48,7 +48,13 @@ object TmdbApi {
     data class Details(
         val poster: String?, val backdrop: String?, val plot: String?, val cast: List<String>, val director: String?,
         val genres: List<String>, val year: String?, val score: Double?, val trailer: String?, val certs: Map<String, String>, val adult: Boolean,
+        val imdbId: String? = null,
     )
+
+    private val imdbPattern = Regex("""^tt\d{5,10}$""")
+
+    /** A valid IMDb title id ("tt0042546"), or null. */
+    fun imdbId(raw: String?): String? = raw?.trim()?.takeIf { imdbPattern.matches(it) }
 
     fun parseDetails(body: String, type: CatalogType): Details? {
         val o = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull() ?: return null
@@ -92,6 +98,7 @@ object TmdbApi {
             trailer = trailer,
             certs = certs,
             adult = (o["adult"] as? JsonPrimitive)?.booleanOrNull ?: false,
+            imdbId = imdbId(o["imdb_id"].str() ?: (o["external_ids"] as? JsonObject)?.get("imdb_id").str()),
         )
     }
 

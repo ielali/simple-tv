@@ -87,7 +87,9 @@ Film details and ratings (ADR-018): `MetadataService` asks the provider's detail
 when the household has a key, caches the result per subscription, and checks every film of a film
 channel with rating rules in the background. `RatingRules` decides what a channel may play;
 `QueuePlayback` filters the queue with it. Routes: `GET /api/details/{pid}/{type}/{id}`,
-`GET /api/ratings`, `PUT /api/tmdb/key`.
+`GET /api/ratings`, `PUT /api/tmdb/key`. Queue lists are paged: `GET /api/channels/{id}/queue?offset=
+&limit=&fromResume=1` (series lists start where the channel stopped) and `offset`/`limit` in the
+queue-preview body; the page loads the next page as the end of a list scrolls into view.
 
 ## Playback
 
