@@ -137,6 +137,45 @@ class YouTubeLookup(private val fetcher: TextFetcher) {
         return Result.Found(Preview(source = id, kind = "channel", title = snippet.str("title"), thumbnail = thumb, live = live, channelId = id))
     }
 
+    /**
+     * Each YouTube channel's picture, for lineup channels without a logo (ADR-027): live channels by
+     * their channel id, videos and playlists by the channel that owns them. Official Data API only,
+     * 50 ids per call at 1 quota unit each. [auth] is the API key header or the signed-in account's
+     * bearer token. Returns lineup channel id -> picture address; failures just leave channels out.
+     */
+    fun pictures(targets: Map<String, YouTubeEmbed.Target>, auth: Map<String, String>): Map<String, String> {
+        val owner = HashMap<String, String>() // lineup id -> YouTube channel id
+        targets.forEach { (id, t) -> if (t is YouTubeEmbed.Target.ChannelLive) owner[id] = t.channelId }
+        fun owners(kind: String, ids: Map<String, String>) {
+            ids.values.distinct().chunked(50).forEach { chunk ->
+                val body = getWith("$API/$kind?part=snippet&id=" + chunk.joinToString(","), auth) ?: return@forEach
+                val byId = (obj(body)?.get("items") as? JsonArray).orEmpty().mapNotNull { el ->
+                    val o = el as? JsonObject ?: return@mapNotNull null
+                    val ch = (o["snippet"] as? JsonObject).str("channelId") ?: return@mapNotNull null
+                    (o.str("id") ?: return@mapNotNull null) to ch
+                }.toMap()
+                ids.forEach { (lineupId, itemId) -> byId[itemId]?.let { owner[lineupId] = it } }
+            }
+        }
+        owners("videos", targets.mapNotNull { (id, t) -> (t as? YouTubeEmbed.Target.Video)?.let { id to it.id } }.toMap())
+        owners("playlists", targets.mapNotNull { (id, t) -> (t as? YouTubeEmbed.Target.Playlist)?.let { id to it.listId } }.toMap())
+        val pic = HashMap<String, String>()
+        owner.values.distinct().chunked(50).forEach { chunk ->
+            val body = getWith("$API/channels?part=snippet&id=" + chunk.joinToString(","), auth) ?: return@forEach
+            (obj(body)?.get("items") as? JsonArray).orEmpty().forEach { el ->
+                val o = el as? JsonObject ?: return@forEach
+                val thumbs = (o["snippet"] as? JsonObject)?.get("thumbnails") as? JsonObject
+                val url = listOf("high", "medium", "default").firstNotNullOfOrNull { (thumbs?.get(it) as? JsonObject).str("url") }
+                if (url != null) o.str("id")?.let { pic[it] = url }
+            }
+        }
+        return owner.mapNotNull { (lineupId, ch) -> pic[ch]?.let { lineupId to it } }.toMap()
+    }
+
+    private fun getWith(url: String, auth: Map<String, String>): String? = try {
+        fetcher.get(url, auth + ("User-Agent" to "Telly/1 (Android TV)")).takeIf { it.ok }?.body
+    } catch (e: IOException) { null }
+
     private fun channelIdForHandle(handle: String, apiKey: String): Lookup<String?> =
         when (val r = get("$API/channels?part=id&forHandle=" + URLEncoder.encode(handle, "UTF-8"), apiKey)) {
             is Lookup.Fail -> r

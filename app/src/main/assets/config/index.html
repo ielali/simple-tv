@@ -224,6 +224,12 @@ details.limits>summary::-webkit-details-marker{display:none}
 .catitem{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;border-radius:12px;font-weight:600;width:100%;border:0;background:none;text-align:start}
 .catitem span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .catitem.on{background:var(--tint)}
+.logogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.logochoice{display:flex;flex-direction:column;gap:4px;align-items:stretch;padding:6px;border-radius:12px;border:1px solid var(--line);background:var(--card);text-align:center;min-height:44px;cursor:pointer}
+.logochoice:hover,.logochoice:focus-visible{border-color:var(--primary)}
+.logochoice .lpic{display:grid;place-items:center;aspect-ratio:16/9;background:#fff;border-radius:8px;overflow:hidden}
+.logochoice .lpic img{max-width:90%;max-height:90%;object-fit:contain}
+.logochoice .lcap{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .catitem:hover{background:var(--tint)}
 .catitem .c{margin-inline-start:auto;color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
 .phone .catlist,.tablet .catlist{display:flex;flex-direction:row;overflow-x:auto;gap:8px;scrollbar-width:none}
@@ -1043,19 +1049,52 @@ screens.lineup = (() => {
     pick.querySelector('input').oninput = (e) => { clearTimeout(t); t = setTimeout(() => search(e.target.value), 200); };
   }
   /** A logo the TV found by itself (ADR-027): say where it came from and let the caregiver remove it. */
+  const LOGO_FROM = { guide: 'from the TV guide', 'iptv-org': 'from a public list of channels', wikidata: 'from Wikipedia', youtube: 'its YouTube picture', chosen: 'chosen by you' };
   function logoLine(r) {
     if (r.logoUrl || r.id.startsWith('new')) return '';
-    if (r.foundLogo) return `<div class="f fw g8" style="align-items:center"><span style="font-weight:600">Logo:</span><span class="logo" style="display:grid"><img src="${esc(r.foundLogo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()"></span><span class="cap">found automatically from the TV guide or a public list of channels</span><button class="btn ghost" type="button" data-logooff="${esc(r.id)}">Remove it</button></div>`;
-    if (r.logoOff) return `<div class="f fw g8" style="align-items:center"><span style="font-weight:600">Logo:</span><span class="cap">none, you removed the one found</span><button class="btn ghost" type="button" data-logoon="${esc(r.id)}">Find a logo again</button></div>`;
-    return '';
+    const what = r.foundLogo
+      ? `<span class="logo" style="display:grid"><img src="${esc(r.foundLogo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()"></span><span class="cap">${esc(LOGO_FROM[r.logoSource] || 'found automatically')}</span>`
+      : `<span class="cap">${r.logoOff ? 'none, you removed it' : 'none found yet'}</span>`;
+    const btns = (r.foundLogo ? `<button class="btn ghost" type="button" data-logopick>${r.logoSource === 'chosen' ? 'Change' : 'Choose another'}</button><button class="btn ghost" type="button" data-logooff="${esc(r.id)}">Remove it</button>` : `<button class="btn ghost" type="button" data-logopick>Choose a logo</button>`)
+      + (r.logoOff || r.logoSource === 'chosen' ? `<button class="btn ghost" type="button" data-logoon="${esc(r.id)}">Find one automatically</button>` : '');
+    return `<div class="col g8" data-logobox="${esc(r.id)}"><div class="f fw g8" style="align-items:center"><span style="font-weight:600">Logo:</span>${what}${btns}</div>
+      <div data-logopicker class="hide col g8">${findBox('lFind-' + r.id, r.name, 'Search for a logo, like Netflix or Al Jazeera')}
+        <div data-logoresults class="logogrid"></div>
+        <div class="f g8" style="align-items:flex-end"><label class="field grow"><span>Or paste a picture address</span><span class="inp"><input data-logourl type="url" dir="ltr" autocomplete="off" placeholder="https://"></span></label><button class="btn" type="button" data-logouse>Use it</button></div>
+      </div></div>`;
   }
-  async function setLogoOff(id, off) {
+  function bindLogo(el) {
+    const box = $('[data-logobox]', el); if (!box) return;
+    const id = box.dataset.logobox;
+    const picker = box.querySelector('[data-logopicker]');
+    const results = box.querySelector('[data-logoresults]');
+    let t = null; let asked = 0;
+    const search = async (q) => {
+      const n = ++asked;
+      results.innerHTML = '<div class="skel" style="width:60%"></div>';
+      const list = await GET(`/api/channels/${encodeURIComponent(id)}/logo-choices?q=${encodeURIComponent(q)}`).catch(() => null);
+      if (n !== asked) return;
+      if (!list) { results.innerHTML = '<p class="cap">The TV couldn\'t look just now. Try again in a moment.</p>'; return; }
+      results.innerHTML = list.length ? list.map((c, i) => `<button type="button" class="logochoice" data-li="${i}" title="${esc(c.label)}"><span class="lpic"><img src="${esc(c.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('button').remove()"></span><span class="lcap" dir="auto">${esc(c.label)}</span></button>`).join('')
+        : '<p class="cap">No logos found. Try another name, or paste a picture address.</p>';
+      $$('[data-li]', results).forEach((b) => b.onclick = () => choose(id, list[+b.dataset.li].url));
+    };
+    const pick = box.querySelector('[data-logopick]');
+    if (pick) pick.onclick = () => { const was = picker.classList.contains('hide'); picker.classList.toggle('hide'); if (was) { const i = picker.querySelector('input[type=search]'); search(i.value); i.focus(); } };
+    picker.querySelector('input[type=search]').oninput = (e) => { clearTimeout(t); t = setTimeout(() => search(e.target.value.trim() || ''), 300); };
+    const urlIn = picker.querySelector('[data-logourl]');
+    picker.querySelector('[data-logouse]').onclick = () => { const u = urlIn.value.trim(); if (!/^https?:\/\/\S+$/i.test(u)) { toast('Paste an address that starts with https://'); urlIn.focus(); return; } choose(id, u); };
+    urlIn.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); picker.querySelector('[data-logouse]').click(); } };
+  }
+  async function choose(id, url) { await logoCall(id, { url }, 'Logo saved. The TV shows it now.'); }
+  async function setLogoOff(id, off) { await logoCall(id, { off }, off ? 'Logo removed.' : 'Looking for a logo. It shows when one is found.'); }
+  async function logoCall(id, body, done) {
     try {
-      const view = await saving(() => PUT(`/api/channels/${encodeURIComponent(id)}/found-logo`, { off }), off ? 'Logo removed.' : 'Looking for a logo. It shows when one is found.');
+      const view = await saving(() => PUT(`/api/channels/${encodeURIComponent(id)}/found-logo`, body), done);
       // Only the found-logo fields change: unsaved edits to the lineup stay as they are.
       const fresh = new Map(view.channels.map((c) => [c.id, c]));
       for (const list of [rows, saved, state.lineup ? state.lineup.channels : []]) {
-        list.forEach((x) => { const c = fresh.get(x.id); if (c) { x.foundLogo = c.foundLogo; x.logoOff = c.logoOff; } });
+        list.forEach((x) => { const c = fresh.get(x.id); if (c) { x.foundLogo = c.foundLogo; x.logoOff = c.logoOff; x.logoSource = c.logoSource; } });
       }
       paint();
     } catch (e) { /* toast */ }
@@ -1144,7 +1183,7 @@ screens.lineup = (() => {
     $$('[data-edit]', el).forEach((b) => b.onclick = () => { open = open === b.dataset.edit ? null : b.dataset.edit; paint(); const i = $(`[data-panel="${CSS.escape(b.dataset.edit)}"] input[data-f="name"]`); if (i) i.focus(); });
     if (open && $(`[data-gmatch="${CSS.escape(open)}"]`)) { if (matches[open]) paintMatch(open); else loadMatch(open); }
     $$('[data-play]', el).forEach((b) => b.onclick = () => { const r = byId(b.dataset.play); playOnTv({ channelId: r.id }, r.name); });
-    $$('[data-panel] input', el).forEach((inp) => {
+    $$('[data-panel] input[data-f]', el).forEach((inp) => {
       inp.addEventListener('input', () => {
         const r = byId(inp.closest('[data-panel]').dataset.panel);
         if (inp.dataset.f === 'number') { const v = inp.value.replace(/\D/g, ''); inp.value = v; r.number = v === '' ? NaN : parseInt(v, 10); }
@@ -1157,6 +1196,7 @@ screens.lineup = (() => {
     $$('[data-remove]', el).forEach((b) => b.onclick = () => remove(b.dataset.remove));
     $$('[data-logooff]', el).forEach((b) => b.onclick = () => setLogoOff(b.dataset.logooff, true));
     $$('[data-logoon]', el).forEach((b) => b.onclick = () => setLogoOff(b.dataset.logoon, false));
+    bindLogo(el);
     const rn = $('#renumber', el); if (rn) rn.onclick = () => { rows.forEach((r, i) => { r.number = i + 1; }); paint(); };
     const sn = $('#sortNum', el); if (sn) sn.onclick = () => { rows.sort((a, b) => (a.number || 1e9) - (b.number || 1e9)); paint(); };
     const d = $('#discard', el); if (d) d.onclick = () => { discard(); paint(); };

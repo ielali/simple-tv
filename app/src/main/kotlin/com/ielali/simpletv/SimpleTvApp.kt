@@ -103,10 +103,10 @@ class SimpleTvApp : Application() {
         meta.start()
         guide = GuideService(this, appScope, providers, channels, catalogs, settings, HttpFetcher(readTimeoutMs = 15_000))
         guide.start()
-        logos = com.ielali.simpletv.data.LogoService(this, appScope, channels, guide)
-        logos.start()
         val http = HttpFetcher(readTimeoutMs = 20_000)
         ytSuggestions = YouTubeSuggestions(this, appScope, secrets, com.ielali.simpletv.youtube.YouTubeAccount(http, http))
+        logos = com.ielali.simpletv.data.LogoService(this, appScope, channels, guide, secrets, ytSuggestions, HttpFetcher(readTimeoutMs = 15_000))
+        logos.start()
         catalog.startScheduler()
         configServer = ConfigServer(this, CONFIG_PORT).also { it.start() }
     }

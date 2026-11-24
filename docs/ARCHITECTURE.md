@@ -170,7 +170,8 @@ stored in `files/guide/overrides.json`. Routes: `GET /api/guide/now`, `GET /api/
 `GET /api/guide/match/{id}`, `PUT /api/guide/match`.
 
 `LogoService` (ADR-027) finds logos for live channels without one: the matched XMLTV channel's icon
-(`GuideService.iconFor`), else a weekly index of iptv-org's public channel database (`ChannelLogos`).
+(`GuideService.iconFor`), else a weekly index of iptv-org's public channel database (`ChannelLogos`),
+else Wikidata (`WikiLogos`); YouTube channels get their channel picture (`YouTubeLookup.pictures`).
 Results live in `files/logos/found.json` and reach the page as `foundLogo`;
 `PUT /api/channels/{id}/found-logo` turns one off or looks again.
 

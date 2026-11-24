@@ -39,12 +39,14 @@ object ApiViews {
         val foundLogo: String? = null,
         /** The caregiver turned the found logo off. */
         val logoOff: Boolean = false,
+        /** Where the found logo came from: guide, iptv-org, wikidata, youtube or chosen. */
+        val logoSource: String? = null,
     )
 
     @Serializable
     data class Lineup(val channels: List<ChannelView>, val nextNumber: Int)
 
-    fun channel(c: Channel, flag: String? = null, foundLogo: String? = null, logoOff: Boolean = false) = ChannelView(
+    fun channel(c: Channel, flag: String? = null, foundLogo: String? = null, logoOff: Boolean = false, logoSource: String? = null) = ChannelView(
         id = c.id,
         number = c.number,
         name = c.name,
@@ -57,6 +59,7 @@ object ApiViews {
         flag = flag,
         foundLogo = foundLogo?.takeIf { c.logoUrl.isNullOrBlank() && !logoOff },
         logoOff = logoOff && c.logoUrl.isNullOrBlank(),
+        logoSource = logoSource?.takeIf { c.logoUrl.isNullOrBlank() && !logoOff && foundLogo != null },
     )
 
     fun lineup(
@@ -64,8 +67,9 @@ object ApiViews {
         flags: Map<String, String>,
         foundLogos: Map<String, String> = emptyMap(),
         logosOff: Set<String> = emptySet(),
+        logoSources: Map<String, String> = emptyMap(),
     ) = Lineup(
-        channels = channels.sortedBy { it.number }.map { channel(it, flags[it.id], foundLogos[it.id], it.id in logosOff) },
+        channels = channels.sortedBy { it.number }.map { channel(it, flags[it.id], foundLogos[it.id], it.id in logosOff, logoSources[it.id]) },
         nextNumber = nextNumber(channels),
     )
 

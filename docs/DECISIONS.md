@@ -586,3 +586,17 @@ Decision:
 Consequences: Logos show up some minutes after the TV starts or the lineup changes, not at once.
 Channels with uncommon or provider-specific names may stay without one. The pictures are loaded
 from the guide's or iptv-org's hosts, as provider logos already are.
+
+Update (more sources and a picker):
+- Live channels nothing else knows are looked up on Wikidata: the whole name, then its brand (the
+  name with words dropped from the end, never a generic word such as "Movies" alone), so "Netflix
+  Documentary" gets Netflix's logo. Only an exact name whose description says TV channel, network,
+  broadcaster, streaming or news counts; the logo is the item's P154 file on Wikimedia Commons
+  (drawings as a 330 px PNG). At most 25 names per run; a miss is asked again after a week.
+- YouTube channels get the channel's picture: from the household's subscriptions (no quota), else
+  the YouTube Data API (`channels.list`, 50 per call; videos and playlists by their owner) with the
+  API key or the signed-in account. Pictures are refreshed within 30 days (API policy).
+- The edit panel says where a logo came from and has "Choose a logo": a search of iptv-org and
+  Wikidata (and the channel's YouTube picture), or a pasted picture address. A chosen logo stays
+  until changed; "Find one automatically" goes back to the automatic one.
+  (`GET /api/channels/{id}/logo-choices?q=`, `PUT /api/channels/{id}/found-logo {url}`.)

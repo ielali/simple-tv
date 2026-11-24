@@ -68,4 +68,14 @@ class ChannelLogosTest {
         assertNull(ChannelLogos.find(ch("No Logo TV"), idx, "AU"))
         assertNull(ChannelLogos.find(ch("Totally unknown"), idx, "AU"))
     }
+
+    @Test
+    fun `the picker finds channels by part of their name, the TV's country first`() {
+        val gems = ChannelLogos.search("gem", idx, "NZ")
+        assertEquals("https://l/gem-nz.png", gems.first().url)
+        assertEquals(3, gems.size)
+        assertEquals("Gem (NZ)", gems.first().label)
+        assertEquals(listOf("https://l/abc.png"), ChannelLogos.search("ABC", idx, "AU").map { it.url })
+        assertEquals(emptyList<ChannelLogos.Choice>(), ChannelLogos.search("x", idx, "AU"))
+    }
 }

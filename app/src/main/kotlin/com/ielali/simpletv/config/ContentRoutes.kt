@@ -83,7 +83,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
     )
     @Serializable data class TmdbKey(val key: String = "")
     @Serializable data class Control(val action: String = "")
-    @Serializable data class FoundLogo(val off: Boolean = false)
+    @Serializable data class FoundLogo(val off: Boolean = false, val url: String? = null)
     @Serializable data class GuideNow(val channels: Map<String, com.ielali.simpletv.data.NowNext>, val now: Long)
     @Serializable data class GuideSourceView(
         val id: String, val label: String, val kind: String, val chosen: Boolean,
@@ -159,6 +159,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
             list, app.catalog.flags(list),
             found.mapNotNull { (k, v) -> v.url?.let { k to it } }.toMap(),
             found.filterValues { it.off }.keys,
+            found.mapValues { it.value.source },
         )
         // Film and series rows say how big the queue is and where it stopped (from the cached catalog).
         return base.copy(channels = base.channels.map { v ->
@@ -439,8 +440,21 @@ class ContentRoutes(private val app: SimpleTvApp) {
             val id = call.parameters["id"].orEmpty()
             if (channels.current().channels.none { it.id == id }) return@put call.fail(HttpStatusCode.NotFound, "That channel isn't on the TV any more.")
             val req = call.receive<FoundLogo>()
-            app.logos.setOff(id, req.off)
+            val url = req.url?.trim()?.takeIf { it.isNotEmpty() }
+            if (url != null) {
+                val ok = url.length <= 2000 && (url.startsWith("https://") || url.startsWith("http://")) && url.none { it.isWhitespace() }
+                if (!ok) return@put call.fail(HttpStatusCode.BadRequest, "That isn't a picture address. It should start with https://.")
+                app.logos.choose(id, url)
+            } else {
+                app.logos.setOff(id, req.off)
+            }
             call.respond(lineup())
+        }
+        get("/api/channels/{id}/logo-choices") {
+            val id = call.parameters["id"].orEmpty()
+            val ch = channels.current().channels.firstOrNull { it.id == id } ?: return@get call.fail(HttpStatusCode.NotFound, "That channel isn't on the TV any more.")
+            val q = call.request.queryParameters["q"]?.trim()?.take(80)?.takeIf { it.isNotEmpty() } ?: ch.name
+            call.respond(app.logos.choices(id, q))
         }
         post("/api/channels/{id}/restart") {
             val id = call.parameters["id"].orEmpty()

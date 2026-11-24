@@ -1,5 +1,6 @@
 package com.ielali.simpletv.data
 
+import com.ielali.simpletv.youtube.YouTubeEmbed
 import com.ielali.simpletv.youtube.YouTubeLookup
 import com.ielali.simpletv.youtube.YouTubeLookup.Result
 import org.junit.Assert.assertEquals
@@ -96,5 +97,32 @@ class YouTubeLookupTest {
         val keyed = (lookup.preview(link, "k") as Result.Found).preview
         assertEquals(37, keyed.count)
         assertTrue(seen.filter { it.first.contains("googleapis") }.all { !it.first.contains("key=") })
+    }
+
+    @Test
+    fun `channel pictures for live channels, videos and playlists, batched`() {
+        val calls = mutableListOf<String>()
+        val api = TextFetcher { url, headers ->
+            calls += url
+            assertEquals("Bearer t", headers["Authorization"])
+            when {
+                url.contains("/videos?") -> HttpResult(200, """{"items":[{"id":"v1","snippet":{"channelId":"UCb"}}]}""")
+                url.contains("/playlists?") -> HttpResult(200, """{"items":[{"id":"PL1","snippet":{"channelId":"UCa"}}]}""")
+                url.contains("/channels?") -> HttpResult(200, """{"items":[{"id":"UCa","snippet":{"thumbnails":{"default":{"url":"http://i/a88.jpg"},"high":{"url":"http://i/a800.jpg"}}}},{"id":"UCb","snippet":{"thumbnails":{"medium":{"url":"http://i/b.jpg"}}}}]}""")
+                else -> HttpResult(404, "")
+            }
+        }
+        val pics = YouTubeLookup(api).pictures(
+            mapOf(
+                "live" to YouTubeEmbed.Target.ChannelLive("UCa"),
+                "vid" to YouTubeEmbed.Target.Video("v1"),
+                "list" to YouTubeEmbed.Target.Playlist("PL1"),
+                "gone" to YouTubeEmbed.Target.ChannelLive("UCgone"),
+            ),
+            mapOf("Authorization" to "Bearer t"),
+        )
+        assertEquals(mapOf("live" to "http://i/a800.jpg", "vid" to "http://i/b.jpg", "list" to "http://i/a800.jpg"), pics)
+        assertEquals("one call per kind", 3, calls.size)
+        assertTrue(calls.last().contains("id=UCa,UCgone,UCb") || calls.last().contains("UCa") && calls.last().contains("UCb"))
     }
 }

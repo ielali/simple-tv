@@ -127,6 +127,9 @@ class YouTubeSuggestions(
         error = null
     }
 
+    /** A current access token when the TV is signed in to YouTube (for channel pictures, ADR-027). */
+    suspend fun bearer(): String? = if (connected()) token() else null
+
     private suspend fun token(): String? {
         access?.let { (t, until) -> if (clock() < until) return t }
         val s = secrets.current()

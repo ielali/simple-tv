@@ -25,6 +25,8 @@ object ChannelLogos {
         /** iptv-org id (lower case) -> country code. */
         val country: Map<String, String> = emptyMap(),
         val builtAt: Long = 0L,
+        /** iptv-org id (lower case) -> the channel's name, for the logo picker. */
+        val name: Map<String, String> = emptyMap(),
     )
 
     private data class Candidate(val url: String, val inUse: Boolean, val main: Boolean, val raster: Boolean, val width: Int)
@@ -57,6 +59,7 @@ object ChannelLogos {
     fun build(channels: Sequence<JsonObject>, logos: Map<String, String>, now: Long): Index {
         val byName = HashMap<String, MutableList<String>>()
         val country = HashMap<String, String>()
+        val display = HashMap<String, String>()
         val kept = HashSet<String>()
         for (o in channels) {
             val id = o.str("id")?.lowercase() ?: continue
@@ -64,13 +67,34 @@ object ChannelLogos {
             if ((o["is_nsfw"] as? JsonPrimitive)?.booleanOrNull == true || o.str("closed") != null) continue
             kept += id
             o.str("country")?.let { country[id] = it.uppercase() }
+            o.str("name")?.let { display[id] = it }
             val names = listOfNotNull(o.str("name")) + (o["alt_names"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
             for (n in names) {
                 val k = GuideMatch.normalise(n)
                 if (k.isNotEmpty()) byName.getOrPut(k) { ArrayList() }.let { if (id !in it) it += id }
             }
         }
-        return Index(byName, logos.filterKeys { it in kept }, country, now)
+        return Index(byName, logos.filterKeys { it in kept }, country, now, display)
+    }
+
+    /** A logo the caregiver can pick in the edit panel. */
+    @Serializable
+    data class Choice(val url: String, val label: String, val source: String)
+
+    /** Channels whose name contains [q] (exact names first), for the caregiver's logo picker. */
+    fun search(q: String, idx: Index, region: String, limit: Int = 12): List<Choice> {
+        val k = GuideMatch.normalise(q)
+        if (k.length < 2) return emptyList()
+        val keys = idx.byName.keys.filter { it.contains(k) }.sortedWith(compareBy({ it != k }, { !it.startsWith(k) }, { it.length }))
+        val home = countryCode(region)
+        val ids = LinkedHashSet<String>()
+        for (key in keys) {
+            idx.byName[key].orEmpty().sortedBy { idx.country[it] != home }.forEach { if (it in idx.logo) ids += it }
+            if (ids.size >= limit) break
+        }
+        return ids.take(limit).map { id ->
+            Choice(idx.logo.getValue(id), (idx.name[id] ?: id.substringBeforeLast('.')) + (idx.country[id]?.let { " ($it)" } ?: ""), "iptv-org")
+        }
     }
 
     /** Android says GB where iptv-org says UK. */
