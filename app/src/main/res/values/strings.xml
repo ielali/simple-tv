@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Simple TV</string>
+    <string name="app_name" translatable="false">Telly</string>
     <string name="no_channels_title">No channels yet</string>
     <string name="no_channels_hint">On a phone or computer connected to the same Wi‑Fi, open:</string>
     <string name="settings_title">Settings</string>
@@ -16,8 +16,8 @@
     <string name="no_signal">No signal</string>
     <string name="no_signal_retrying">No signal. Trying again…</string>
     <string name="tuning">Tuning…</string>
-    <string name="guard_service_label">Simple TV home guard</string>
-    <string name="guard_service_description">Keeps the TV on Simple TV: the Home button returns here, and assistant and app shortcut buttons on the remote do nothing. Turn it off or pause it from the Simple TV config page.</string>
+    <string name="guard_service_label">Telly home guard</string>
+    <string name="guard_service_description">Keeps the TV on Telly: the Home button returns here, and assistant and app shortcut buttons on the remote do nothing. Turn it off or pause it from the Telly config page.</string>
     <string name="channel_list_title">Channels</string>
     <string name="channel_list_hint">OK to watch · BACK to go back</string>
     <string name="channel_list_kind_youtube">YouTube</string>
@@ -26,7 +26,7 @@
     <string name="no_signal_hint">Press channel up for another channel.</string>
     <string name="hint_controls">Right: next · OK: pause</string>
     <string name="hint_skipped">Skipped · Left goes back</string>
-    <string name="guard_paused_tv">Simple TV is paused</string>
+    <string name="guard_paused_tv">Telly is paused</string>
     <string name="yt_problem">YouTube isn’t playing. Press channel up for another channel.</string>
     <string name="checking_films">Checking the films…</string>
     <string name="no_films">Nothing to play on this channel yet</string>

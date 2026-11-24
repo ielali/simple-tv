@@ -541,3 +541,21 @@ Decision:
 
 Consequences: Sorting by score or rating changes as the TV checks more films' details. Scores and
 dates appear after the next catalog refresh.
+
+## ADR-026 The product is called Telly
+
+Context: The Telly design hand-off (docs/design/telly-handover) renames the product and gives it a
+logo mark (a smiling TV with antennae), a favicon and an Android TV banner. Screens and behaviour are
+unchanged from the first hand-off.
+
+Decision:
+- Everything a person reads says Telly: the TV app's name, its home-guard entry in Android's
+  accessibility settings, the TV's own messages (English and Arabic, where the brand stays in Latin
+  letters), and the config page (title, sidebar, first run, settings). The page's logo tile shows
+  "T" and its favicon is the gold tile mark.
+- The launcher icon is the mark as a vector drawable on gold, kept inside the adaptive icon's safe
+  zone; the TV banner is the hand-off's 320x180 banner rendered to PNG (xhdpi and xxxhdpi) with the
+  wordmark in Inter, until a final wordmark font is outlined.
+- The package and code names stay `com.ielali.simpletv` (and the build's `simple-tv.apk`): a new
+  package id would install a second app and lose the lineup and settings on the TV.
+- The daily catalog update keeps its 04:00 default (ADR-024), not the hand-off's 21:00.

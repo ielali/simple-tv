@@ -1,6 +1,6 @@
-# Simple TV — guide for AI developers
+# Telly (formerly Simple TV) — guide for AI developers
 
-Simple TV is an Android TV app that makes a modern set-top box behave like a 1990s television for
+Telly (code name Simple TV, package `com.ielali.simpletv`) is an Android TV app that makes a modern set-top box behave like a 1990s television for
 elderly viewers with no digital background. One remote, numbered channels, nothing else on screen.
 Sources are IPTV streams and YouTube live channels. A caregiver configures channels from a phone or
 laptop through a web page the TV serves on the home network.

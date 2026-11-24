@@ -17,8 +17,8 @@
     <string name="no_signal">لا توجد إشارة</string>
     <string name="no_signal_retrying">لا توجد إشارة. جارٍ إعادة المحاولة…</string>
     <string name="tuning">جارٍ ضبط القناة…</string>
-    <string name="guard_service_label">حارس الشاشة الرئيسية لـ Simple TV</string>
-    <string name="guard_service_description">يُبقي التلفاز على Simple TV: زر الصفحة الرئيسية يعيدك إلى هنا، وأزرار المساعد والاختصارات في جهاز التحكم لا تفعل شيئًا. يمكن إيقافه أو إيقافه مؤقتًا من صفحة إعدادات Simple TV.</string>
+    <string name="guard_service_label">حارس الشاشة الرئيسية لـ Telly</string>
+    <string name="guard_service_description">يُبقي التلفاز على Telly: زر الصفحة الرئيسية يعيدك إلى هنا، وأزرار المساعد والاختصارات في جهاز التحكم لا تفعل شيئًا. يمكن إيقافه أو إيقافه مؤقتًا من صفحة إعدادات Telly.</string>
     <string name="channel_list_title">القنوات</string>
     <string name="channel_list_hint">موافق للمشاهدة · رجوع للعودة</string>
     <string name="channel_list_kind_youtube">يوتيوب</string>
@@ -27,7 +27,7 @@
     <string name="no_signal_hint">اضغط زر القناة للأعلى لمشاهدة قناة أخرى.</string>
     <string name="hint_controls">يمين: التالي · موافق: إيقاف مؤقت</string>
     <string name="hint_skipped">تم التخطي · يسار للرجوع</string>
-    <string name="guard_paused_tv">Simple TV متوقف مؤقتًا</string>
+    <string name="guard_paused_tv">Telly متوقف مؤقتًا</string>
     <string name="yt_problem">يوتيوب لا يعمل. اضغط زر القناة للأعلى لمشاهدة قناة أخرى.</string>
     <string name="checking_films">جارٍ فحص الأفلام…</string>
     <string name="no_films">لا يوجد ما يُعرض على هذه القناة بعد</string>

@@ -4,9 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>Simple TV</title>
+<title>Telly</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%23FFC857%22/%3E%3Cg transform=%22translate(5 5) scale(.84)%22%3E%3Cg stroke=%22%231B2A41%22 stroke-width=%224.4%22 stroke-linecap=%22round%22%3E%3Cline x1=%2224%22 y1=%2216%22 x2=%2211%22 y2=%225.5%22/%3E%3Cline x1=%2241%22 y1=%2216%22 x2=%2253%22 y2=%223.5%22/%3E%3C/g%3E%3Ccircle cx=%2210.5%22 cy=%225%22 r=%223.8%22 fill=%22%231B2A41%22/%3E%3Ccircle cx=%2253.5%22 cy=%223%22 r=%223.8%22 fill=%22%231B2A41%22/%3E%3Crect x=%224%22 y=%2214%22 width=%2256%22 height=%2242%22 rx=%2217%22 fill=%22%231B2A41%22/%3E%3Ccircle cx=%2222.5%22 cy=%2230%22 r=%224.2%22 fill=%22%23FFC857%22/%3E%3Ccircle cx=%2241.5%22 cy=%2230%22 r=%224.2%22 fill=%22%23FFC857%22/%3E%3Cpath d=%22M20.5 37.5H43.5Q43.5 50.5 32 50.5Q20.5 50.5 20.5 37.5Z%22 fill=%22%23FFC857%22/%3E%3C/g%3E%3C/svg%3E">
 <!--
-  Simple TV caregiver page. Served by the TV itself (ConfigServer), so it is one self-contained file:
+  Telly caregiver page. Served by the TV itself (ConfigServer), so it is one self-contained file:
   no external fonts, scripts or images. Built from docs/design/handoff/Main.dc.html.
   Rules: never show a stream address or a provider password; error text never contains a URL.
 -->
@@ -614,7 +615,7 @@ function renderShell(title, subtitle) {
   $('#app').className = 'app ' + currentSize;
   $('#app').innerHTML = `
   <aside class="side" aria-label="Main">
-    <div class="brand"><div class="logo-mark">TV</div><span class="brandtext">Simple TV</span></div>
+    <div class="brand"><div class="logo-mark">T</div><span class="brandtext">Telly</span></div>
     ${NAV.map((n) => `<a class="nav ${n.k === act ? 'on' : ''}" href="#/${n.k}" aria-label="${esc(n.label)}" ${n.k === act ? 'aria-current="page"' : ''}>${ico(n.icon)}<span class="nlabel">${esc(n.label)}</span></a>`).join('')}
     <div class="sidefoot" id="sidefoot">
       <span class="pill ${state.online ? 'ok' : 'warn'}"><span class="dot"></span></span>
@@ -633,7 +634,7 @@ function renderShell(title, subtitle) {
     </nav>
   </div>`;
 }
-function setTitle(title, sub) { const t = $('#pageTitle'); if (t) { t.textContent = title; $('#pageSub').textContent = sub; } document.title = title + ' · Simple TV'; }
+function setTitle(title, sub) { const t = $('#pageTitle'); if (t) { t.textContent = title; $('#pageSub').textContent = sub; } document.title = title + ' · Telly'; }
 function renderShellBits() {
   const d = $('#nowDesk'); if (d) d.innerHTML = nowChip('deskonly');
   const p = $('#nowPhone'); if (p) p.innerHTML = nowChip('', true);
@@ -658,7 +659,7 @@ async function render() {
   if (route.name === 'first') { await screens.first.render(seq); return; }
   const meta = TITLES[route.name] || TITLES.home;
   renderShell(meta[0], meta[1]);
-  document.title = meta[0] + ' · Simple TV';
+  document.title = meta[0] + ' · Telly';
   const content = $('#content');
   try {
     await screens[route.name].render(content, seq);
@@ -869,7 +870,7 @@ screens.home = {
           <p class="muted">It may be switched off, or on a different Wi-Fi network.${state.lastReached ? ' We last reached it ' + esc(whenPast(state.lastReached)) + '.' : ''}</p></div>
           <div class="f fw g8"><button class="btn pri" id="retry">Try again</button></div>
           <details><summary>${ico('right', 18)}How to get back in</summary>
-            <ol class="muted" style="margin:4px 0 0;padding-inline-start:20px;line-height:26px"><li>Switch the TV on and wait for Simple TV to start.</li><li>Check this phone is on the same Wi-Fi as the TV.</li><li>Open the address shown on the TV: ${esc(host)}</li></ol>
+            <ol class="muted" style="margin:4px 0 0;padding-inline-start:20px;line-height:26px"><li>Switch the TV on and wait for Telly to start.</li><li>Check this phone is on the same Wi-Fi as the TV.</li><li>Open the address shown on the TV: ${esc(host)}</li></ol>
           </details>
         </div>
       </section>` : tvCard()}
@@ -1253,7 +1254,7 @@ const numbersWords = (start, n) => n <= 0 ? '' : n === 1 ? `It'll get number ${s
 const ADULT_RX = /(^|[^a-z])(adult|xxx|porn|erotic|18\s*\+|\+\s*18|for adults)([^a-z]|$)/i;
 async function confirmMany(n, start, names = []) {
   if (names.some((x) => ADULT_RX.test(x || ''))) {
-    if (!(await dialog({ title: 'This looks like adult content', text: 'The name suggests these channels are for adults. Simple TV’s adult filter only covers film channels, so these would play for anyone pressing channel up.', ok: 'Add them anyway', danger: true }))) return false;
+    if (!(await dialog({ title: 'This looks like adult content', text: 'The name suggests these channels are for adults. Telly’s adult filter only covers film channels, so these would play for anyone pressing channel up.', ok: 'Add them anyway', danger: true }))) return false;
   }
   if (n <= 10) return true;
   return dialog({ title: `Add ${fmtN(n)} channels?`, text: `They’d all be on channel up and down, numbers ${start} to ${start + n - 1}. The lineup is easiest with 10 to 30 channels; the Live TV button shows the whole list.`, ok: `Add ${fmtN(n)} channels` });
@@ -1502,7 +1503,7 @@ screens.add = (() => {
         <div><div class="sec" dir="auto">${esc(p.title || (p.kind === 'playlist' ? 'YouTube playlist' : 'YouTube channel'))}</div><div class="cap">${p.kind === 'playlist' ? esc([p.author, p.count ? plural(p.count, 'video') : 'Playlist', 'plays in order, then starts again'].filter(Boolean).join(' · ')) : p.kind === 'channel' ? (p.live === false ? 'Not live right now · it plays the channel’s live stream when there is one' : 'Live right now · plays whatever the channel is streaming') : esc([p.author, p.live ? 'Live now' : 'Video'].filter(Boolean).join(' · '))}</div></div>
         ${p.kind === 'playlist' ? `${p.startVideo ? `<div class="field"><span>Start from</span><div class="seg full" role="radiogroup"><button data-plstart="video" class="${yt.plFromStart ? '' : 'on'}" role="radio" aria-checked="${!yt.plFromStart}">The video in the link</button><button data-plstart="begin" class="${yt.plFromStart ? 'on' : ''}" role="radio" aria-checked="${!!yt.plFromStart}">The beginning</button></div></div>` : ''}
           <div class="field"><span>Order</span><div class="seg full" role="radiogroup"><button data-plshuffle="0" class="${yt.plShuffle ? '' : 'on'}" role="radio" aria-checked="${!yt.plShuffle}">In order</button><button data-plshuffle="1" class="${yt.plShuffle ? 'on' : ''}" role="radio" aria-checked="${!!yt.plShuffle}">Shuffled</button></div></div>
-          <p class="hint">Plays inside Simple TV with YouTube’s own player, signed out. On the remote, Right and Left go to the next or previous video and OK pauses. The TV remembers where it stopped.</p>` : ''}
+          <p class="hint">Plays inside Telly with YouTube’s own player, signed out. On the remote, Right and Left go to the next or previous video and OK pauses. The TV remembers where it stopped.</p>` : ''}
         <div class="f g12" style="align-items:flex-start">
           <label class="field numfield"><span>Number</span><span class="inp ${clash ? 'bad' : ''}"><input id="ytNum" inputmode="numeric" maxlength="4" value="${esc(yt.number)}"></span></label>
           <label class="field grow"><span>Name on the TV</span><span class="inp"><input id="ytName" value="${esc(yt.name)}" dir="auto" maxlength="80"></span></label>
@@ -2243,12 +2244,12 @@ screens.settings = (() => {
     const mm = Math.floor(left / 60000), ss = Math.floor((left % 60000) / 1000);
     return `<section class="card col g12">
       <div class="f g12"><h2 class="sec grow">Home guard</h2><span class="pill ${pc}"><span class="dot"></span>${word}</span></div>
-      <p class="muted">Keeps the TV on Simple TV. The Home button comes back here, and the assistant and app buttons do nothing.</p>
+      <p class="muted">Keeps the TV on Telly. The Home button comes back here, and the assistant and app buttons do nothing.</p>
       ${g.guardEnabled && !g.serviceEnabled ? `<p class="hint err">${g.canSelfManage ? 'The TV switched the guard off. Restart the TV, or turn the guard off and on again here.' : 'It needs a one-time setup from a computer (tools/tv-admin.sh guard-on).'}</p>` : ''}
       ${paused ? `<div class="f fw g12 card" style="padding:12px"><div class="grow" style="min-width:160px"><div style="font-weight:600" id="pauseLeft">Paused. ${mm} min ${String(ss).padStart(2, '0')} s left</div><div class="cap">You can use the TV's own settings, like Wi-Fi, until then.</div></div><button class="btn pri" id="gResume">Resume now</button></div>` : ''}
       <div class="f fw g8">${g.guardEnabled && !paused ? '<button class="btn" id="gPause">Pause for 15 minutes</button>' : ''}<button class="btn" id="gToggle">${g.guardEnabled ? 'Turn off' : 'Turn on'}</button></div>
       <details><summary>${ico('right', 18)}YouTube account screen</summary><div class="col g8">
-        <p class="muted">When YouTube asks who is watching, Simple TV can choose the first account. Show that screen on the TV, then press Remember.</p>
+        <p class="muted">When YouTube asks who is watching, Telly can choose the first account. Show that screen on the TV, then press Remember.</p>
         <p class="cap">${!g.youtubePickerSupported ? 'Needs Android 13 or newer on the TV.' : g.youtubePickerLearnedAt ? `Remembered ${esc(whenPast(Date.now() - (g.now - g.youtubePickerLearnedAt)))}.${g.youtubePickerAt ? ' Last chose the first account ' + esc(whenPast(Date.now() - (g.now - g.youtubePickerAt))) + '.' : ''}` : 'Not remembered yet.'}</p>
         <div class="f fw g8"><button class="btn" id="pkRemember" ${g.youtubePickerSupported ? '' : 'disabled'}>Remember this screen</button><button class="btn ghost" id="pkForget" ${g.youtubePickerLearnedAt ? '' : 'disabled'}>Forget it</button></div>
       </div></details>
@@ -2259,8 +2260,8 @@ screens.settings = (() => {
   function keysCard() {
     const rows = state.keys || [];
     const seen = new Set(); const latest = rows.filter((k) => !seen.has(k.keyCode) && seen.add(k.keyCode)).slice(0, 8);
-    const result = (k) => k.returnsHome ? ['ok', 'Back to Simple TV'] : (k.blocked || k.blockedByDefault || k.action === 'SWALLOW') ? ['ok', 'Blocked'] : k.needed || k.action === 'ROUTE' || k.action === 'HANDLED' ? ['info', 'Used by Simple TV'] : null;
-    const usual = (k) => k.returnsHome ? 'Back to Simple TV' : k.blockedByDefault ? 'Does nothing' : k.needed ? 'Its usual job' : 'Opens its app';
+    const result = (k) => k.returnsHome ? ['ok', 'Back to Telly'] : (k.blocked || k.blockedByDefault || k.action === 'SWALLOW') ? ['ok', 'Blocked'] : k.needed || k.action === 'ROUTE' || k.action === 'HANDLED' ? ['info', 'Used by Telly'] : null;
+    const usual = (k) => k.returnsHome ? 'Back to Telly' : k.blockedByDefault ? 'Does nothing' : k.needed ? 'Its usual job' : 'Opens its app';
     const picker = (k) => {
       const job = keyJob(k);
       const opts = [['', usual(k)], ['list', 'Opens the channel list'], ['previous', 'Previous channel']].concat(k.blockable && !k.blockedByDefault ? [['blocked', 'Does nothing']] : []);
@@ -2268,7 +2269,7 @@ screens.settings = (() => {
     };
     return `<section class="card col g8">
       <div class="f g12"><div class="grow"><h2 class="sec">Remote buttons</h2><p class="cap">Press a button on the remote, then refresh.</p></div><button class="btn" id="kRefresh">${ico('refresh', 18)}Refresh</button></div>
-      <div class="muted" style="line-height:22px">On the TV, <b>channel up and down</b> change channel. The blue <b>Live TV</b> button opens the channel list: up and down choose, OK watches, Back goes back to the channel that was on. Holding <b>Back</b> for 5 seconds pauses Simple TV and opens the TV’s Wi-Fi settings. For “previous channel” on one press, give a spare button that job below.</div>
+      <div class="muted" style="line-height:22px">On the TV, <b>channel up and down</b> change channel. The blue <b>Live TV</b> button opens the channel list: up and down choose, OK watches, Back goes back to the channel that was on. Holding <b>Back</b> for 5 seconds pauses Telly and opens the TV’s Wi-Fi settings. For “previous channel” on one press, give a spare button that job below.</div>
       ${latest.length ? `<div class="list">${latest.map((k) => { const r = result(k);
         const extra = k.action === 'PASS' || k.action === 'SYSTEM' ? ' · opened another app' : '';
         const right = k.assignable ? picker(k) : k.blocked ? `<button class="btn" data-unblock="${k.keyCode}">Unblock</button>` : r ? `<span class="pill ${r[0]}"><span class="dot"></span>${r[1]}</span>` : k.blockable ? `<button class="btn" data-block="${k.keyCode}">Block this button</button>` : '<span class="pill info">Passed on</span>';
@@ -2293,15 +2294,15 @@ screens.settings = (() => {
           <div class="f g12"><div class="grow"><div style="font-weight:600" id="clockH">Clock in the corner</div><div class="cap">The time stays in the top corner while watching.</div></div><button class="sw ${s.showClock !== false ? 'on' : ''}" id="clockSw" role="switch" aria-checked="${s.showClock !== false}" aria-labelledby="clockH"></button></div>
           <p class="cap">${s.hideAdult !== false ? 'Adult films are left out of film channels.' : 'Adult films are not filtered.'} <a href="#/settings" id="toRatings">Change in Advanced</a></p></section>
         <section class="card col g12"><h2 class="sec">How YouTube plays</h2>
-          ${[['EMBEDDED', 'Inside Simple TV', 'Simplest. Shows ads, and doesn’t use any account.'], ['YOUTUBE_APP', 'In the YouTube app', 'Uses the account signed in on the TV. With Premium there are no ads. Up and down still change channel.']].map(([k, t, d]) => `<button class="opt ${s.youtubePlayback === k ? 'on' : ''}" data-yt="${k}" role="radio" aria-checked="${s.youtubePlayback === k}"><span class="radio"></span><div><div style="font-weight:600">${t}</div><div class="muted">${d}</div></div></button>`).join('')}
-          <p class="hint">Playlist channels always play inside Simple TV, signed out, so the remote can move through them. They can show ads.</p></section>
+          ${[['EMBEDDED', 'Inside Telly', 'Simplest. Shows ads, and doesn’t use any account.'], ['YOUTUBE_APP', 'In the YouTube app', 'Uses the account signed in on the TV. With Premium there are no ads. Up and down still change channel.']].map(([k, t, d]) => `<button class="opt ${s.youtubePlayback === k ? 'on' : ''}" data-yt="${k}" role="radio" aria-checked="${s.youtubePlayback === k}"><span class="radio"></span><div><div style="font-weight:600">${t}</div><div class="muted">${d}</div></div></button>`).join('')}
+          <p class="hint">Playlist channels always play inside Telly, signed out, so the remote can move through them. They can show ads.</p></section>
         ${guardCard()}
       </div>
       <div class="col g24">
         <h2 class="grp">This TV</h2>
         <section class="card f g16 fw">
           <div class="qr">${qrSvg()}</div>
-          <div class="grow col g8" style="min-width:180px"><h2 class="sec">This TV</h2><div>Open this page on any phone on the same Wi-Fi:</div><div style="font-weight:700" dir="ltr">${esc(host)}</div><div class="cap">Simple TV version ${esc(st.appVersion)}</div>
+          <div class="grow col g8" style="min-width:180px"><h2 class="sec">This TV</h2><div>Open this page on any phone on the same Wi-Fi:</div><div style="font-weight:700" dir="ltr">${esc(host)}</div><div class="cap">Telly version ${esc(st.appVersion)}</div>
           ${st.pinSet && state.token ? '<div><button class="btn ghost" id="signOut" style="padding:0">Sign out on this device</button></div>' : ''}</div>
         </section>
         <section class="card col g12">
@@ -2337,8 +2338,8 @@ screens.settings = (() => {
           </div></details>
           <details ${ytAcc && (ytAcc.pending || ytEdit) ? 'open' : ''}><summary>${ico('right', 18)}<span class="grow">Suggestions from your YouTube account</span><span class="pill info" id="ytAccPill"><span id="ytAccHead">${esc(ytState(ytAcc))}</span></span></summary><div class="col g8" id="ytAccount"><div class="skel"></div></div></details></section>
           ${ratingsCard()}
-          <section class="card col g12"><h2 class="sec">Erase Simple TV</h2>
-            <p class="muted">Before giving this TV box away: deletes every channel, subscription, key, sign-in and the PIN from it. Simple TV then starts as new.</p>
+          <section class="card col g12"><h2 class="sec">Erase Telly</h2>
+            <p class="muted">Before giving this TV box away: deletes every channel, subscription, key, sign-in and the PIN from it. Telly then starts as new.</p>
             <div><button class="btn dng" id="eraseAll" type="button">Erase everything</button></div></section>
         </div>
       </div>
@@ -2349,10 +2350,10 @@ screens.settings = (() => {
     const cs = $('#clockSw', el); if (cs) cs.onclick = () => setSetting({ showClock: !(s.showClock !== false) }, s.showClock !== false ? 'The clock is hidden.' : 'The clock shows in the corner.');
     const er = $('#eraseAll', el); if (er) er.onclick = async () => {
       if (!(await dialog({ title: 'Erase everything on this TV?', text: 'All channels, subscriptions, keys, the YouTube sign-in and the PIN are deleted from the TV. This can’t be undone.', ok: 'Erase everything', danger: true }))) return;
-      if (!(await dialog({ title: 'Are you sure?', text: 'Simple TV will start again as new, with no channels.', ok: 'Yes, erase it', danger: true }))) return;
+      if (!(await dialog({ title: 'Are you sure?', text: 'Telly will start again as new, with no channels.', ok: 'Yes, erase it', danger: true }))) return;
       try {
         await POST('/api/erase', { confirm: 'ERASE' });
-        toast('Erasing… Simple TV restarts on the TV in a few seconds.', null, 8000);
+        toast('Erasing… Telly restarts on the TV in a few seconds.', null, 8000);
         setTimeout(() => { try { localStorage.clear(); } catch (x) { /* private mode */ } location.href = location.pathname; }, 7000);
       } catch (e) { if (e.status !== 401) toast(e.message, null, 6000); }
     };
@@ -2404,12 +2405,12 @@ screens.settings = (() => {
     const gp = $('#gPause', el); if (gp) gp.onclick = async () => { try { state.guard = await saving(() => POST('/api/guard/pause', { minutes: 15 }), 'Paused for 15 minutes.'); state.guard.fetchedAt = Date.now(); paint(); } catch (e) { /* toast */ } };
     const gr = $('#gResume', el); if (gr) gr.onclick = async () => { try { state.guard = await saving(() => POST('/api/guard/resume'), 'The guard is on again.'); state.guard.fetchedAt = Date.now(); paint(); } catch (e) { /* toast */ } };
     const gt = $('#gToggle', el); if (gt) gt.onclick = async () => {
-      if (g.guardEnabled && !(await dialog({ title: 'Turn the home guard off?', text: 'The Home and app buttons will leave Simple TV again, and your viewer may get lost in Google TV.', ok: 'Turn off', danger: true }))) return;
+      if (g.guardEnabled && !(await dialog({ title: 'Turn the home guard off?', text: 'The Home and app buttons will leave Telly again, and your viewer may get lost in Google TV.', ok: 'Turn off', danger: true }))) return;
       await setSetting({ guardEnabled: !g.guardEnabled }, g.guardEnabled ? 'The guard is off.' : 'The guard is on.');
       state.guard = await GET('/api/guard'); state.guard.fetchedAt = Date.now(); paint();
     };
-    const pr = $('#pkRemember', el); if (pr) pr.onclick = async () => { try { state.guard = await saving(() => POST('/api/guard/youtube-picker/remember'), 'Remembered. Simple TV now chooses the first account on that screen.'); paint(); } catch (e) { /* toast */ } };
-    const pf = $('#pkForget', el); if (pf) pf.onclick = async () => { if (!(await dialog({ title: 'Forget the account screen?', text: 'Simple TV will stop answering YouTube’s account screen.', ok: 'Forget it', danger: true }))) return; try { state.guard = await saving(() => DEL('/api/guard/youtube-picker'), 'Forgotten.'); paint(); } catch (e) { /* toast */ } };
+    const pr = $('#pkRemember', el); if (pr) pr.onclick = async () => { try { state.guard = await saving(() => POST('/api/guard/youtube-picker/remember'), 'Remembered. Telly now chooses the first account on that screen.'); paint(); } catch (e) { /* toast */ } };
+    const pf = $('#pkForget', el); if (pf) pf.onclick = async () => { if (!(await dialog({ title: 'Forget the account screen?', text: 'Telly will stop answering YouTube’s account screen.', ok: 'Forget it', danger: true }))) return; try { state.guard = await saving(() => DEL('/api/guard/youtube-picker'), 'Forgotten.'); paint(); } catch (e) { /* toast */ } };
     $('#kRefresh', el).onclick = async () => { try { state.keys = await GET('/api/keys'); paint(); } catch (e) { /* offline */ } };
     const kc = $('#kClear', el); if (kc) kc.onclick = async () => { try { state.keys = await POST('/api/keys/clear'); paint(); } catch (e) { /* offline */ } };
     const setBlocked = async (code, block) => {
@@ -2452,10 +2453,10 @@ screens.first = (() => {
     const st = (n) => n === step ? 'on' : n < step ? 'done' : '';
     $('#app').className = 'app ' + currentSize;
     $('#app').innerHTML = `<div class="solo grow"><div class="center col g24" style="padding-inline:${currentSize === 'desktop' ? '40px' : '8px'}">
-      <div class="f g12"><div class="logo-mark">TV</div><div class="sec grow">Set up Simple TV</div><a class="btn ghost" href="#/home">Skip</a></div>
+      <div class="f g12"><div class="logo-mark">T</div><div class="sec grow">Set up Telly</div><a class="btn ghost" href="#/home">Skip</a></div>
       <div class="f fw g16" aria-label="Steps">${['Connect', 'Pick channels', 'Watch'].map((l, i) => `<div class="step ${st(i + 1)}" ${i + 1 === step ? 'aria-current="step"' : ''}><span class="b">${i + 1 < step ? ico('check', 14, 2.4) : i + 1}</span>${l}</div>`).join('')}</div>
       ${inner}</div></div>`;
-    document.title = 'Set up · Simple TV';
+    document.title = 'Set up · Telly';
   }
   async function render(seq) {
     clearTimeout(pollT);
@@ -2567,7 +2568,7 @@ async function showLogin() {
     if (isLocked && !msg) msg = { k: 'warn', t: `Too many tries. You can try again in ${Math.max(1, Math.ceil((lockedUntil - Date.now()) / 60000))} minutes.` };
     $('#app').className = 'app ' + currentSize;
     $('#app').innerHTML = `<div class="solo grow"><div class="center col g24" style="max-width:420px">
-      <div class="logo-mark">TV</div>
+      <div class="logo-mark">T</div>
       <div><h1 class="h1">Enter your PIN</h1><p class="muted">This keeps the TV settings to you. Your lineup is safe until you unlock.</p></div>
       <label class="col g8"><span class="sr">PIN</span>
         <div class="pin ${msg && msg.k === 'err' ? 'bad' : ''} ${isLocked ? 'locked' : ''}" aria-hidden="true">${Array.from({ length: 6 }, (_, i) => `<span class="${i === pin.length && !isLocked ? 'cur' : ''}">${i < pin.length ? '•' : ''}</span>`).join('')}</div>
@@ -2578,7 +2579,7 @@ async function showLogin() {
       <button class="btn pri block ${isLocked || pin.length < 4 || busy ? 'dis' : ''}" id="unlock">${busy ? '<span class="spin"></span>' : ''}Unlock</button>
       <details><summary>${ico('right', 18)}Forgot your PIN?</summary><p class="muted">The PIN is shown on the TV's settings screen. Press MENU on the remote, look there, then come back.</p></details>
     </div></div>`;
-    document.title = 'Enter your PIN · Simple TV';
+    document.title = 'Enter your PIN · Telly';
     const inp = $('#pinIn');
     if (!isLocked && currentSize !== 'phone') inp.focus();
     inp.oninput = () => { pin = inp.value.replace(/\D/g, '').slice(0, 6); if (msg && msg.k === 'err') msg = null; paint(); };

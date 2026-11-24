@@ -1,4 +1,4 @@
-# Simple TV
+# Telly
 
 An Android TV app that turns a modern set-top box into an old-style television for elderly viewers.
 Numbered channels, one classic remote, no menus. Channels come from IPTV streams or YouTube live
