@@ -422,6 +422,14 @@ that channel stays on, since the viewer has been watching it.
 The video view is placed at the window's absolute screen position (left/top), never a start/end
 offset: in Arabic the screen runs right to left and a mirrored offset put the picture over the list.
 
+Update: At the caregiver's request, after seeing it on the TV, the list uses smaller type than rule
+5b so that useful text fits: rows 40sp (about six channels), the highlighted channel's full name
+scrolls; the window's guide shows the times at 24sp, the programme's name at 30sp on up to two lines,
+next at 24sp and the description at 22sp in the room left. The banner keeps rule 5b's sizes.
+Provider text is tidied (`TextClean`): HTML entities in names and guide titles are decoded, and guide
+titles that are only a path or link ("home/1/1...") are dropped. The tuning screen shows the
+channel's logo.
+
 Consequences: Rule 1 now allows this one list besides the video and the banner. Which code the
 Kogan remote's Live TV button sends is unconfirmed; the key log shows it. While a YouTube-app
 channel is on, the list shows over Simple TV and YouTube reopens when it closes.

@@ -60,7 +60,7 @@ class ChannelRepository(context: Context) {
                 c.copy(
                     id = c.id.ifBlank { UUID.randomUUID().toString() },
                     number = n,
-                    name = c.name.trim().ifBlank { "Channel $n" },
+                    name = TextClean.name(c.name).ifBlank { "Channel $n" },
                     url = c.url.trim(),
                 )
             }
@@ -69,5 +69,8 @@ class ChannelRepository(context: Context) {
 
     private fun load(): ChannelList = runCatching {
         if (file.exists()) json.decodeFromString<ChannelList>(file.readText()) else ChannelList()
-    }.getOrElse { ChannelList() }
+    }.getOrElse { ChannelList() }.let { l ->
+        // Lineups saved before names were tidied ("Tom &amp; Jerry") read correctly straight away.
+        l.copy(channels = l.channels.map { c -> c.copy(name = TextClean.name(c.name).ifBlank { c.name }) })
+    }
 }

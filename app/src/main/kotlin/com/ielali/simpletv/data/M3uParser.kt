@@ -53,7 +53,7 @@ object M3uParser {
                     result += Channel(
                         id = UUID.randomUUID().toString(),
                         number = 0,
-                        name = name.ifBlank { "Channel" },
+                        name = TextClean.name(name).ifBlank { "Channel" },
                         type = type,
                         url = line,
                         logoUrl = pendingLogo,

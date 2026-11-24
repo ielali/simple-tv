@@ -117,7 +117,7 @@ object XmltvReader {
                 else -> skip(p)
             }
         }
-        val t = title?.takeIf { it.isNotEmpty() } ?: return null
+        val t = TextClean.guideTitle(title) ?: return null
         return Programme(start, stopAttr ?: (start + 30 * 60_000L), t, desc?.takeIf { it.isNotEmpty() }, category, episode)
     }
 
@@ -211,8 +211,8 @@ object XtreamGuide {
             val start = str("start_timestamp")?.toDoubleOrNull()?.toLong()?.times(1000) ?: return@mapNotNull null
             val stop = (str("stop_timestamp") ?: str("end_timestamp"))?.toDoubleOrNull()?.toLong()?.times(1000)
                 ?: str("end")?.toDoubleOrNull()?.toLong()?.times(1000) ?: (start + 30 * 60_000L)
-            val title = str("title")?.let(::maybeBase64)?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            Programme(start, stop, title, str("description")?.let(::maybeBase64)?.trim()?.takeIf { it.isNotEmpty() })
+            val title = TextClean.guideTitle(str("title")?.let(::maybeBase64)) ?: return@mapNotNull null
+            Programme(start, stop, title, TextClean.guideText(str("description")?.let(::maybeBase64)))
         }.sortedBy { it.start }
     }
 

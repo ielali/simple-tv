@@ -8,7 +8,9 @@ import android.webkit.WebViewClient
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
@@ -288,13 +290,13 @@ private fun ChannelListOverlay(state: TvUiState, vm: TvViewModel, onPreviewBox: 
             }
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxSize()) {
-                Column(Modifier.weight(0.58f).fillMaxHeight()) {
+                Column(Modifier.weight(0.5f).fillMaxHeight()) {
                     for (i in start until minOf(start + rows, channels.size)) {
                         ListRow(channels[i], highlighted = i == index, watching = channels[i].id == state.current?.id)
                     }
                 }
                 Spacer(Modifier.width(32.dp))
-                Column(Modifier.weight(0.42f).fillMaxHeight()) {
+                Column(Modifier.weight(0.5f).fillMaxHeight()) {
                     Box(
                         Modifier.fillMaxWidth().aspectRatio(16f / 9f)
                             .background(Color.Black, RoundedCornerShape(12.dp))
@@ -304,12 +306,13 @@ private fun ChannelListOverlay(state: TvUiState, vm: TvViewModel, onPreviewBox: 
                         if (!state.previewOn) PreviewCard(highlighted)
                     }
                     Spacer(Modifier.height(12.dp))
-                    Text(highlighted.name, color = Fg, fontSize = 40.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     val title = state.nowTitle
-                    if (highlighted.id == state.current?.id && !title.isNullOrBlank() && highlighted.playlist != null) {
-                        Text(title, color = Fg.copy(alpha = 0.85f), fontSize = 32.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    val guide = state.listGuide?.takeIf { it.now != null }
+                    when {
+                        highlighted.id == state.current?.id && !title.isNullOrBlank() && highlighted.playlist != null ->
+                            Text(title, color = Fg, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, lineHeight = 36.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        guide != null -> ListGuide(guide, Modifier.fillMaxWidth().weight(1f))
                     }
-                    state.listGuide?.takeIf { it.now != null }?.let { GuideLines(it, Modifier.fillMaxWidth()) }
                 }
             }
         }
@@ -349,8 +352,9 @@ private fun BoxScope.placedAt(box: Rect, d: Density): Modifier = Modifier
     .size(with(d) { box.width.toDp() }, with(d) { box.height.toDp() })
 
 private val HeaderHeight = 64.dp
-private val RowHeight = 76.dp
+private val RowHeight = 64.dp
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ListRow(channel: Channel, highlighted: Boolean, watching: Boolean) {
     val ink = if (highlighted) Color(0xFF0B1220) else Fg
@@ -364,12 +368,14 @@ private fun ListRow(channel: Channel, highlighted: Boolean, watching: Boolean) {
     ) {
         Text(
             if (channel.number > 0) channel.number.toString() else "",
-            color = if (highlighted) ink else Accent, fontSize = 48.sp, fontWeight = FontWeight.Black,
-            modifier = Modifier.width(120.dp),
+            color = if (highlighted) ink else Accent, fontSize = 40.sp, fontWeight = FontWeight.Black,
+            modifier = Modifier.width(100.dp),
         )
         Text(
-            channel.name, color = ink, fontSize = 48.sp, fontWeight = FontWeight.SemiBold,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+            channel.name, color = ink, fontSize = 40.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+            overflow = if (highlighted) TextOverflow.Clip else TextOverflow.Ellipsis,
+            // The highlighted channel's whole name scrolls by when it is too long to fit.
+            modifier = Modifier.weight(1f).then(if (highlighted) Modifier.basicMarquee(initialDelayMillis = 1200) else Modifier),
         )
         // The channel on now.
         if (watching) Text("●", color = if (highlighted) ink else Accent, fontSize = 32.sp)
@@ -415,6 +421,43 @@ private fun GuideLines(guide: NowNext, barModifier: Modifier = Modifier.width(56
             Text(stringResource(R.string.guide_next), color = Fg.copy(alpha = 0.8f), fontSize = 32.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(16.dp))
             Text("${fmt.format(java.util.Date(next.start))}  ${next.title}", color = Fg.copy(alpha = 0.8f), fontSize = 32.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/**
+ * Now and next in the channel list: the programme's own name gets two lines, the times sit above it in
+ * smaller type, and the description fills whatever room is left.
+ */
+@Composable
+private fun ListGuide(guide: NowNext, modifier: Modifier) {
+    val ctx = LocalContext.current
+    val fmt = remember { android.text.format.DateFormat.getTimeFormat(ctx) }
+    val now = guide.now ?: return
+    val span = (now.stop - now.start).coerceAtLeast(1L)
+    Column(modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.guide_now), color = Accent, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(12.dp))
+            Text("${fmt.format(java.util.Date(now.start))}–${fmt.format(java.util.Date(now.stop))}", color = Fg.copy(alpha = 0.75f), fontSize = 24.sp)
+        }
+        Text(now.title, color = Fg, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, lineHeight = 36.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        LinearProgressIndicator(
+            progress = { ((System.currentTimeMillis() - now.start).toFloat() / span).coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).height(6.dp),
+            color = Accent,
+            trackColor = Fg.copy(alpha = 0.25f),
+        )
+        guide.next?.let { next ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.guide_next), color = Fg.copy(alpha = 0.75f), fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(12.dp))
+                Text("${fmt.format(java.util.Date(next.start))}  ${next.title}", color = Fg.copy(alpha = 0.75f), fontSize = 24.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        now.desc?.let { d ->
+            Spacer(Modifier.height(6.dp))
+            Text(d, color = Fg.copy(alpha = 0.7f), fontSize = 22.sp, lineHeight = 28.sp, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         }
     }
 }
@@ -503,6 +546,13 @@ private fun ChannelCard(channel: Channel, status: String) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        if (!channel.logoUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = channel.logoUrl, contentDescription = null, contentScale = ContentScale.Fit,
+                modifier = Modifier.height(140.dp).width(320.dp),
+            )
+            Spacer(Modifier.height(16.dp))
+        }
         // A "Play on TV" preview has no number (0).
         if (channel.number > 0) Text(channel.number.toString(), color = Accent, fontSize = 120.sp, fontWeight = FontWeight.Black)
         Text(channel.name, color = Fg, fontSize = 56.sp, fontWeight = FontWeight.Bold)

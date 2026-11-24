@@ -91,7 +91,7 @@ object XtreamApi {
         return arr.mapNotNull { el ->
             val o = el as? JsonObject ?: return@mapNotNull null
             val id = o["stream_id"].asString() ?: return@mapNotNull null
-            val name = o["name"].asString()?.trim().orEmpty().ifEmpty { "Channel $id" }
+            val name = TextClean.name(o["name"].asString().orEmpty()).ifEmpty { "Channel $id" }
             val categoryId = o["category_id"].asString()
             val order = o["num"].asInt() ?: Int.MAX_VALUE
             order to Channel(
@@ -181,7 +181,7 @@ object XtreamApi {
         return arr.mapNotNull { el ->
             val o = el as? JsonObject ?: return@mapNotNull null
             val id = o["stream_id"].asString() ?: return@mapNotNull null
-            val name = o["name"].asString()?.trim().orEmpty().ifEmpty { "Film $id" }
+            val name = TextClean.name(o["name"].asString().orEmpty()).ifEmpty { "Film $id" }
             val categoryId = o["category_id"].asString()
             (o["num"].asInt() ?: Int.MAX_VALUE) to CatalogItem(
                 id = id,
@@ -201,7 +201,7 @@ object XtreamApi {
         return arr.mapNotNull { el ->
             val o = el as? JsonObject ?: return@mapNotNull null
             val id = o["series_id"].asString() ?: return@mapNotNull null
-            val name = o["name"].asString()?.trim().orEmpty().ifEmpty { "Series $id" }
+            val name = TextClean.name(o["name"].asString().orEmpty()).ifEmpty { "Series $id" }
             val categoryId = o["category_id"].asString()
             (o["num"].asInt() ?: Int.MAX_VALUE) to CatalogItem(
                 id = id,
