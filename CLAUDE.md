@@ -53,9 +53,9 @@ app/src/main/kotlin/com/ielali/simpletv/
   data/WikiLogos.kt       Pure: Wikidata look-ups by name or brand and Commons picture addresses (ADR-027)
   tv/TvController.kt      App-scoped TV state: current channel, digits, banner, YouTube-app hand-off.
                           Android-free; driven by the screen and, over YouTube, by the guard
-  tv/ExternalPlayer.kt    Opens the YouTube app / brings Simple TV forward from app context
+  tv/ExternalPlayer.kt    Opens the YouTube app / brings Telly forward from app context
   tv/TvViewModel.kt       Screen adapter: video surface + settings overlay, exposes TvUiState
-  tv/LocaleSupport.kt     Applies the config page's TV language to Simple TV's screen only
+  tv/LocaleSupport.kt     Applies the config page's TV language to Telly's screen only
   data/TvLanguage.kt      Supported TV languages (English, Arabic) and RTL detection
   tv/PlayerScreen.kt      Compose UI: video surface, YouTube WebView, banner, overlays
   player/PlaybackEngine.kt Media3 ExoPlayer wrapper tuned for live TV; never stops retrying
@@ -95,7 +95,7 @@ app/src/main/kotlin/com/ielali/simpletv/
   config/QrCode.kt        ZXing wrapper: URL -> module matrix (pure JVM)
   tv/QrCodeView.kt        Compose canvas renderer for the QR matrix
   boot/BootReceiver.kt    Start on boot (re-enables the guard first; its exemption allows the start)
-  guard/HomeGuardService.kt Accessibility service: HOME/TV keys -> Simple TV, swallows shortcut keys,
+  guard/HomeGuardService.kt Accessibility service: HOME/TV keys -> Telly, swallows shortcut keys,
                           covers the stock home and sponsored apps (soft kiosk, no factory reset)
   guard/HomeGuardPolicy.kt  Pure decisions for keys and windows; GuardKeys.kt mirrors KeyEvent codes
   guard/GuardSetup.kt     Enables/disables the service via WRITE_SECURE_SETTINGS (granted over adb)

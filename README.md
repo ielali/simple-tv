@@ -4,12 +4,15 @@ An Android TV app that turns a modern set-top box into an old-style television f
 Numbered channels, one classic remote, no menus. Channels come from IPTV streams or YouTube live
 channels and are configured by a caregiver from a phone or laptop.
 
+Telly was called Simple TV. The package (`com.ielali.simpletv`), the repository and the release file
+(`simple-tv.apk`) keep the old name so updates install over the existing app (ADR-026).
+
 ## How it works for the viewer
 
 - Type a number on the remote, the channel changes. Channel up/down works too.
 - A large banner shows the channel number and name, then fades.
 - BACK does nothing harmful. MENU shows one screen with the address and a QR code for the config page.
-- The home guard keeps the TV on Simple TV: HOME returns here, assistant and app shortcut buttons do
+- The home guard keeps the TV on Telly: HOME returns here, assistant and app shortcut buttons do
   nothing, and the app starts after a reboot. A caregiver can pause it from the config page.
 
 ## How it works for the caregiver
@@ -40,11 +43,12 @@ CI builds the debug APK on every push to `main` and attaches it to the workflow 
 
 ## Status
 
-Scaffold. Core tuning logic, playback engine, config server and web UI are in place and the pure
-logic is unit tested. Not yet run on a device. Work through `docs/BACKLOG.md`.
+In daily use on a Google TV dongle. Live TV, YouTube, film and series channels, the TV guide, the
+channel list, logos and the caregiver web app are in place; the pure logic is unit tested and every
+push to `main` publishes a build. Next work is in `docs/BACKLOG.md`.
 
 ## Acknowledgements
 
 The home guard approach and the rule never to disable the stock Google TV home come from
 [tv-vibehack](https://github.com/toomramcharan/tv-vibehack) (MIT), built for the same audience.
-Simple TV reimplements the idea in Kotlin; see `docs/DECISIONS.md` ADR-009.
+Telly reimplements the idea in Kotlin; see `docs/DECISIONS.md` ADR-009.

@@ -2,6 +2,9 @@
 
 Short architecture decision records. Newest at the bottom.
 
+The app was called Simple TV until ADR-026 renamed it Telly. Earlier records keep the old name as
+written at the time; the package, code names and release file still use it.
+
 ## ADR-001 Android TV, native Kotlin + Compose
 
 Context: Target is a set-top box driven by an IR/Bluetooth remote; playback must be hardware-decoded

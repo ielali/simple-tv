@@ -17,7 +17,7 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    TV guide: check the free guide presets download (their links were not reachable from the build
    sandbox), how long a guide takes to read on the Kogan, and which lineup channels match. YouTube:
    sign in with a household OAuth client and check that live subscriptions show as "Live now".
-   Channel list: press Live TV (FEATURED_APP_1) from Simple TV and from YouTube; check the preview
+   Channel list: press Live TV (FEATURED_APP_1) from Telly and from YouTube; check the preview
    window plays the highlighted stream after a moment, OK keeps it without re-tuning, Back brings the
    old channel back, the list reads from the sofa, holding Down scrolls, and a lone 0 goes back.
    YouTube playlist channel: add a public playlist; check it plays in order, Right/Left/OK work,
@@ -28,16 +28,16 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    channel plays. Record device, Android version and remote model in DEPLOYMENT.md.
 2. **Key mapping audit on real remotes.** Use the config page's **Remote buttons** card on the Kogan:
    press every button, block anything that still opens an app, record codes in DEPLOYMENT.md.
-   Confirm volume/mute/power pass through and that HOME returns to Simple TV after a reboot.
+   Confirm volume/mute/power pass through and that HOME returns to Telly after a reboot.
 3. **YouTube app channel switching on the Kogan (ADR-010).** Confirm: digits and CH+/- over YouTube
    change channel with the banner drawn over YouTube; YouTube-to-YouTube replaces the video without
-   Simple TV's screen; YouTube-to-IPTV and back works; BACK does nothing over YouTube; OK pauses.
+   Telly's screen; YouTube-to-IPTV and back works; BACK does nothing over YouTube; OK pauses.
    If a new video does not replace the playing one, add FLAG_ACTIVITY_CLEAR_TASK in ExternalPlayer.
 3b. **YouTube embed spike.** Add three real live channels (news, music, nature cams). Note which
    embed, which refuse, whether autoplay works without a gesture on the box's WebView version.
    Decide on the intent fallback and record it in DECISIONS.md.
 4. **YouTube app handoff on device.** With `youtubePlayback = YOUTUBE_APP`, confirm the TV build
-   of YouTube opens watch URLs and `channel/UC…/live` URLs, that BACK returns to Simple TV, and that
+   of YouTube opens watch URLs and `channel/UC…/live` URLs, that BACK returns to Telly, and that
    Premium removes ads. If channel-live URLs are not handled, resolve the live video id first
    (Data API, item below) and hand over the watch URL instead.
 5. **Browse subscriptions in the config page (YouTube Data API).** Needs a Google Cloud project with

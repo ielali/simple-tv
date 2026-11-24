@@ -34,7 +34,8 @@ LG sets run webOS. Two routes:
 ## Getting the APK
 
 Every push to `main` publishes the newest build as the GitHub pre-release named **latest**, with one
-file, `simple-tv.apk`. Releases do not expire. The repository is private, so download it while signed
+file, `simple-tv.apk` (the file keeps Telly's former name, Simple TV, so it installs over earlier
+builds). Releases do not expire. The repository is private, so download it while signed
 in to GitHub. To rebuild without a code change: Actions tab, Android CI, Run workflow.
 
 All builds share one signing key (`app/keystore`), so a newer APK installs over an older one and
@@ -66,8 +67,8 @@ keeps the channel list. The config page header shows the installed build number.
    TV_HOST=<dongle-ip> tools/tv-admin.sh guard-on
    ```
 
-   From then on HOME and the TV button return to Simple TV, the assistant and app shortcut buttons do
-   nothing, and Simple TV opens by itself after a reboot. `tools/tv-admin.sh install simple-tv.apk`
+   From then on HOME and the TV button return to Telly, the assistant and app shortcut buttons do
+   nothing, and Telly opens by itself after a reboot. `tools/tv-admin.sh install simple-tv.apk`
    does the install and this step together.
 
 6. Audit the remote: open the config page, press every button on the remote, press **Refresh** in
@@ -88,7 +89,7 @@ keeps the channel list. The config page header shows the installed build number.
 - From a phone: config page, **Home guard**, **Pause 15 minutes**. Use the remote normally, then
   **Resume now** or wait.
 - From a laptop: `tools/tv-admin.sh stock` hands the TV back to the normal Google TV home;
-  `guard-on` restores Simple TV.
+  `guard-on` restores Telly.
 - `tools/tv-admin.sh status` checks everything, and re-enables the stock home if anything disabled it.
 
 **Never disable the stock Google TV home** (`com.google.android.apps.tv.launcherx`) by any means.
@@ -141,7 +142,7 @@ network. Save writes `channels.json` on the TV and the running app updates immed
 ## Making it the only thing the viewer sees
 
 1. **Launcher**: the app declares the HOME category. On boxes that allow a custom launcher, press HOME
-   and choose Simple TV "Always". Google TV devices may not offer this.
+   and choose Telly "Always". Google TV devices may not offer this.
 2. **Boot**: `BootReceiver` starts the app after boot. Android 10+ may block background activity
    starts; being the HOME app avoids that.
 3. **Soft kiosk (default)**: the home guard above. No reset, keeps the Google account.

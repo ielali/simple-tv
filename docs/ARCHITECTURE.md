@@ -23,14 +23,14 @@
 `TvController` (created by `SimpleTvApp`) owns the TV: current channel, digit entry, banner, last
 channel, and whether a YouTube channel plays in the YouTube app. It is app-scoped and Android-free,
 so it keeps working while YouTube is in front and is unit tested with virtual time. Two adapters drive
-it: `TvViewModel` (Simple TV's screen, which also owns the ExoPlayer and the settings overlay) and the
-home guard (keys over YouTube). `ExternalPlayer` launches YouTube or brings Simple TV forward from
+it: `TvViewModel` (Telly's screen, which also owns the ExoPlayer and the settings overlay) and the
+home guard (keys over YouTube). `ExternalPlayer` launches YouTube or brings Telly forward from
 the application context. `MainActivity.onStart/onStop` report screen visibility, which is how the
 controller knows YouTube is in front.
 
 ## Data flow for a channel change
 
-1. Viewer presses `1`, `2`. On Simple TV's screen `MainActivity` forwards the first DOWN of each key to
+1. Viewer presses `1`, `2`. On Telly's screen `MainActivity` forwards the first DOWN of each key to
    `TvViewModel.onKeyDown`, which passes channel keys to `TvController.onRemoteKey`. While YouTube is in
    front the home guard sends the same keys straight to the controller.
 2. `ChannelTuner` accumulates `"12"` and exposes it through `pendingDigits`; the banner shows the digits.
@@ -38,7 +38,7 @@ controller knows YouTube is in front.
 4. `TvController` resolves the number with `ChannelNavigator.resolve` against the sorted list.
 5. `switchTo` stores the number as "last watched". STREAM channels play in `TvViewModel`'s engine (Simple
    TV is brought forward if YouTube was in front). YouTube channels use the WebView, or in YouTube-app
-   mode the YouTube app is opened directly, with no stop on Simple TV's screen in between.
+   mode the YouTube app is opened directly, with no stop on Telly's screen in between.
 6. The banner shows number and name for 3.5 s.
 
 ## Persistence
@@ -119,9 +119,9 @@ used by the embedded player.
 
 `HomeGuardService` is an accessibility service with key filtering. For each key it asks
 `HomeGuardPolicy.onKey`: HOME and TV bring `MainActivity` forward; assistant, colour and app-launch keys
-(plus caregiver-blocked codes) are swallowed; everything Simple TV, YouTube or the system needs passes.
+(plus caregiver-blocked codes) are swallowed; everything Telly, YouTube or the system needs passes.
 For window changes of the stock Google TV home and sponsored apps it asks `onWindow`, which brings
-Simple TV back unless `GuardState.allowedExternalPackages` says Simple TV opened that app itself
+Telly back unless `GuardState.allowedExternalPackages` says Telly opened that app itself
 (set before the YouTube hand-off, cleared in `MainActivity.onResume`). Launches are debounced.
 
 The guard reads `AppSettings` (`guardEnabled`, `guardPausedUntil`, `guardBlockedKeys`) on every event,
@@ -129,11 +129,11 @@ so config-page changes apply immediately. `GuardSetup` edits the accessibility s
 app holds WRITE_SECURE_SETTINGS (granted once by `tools/tv-admin.sh guard-on`) and re-enables the
 service at app start and boot. An enabled accessibility service also exempts the app from Android's
 background-activity-start limits, which is what lets `BootReceiver` open the TV.
-`BootReceiver` also runs after Simple TV is updated (`MY_PACKAGE_REPLACED`): installing stops the app
+`BootReceiver` also runs after Telly is updated (`MY_PACKAGE_REPLACED`): installing stops the app
 and the guard. When the guard starts, it checks once what is in front and leaves the Google TV home
 if that is where the update or a crash left the TV.
 Going into standby, Google TV puts its own home in front; starting an app then switches the TV back
-on. So the guard never brings Simple TV forward while the screen is off (or for 10 s after it goes
+on. So the guard never brings Telly forward while the screen is off (or for 10 s after it goes
 off), and checks what is in front again when it comes back on. `ExternalPlayer` opens nothing in
 standby either (a night-time catalog refresh could otherwise reopen YouTube).
 
@@ -146,7 +146,7 @@ browse screens; OK (unless digits are pending), left/right, media and volume key
 Buttons given a job in settings (`listButtons`, `previousButtons`; `ButtonRoles`) are decided first,
 on every screen: the guard returns `CHANNEL_LIST` or `PREVIOUS_CHANNEL` and calls the controller.
 The channel list is app-scoped state in `TvController` (`listIndex`), so opening it over YouTube
-brings Simple TV forward, `onAppVisible` holds YouTube back while it is open, and closing it without
+brings Telly forward, `onAppVisible` holds YouTube back while it is open, and closing it without
 choosing sends a YouTube-app channel back to YouTube (ADR-022). With the guard off, `MainActivity`
 reaches the same controller calls through `TvViewModel.onKeyDown`.
 
