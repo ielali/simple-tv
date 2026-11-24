@@ -557,6 +557,14 @@ class ContentRoutes(private val app: SimpleTvApp) {
             app.ytSuggestions.connect()
             call.respond(ytAccount())
         }
+        post("/api/youtube/cancel") {
+            app.ytSuggestions.cancel()
+            call.respond(ytAccount())
+        }
+        delete("/api/youtube/client") {
+            app.ytSuggestions.forgetClient()
+            call.respond(ytAccount())
+        }
         post("/api/youtube/disconnect") {
             app.ytSuggestions.disconnect()
             call.respond(ytAccount())

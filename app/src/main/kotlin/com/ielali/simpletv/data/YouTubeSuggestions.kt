@@ -59,10 +59,28 @@ class YouTubeSuggestions(
     fun connected() = !secrets.current().ytRefreshToken.isNullOrBlank()
     fun clientId(): String? = secrets.current().ytClientId
 
+    /**
+     * Saves the household's OAuth client. A blank secret keeps the stored one. A different client ID
+     * signs the TV out first: a sign-in only works with the client it was made with.
+     */
     suspend fun saveClient(id: String?, secret: String?) {
         val s = secrets.current()
-        secrets.setYouTubeClient(id?.trim()?.ifEmpty { null } ?: s.ytClientId, secret?.ifEmpty { null } ?: s.ytClientSecret)
+        val newId = id?.trim()?.ifEmpty { null } ?: s.ytClientId
+        if (connected() && newId != s.ytClientId) disconnect()
+        val keepSecret = newId == s.ytClientId
+        secrets.setYouTubeClient(newId, secret?.ifEmpty { null } ?: s.ytClientSecret.takeIf { keepSecret })
         error = null
+    }
+
+    /** Stops waiting for the code to be entered. */
+    fun cancel() {
+        pollJob?.cancel(); pending = null; error = null
+    }
+
+    /** Signs out and forgets the client ID and secret too. */
+    suspend fun forgetClient() {
+        disconnect()
+        secrets.setYouTubeClient(null, null)
     }
 
     /** Starts "go to google.com/device and enter the code"; the TV then waits for the phone. */

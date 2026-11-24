@@ -1821,8 +1821,11 @@ screens.settings = (() => {
   let pinDraft = '';
   let pauseTick = null;
   async function render(el, seq) {
-    if (!state.settings || !state.status) { el.innerHTML = loadingCard(4); await loadCore(); if (stale(seq)) return; }
-    else GET('/api/settings').then((s) => { state.settings = s; }).catch(() => {});
+    // Always ask the TV: which keys are saved can change from another phone, or after a restart.
+    if (!state.settings || !state.status) el.innerHTML = loadingCard(4);
+    const [st, se] = await Promise.all([GET('/api/status'), GET('/api/settings')]);
+    if (stale(seq)) return;
+    state.status = st; state.settings = se;
     paint();
     loadGuideCard(); loadYtAccount();
     const [guard, keys, qr] = await Promise.all([GET('/api/guard').catch(() => null), GET('/api/keys').catch(() => []), state.qr ? state.qr : GET('/api/qr').catch(() => null), loadRatings(true)]);
@@ -1867,33 +1870,53 @@ screens.settings = (() => {
   }
 
   /* --- YouTube account (suggestions) --- */
-  let ytAcc = null; let ytT = null;
+  let ytAcc = null; let ytT = null; let ytEdit = false;
   async function loadYtAccount() {
     try { ytAcc = await GET('/api/youtube/account'); } catch (e) { /* offline */ }
     paintYtAccount();
     clearTimeout(ytT);
     if (ytAcc && ytAcc.pending && route.name === 'settings') ytT = setTimeout(loadYtAccount, 3000);
   }
+  /** The heading says how things stand, so it shows even while the section is closed. */
+  const ytState = (a) => !a ? '' : a.connected ? 'Connected' + (a.accountName ? ' as ' + a.accountName : '') : a.pending ? 'Waiting for the code' : a.hasClient ? 'Client saved, not connected' : 'Not set up';
   function paintYtAccount() {
     const el = $('#ytAccount'); if (!el || !ytAcc) return;
     const a = ytAcc;
-    el.innerHTML = a.connected ? `<div class="f fw g8"><span class="pill ok">${ico('check', 14, 2.4)}Connected${a.accountName ? ' as ' + esc(a.accountName) : ''}</span><a class="btn ghost" href="#/add/youtube">See suggestions</a><button class="btn ghost" id="ytDisc" type="button">Disconnect</button></div>${a.error ? `<p class="hint err">${esc(a.error)}</p>` : ''}`
-      : a.pending ? `<div class="card col g8" style="padding:16px"><div>On your phone or computer, go to</div><div style="font-weight:700" dir="ltr">${esc(a.pending.verificationUrl.replace(/^https?:\/\//, ''))}</div><div>and enter this code:</div><div class="codebox" dir="ltr">${esc(a.pending.userCode)}</div><div class="f g8 cap"><span class="spin" style="width:14px;height:14px"></span>Waiting for you to allow it… The code works for ${Math.max(1, Math.round((a.pending.expiresAt - a.now) / 60000))} minutes.</div></div>`
-      : `<ol class="muted" style="margin:0;padding-inline-start:20px;line-height:22px"><li>In the same Google Cloud project as your YouTube key, set the OAuth consent screen to “In production”.</li><li>Create an OAuth client of the type “TVs and Limited Input devices”.</li><li>Paste its client ID and secret here, then press Connect.</li></ol>
+    const head = $('#ytAccHead'); if (head) head.textContent = ytState(a);
+    const pill = $('#ytAccPill'); if (pill) pill.className = 'pill ' + (a.connected ? 'ok' : a.pending ? 'warn' : 'info');
+    const clientLine = a.clientId ? `<div class="cap">Client ID: <span dir="ltr" style="overflow-wrap:anywhere">${esc(a.clientId)}</span> · secret saved on the TV</div>` : '';
+    const form = `<ol class="muted" style="margin:0;padding-inline-start:20px;line-height:22px"><li>In the same Google Cloud project as your YouTube key, set the OAuth consent screen to “In production”.</li><li>Create an OAuth client of the type “TVs and Limited Input devices”.</li><li>Paste its client ID and secret here, then press ${a.connected ? 'Save' : 'Connect'}.</li></ol>
         <label class="field"><span>Client ID</span><span class="inp"><input id="ytCid" value="${esc(a.clientId || '')}" dir="ltr" autocomplete="off" spellcheck="false"></span></label>
-        <label class="field"><span>Client secret</span><span class="inp"><input id="ytSec" type="password" placeholder="${a.hasClient ? 'Saved on the TV' : ''}" dir="ltr" autocomplete="off"></span></label>
-        ${a.error ? `<p class="hint err">${esc(a.error)}</p>` : ''}
-        <div class="f fw g8"><button class="btn pri" id="ytConn" type="button">Connect</button></div>
+        <label class="field"><span>Client secret</span><span class="inp"><input id="ytSec" type="password" placeholder="${a.hasClient ? 'Saved on the TV. Leave empty to keep it' : ''}" dir="ltr" autocomplete="off"></span>${a.hasClient ? '<span class="hint">Leave it empty to keep the saved secret. A different client ID needs its own secret.</span>' : ''}</label>
+        ${a.connected ? '<p class="hint">Saving a different client ID signs the TV out of YouTube; connect again afterwards.</p>' : ''}
+        <div class="f fw g8"><button class="btn pri" id="ytConn" type="button">${a.connected ? 'Save' : 'Connect'}</button>${a.connected || ytEdit ? '<button class="btn" id="ytEditCancel" type="button">Cancel</button>' : ''}${a.hasClient ? '<button class="btn ghost" id="ytForget" type="button">Forget this client</button>' : ''}</div>
         <p class="hint">Google shows a warning that the app isn't verified, because it's your own private app. Choose “Continue”. The TV only reads your subscriptions; it can't change anything on YouTube.</p>`;
-    const d = $('#ytDisc', el); if (d) d.onclick = async () => { if (!(await dialog({ title: 'Disconnect YouTube?', text: 'The TV forgets your subscriptions and signs out. Channels already in your lineup stay.', ok: 'Disconnect', danger: true }))) return; try { ytAcc = await saving(() => POST('/api/youtube/disconnect'), 'Disconnected.'); paintYtAccount(); } catch (e) { /* toast */ } };
-    const c = $('#ytConn', el);
-    if (c) c.onclick = async () => {
-      const id = $('#ytCid').value.trim(); const sec = $('#ytSec').value;
+    el.innerHTML = a.pending
+      ? `<div class="card col g8" style="padding:16px"><div>On your phone or computer, go to</div><div style="font-weight:700" dir="ltr">${esc(a.pending.verificationUrl.replace(/^https?:\/\//, ''))}</div><div>and enter this code:</div><div class="codebox" dir="ltr">${esc(a.pending.userCode)}</div><div class="f g8 cap"><span class="spin" style="width:14px;height:14px"></span>Waiting for you to allow it… The code works for ${Math.max(1, Math.round((a.pending.expiresAt - a.now) / 60000))} minutes.</div><div><button class="btn" id="ytCancel" type="button">Cancel</button></div></div>${clientLine}`
+      : a.connected && !ytEdit
+        ? `<div class="f fw g8"><span class="pill ok">${ico('check', 14, 2.4)}Connected${a.accountName ? ' as ' + esc(a.accountName) : ''}</span><a class="btn ghost" href="#/add/youtube">See suggestions</a></div>${clientLine}
+          ${a.error ? `<p class="hint err">${esc(a.error)}</p>` : ''}
+          <div class="f fw g8"><button class="btn" id="ytChange" type="button">Change client</button><button class="btn ghost" id="ytDisc" type="button">Disconnect</button><button class="btn ghost" id="ytForget" type="button">Forget this client</button></div>`
+        : `${a.error ? `<p class="hint err">${esc(a.error)}</p>` : ''}${form}`;
+    const on = (id, fn) => { const b = $('#' + id, el); if (b) b.onclick = fn; };
+    on('ytChange', () => { ytEdit = true; paintYtAccount(); const i = $('#ytCid'); if (i) i.focus(); });
+    on('ytEditCancel', () => { ytEdit = false; paintYtAccount(); });
+    on('ytCancel', async () => { try { ytAcc = await POST('/api/youtube/cancel'); clearTimeout(ytT); paintYtAccount(); } catch (e) { if (e.status !== 401) toast(e.message, null, 6000); } });
+    on('ytDisc', async () => { if (!(await dialog({ title: 'Disconnect YouTube?', text: 'The TV forgets your subscriptions and signs out. The client ID and secret stay, so you can connect again. Channels already in your lineup stay.', ok: 'Disconnect', danger: true }))) return; try { ytAcc = await saving(() => POST('/api/youtube/disconnect'), 'Disconnected.'); paintYtAccount(); } catch (e) { /* toast */ } });
+    on('ytForget', async () => { if (!(await dialog({ title: 'Forget this client?', text: 'The TV signs out of YouTube and deletes the client ID and secret. You can add a new one afterwards.', ok: 'Forget it', danger: true }))) return; try { ytAcc = await saving(() => DEL('/api/youtube/client'), 'Forgotten.'); ytEdit = false; paintYtAccount(); } catch (e) { /* toast */ } });
+    on('ytConn', async () => {
+      const c = $('#ytConn', el); const id = $('#ytCid').value.trim(); const sec = $('#ytSec').value;
       if (!id) { toast('Paste the client ID first.', null, 5000); return; }
-      c.disabled = true; c.innerHTML = '<span class="spin"></span>Connecting…';
-      try { await PUT('/api/youtube/client', { clientId: id, clientSecret: sec || null }); ytAcc = await POST('/api/youtube/connect'); paintYtAccount(); clearTimeout(ytT); ytT = setTimeout(loadYtAccount, 3000); }
-      catch (e) { c.disabled = false; c.textContent = 'Connect'; if (e.status !== 401) toast(e.message, null, 6000); }
-    };
+      if (id !== a.clientId && !sec) { toast('A different client ID needs its secret too.', null, 5000); return; }
+      c.disabled = true; c.innerHTML = '<span class="spin"></span>' + (a.connected ? 'Saving…' : 'Connecting…');
+      try {
+        ytAcc = await PUT('/api/youtube/client', { clientId: id, clientSecret: sec || null });
+        ytEdit = false;
+        if (!ytAcc.connected) { ytAcc = await POST('/api/youtube/connect'); clearTimeout(ytT); ytT = setTimeout(loadYtAccount, 3000); }
+        else toast("Saved. It's on the TV now.");
+        paintYtAccount();
+      } catch (e) { c.disabled = false; c.textContent = a.connected ? 'Save' : 'Connect'; if (e.status !== 401) toast(e.message, null, 6000); }
+    });
   }
   function ratingsCard() {
     const r = state.ratings; const s = S(); const st = state.status; const has = !!(st.hasTmdbKey || (r && r.hasTmdbKey));
@@ -1902,7 +1925,7 @@ screens.settings = (() => {
     return `<section class="card col g12">
       <h2 class="sec">Film details and ratings</h2>
       <p class="muted">Posters, trailers, descriptions and official age ratings for films and series. They come from TMDB, The Movie Database, with your own free key.</p>
-      ${has ? `<div class="f fw g8"><span class="pill ok">${ico('check', 14, 2.4)}TMDB key saved</span><button class="btn ghost" id="tmdbRemove">Remove key</button></div>` : ''}
+      <div class="li" style="padding:0;min-height:44px"><div class="grow"><div style="font-weight:600">TMDB key</div><div class="cap">${has ? 'Saved on the TV. It is never shown again.' : 'Not added yet.'}</div></div><span class="pill ${has ? 'ok' : 'info'}">${has ? ico('check', 14, 2.4) + 'Saved' : 'Not added'}</span>${has ? '<button class="btn ghost" id="tmdbRemove" type="button">Remove</button>' : ''}</div>
       <details ${has ? '' : 'open'}><summary>${ico('right', 18)}${has ? 'Replace the key' : 'Add your TMDB key'}</summary><div class="col g8">
         <ol class="muted" style="margin:0;padding-inline-start:20px;line-height:22px"><li>Make a free account at themoviedb.org.</li><li>Open Settings, then API, and ask for a key for personal use.</li><li>Copy the long “API Read Access Token” and paste it here.</li></ol>
         <div class="f fw g8"><label class="inp grow" style="min-width:200px"><span class="sr">TMDB key</span><input id="tmdbKey" type="password" autocomplete="off" spellcheck="false" dir="ltr" placeholder="Paste the API Read Access Token"></label><button class="btn" id="tmdbSave">Check and save</button></div>
@@ -1972,12 +1995,12 @@ screens.settings = (() => {
         ${guideCard()}
         <section class="card col g12"><h2 class="sec">How YouTube plays</h2>
           ${[['EMBEDDED', 'Inside Simple TV', 'Simplest. Shows ads, and doesn’t use any account.'], ['YOUTUBE_APP', 'In the YouTube app', 'Uses the account signed in on the TV. With Premium there are no ads. Up and down still change channel.']].map(([k, t, d]) => `<button class="opt ${s.youtubePlayback === k ? 'on' : ''}" data-yt="${k}" role="radio" aria-checked="${s.youtubePlayback === k}"><span class="radio"></span><div><div style="font-weight:600">${t}</div><div class="muted">${d}</div></div></button>`).join('')}
-          <details ${st.hasYoutubeKey ? '' : ''}><summary>${ico('right', 18)}YouTube key (optional)</summary><div class="col g8">
+          <details ${st.hasYoutubeKey ? '' : ''}><summary>${ico('right', 18)}<span class="grow">YouTube key (optional)</span><span class="pill ${st.hasYoutubeKey ? 'ok' : 'info'}">${st.hasYoutubeKey ? 'Saved' : 'Not added'}</span></summary><div class="col g8">
             <p class="muted">With your own free YouTube Data API key, links that start with @ work and the page can tell whether a channel is live. It stays on the TV and is never shown again.</p>
             ${st.hasYoutubeKey ? `<div class="f fw g8"><span class="pill ok">${ico('check', 14, 2.4)}Saved</span><button class="btn ghost" id="keyRemove">Remove key</button></div>` : ''}
             <div class="f fw g8"><label class="inp grow" style="min-width:200px"><span class="sr">YouTube key</span><input id="ytKey" type="password" autocomplete="off" spellcheck="false" dir="ltr" placeholder="${st.hasYoutubeKey ? 'Paste a new key to replace it' : 'Paste your key'}"></label><button class="btn" id="keySave">Save key</button></div>
           </div></details>
-          <details ${ytAcc && (ytAcc.connected || ytAcc.pending) ? 'open' : ''}><summary>${ico('right', 18)}Suggestions from your YouTube account</summary><div class="col g8" id="ytAccount"><div class="skel"></div></div></details></section>
+          <details ${ytAcc && (ytAcc.pending || ytEdit) ? 'open' : ''}><summary>${ico('right', 18)}<span class="grow">Suggestions from your YouTube account</span><span class="pill info" id="ytAccPill"><span id="ytAccHead">${esc(ytState(ytAcc))}</span></span></summary><div class="col g8" id="ytAccount"><div class="skel"></div></div></details></section>
         ${ratingsCard()}
         <section class="card col g12">
           <div class="f g12"><h2 class="sec grow" id="pinH">Lock this page with a PIN</h2><button class="sw ${st.pinSet ? 'on' : ''}" id="pinSw" role="switch" aria-checked="${st.pinSet}" aria-labelledby="pinH"></button></div>

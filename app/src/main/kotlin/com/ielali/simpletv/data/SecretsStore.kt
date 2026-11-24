@@ -2,6 +2,8 @@ package com.ielali.simpletv.data
 
 import android.content.Context
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import java.io.File
 
@@ -22,11 +24,18 @@ class SecretsStore(context: Context) {
     )
 
     private val store = JsonStore(File(context.filesDir, "secrets.json"), Secrets.serializer()) { Secrets() }
+    private val lock = Mutex()
     val secrets: StateFlow<Secrets> = store.value
     fun current(): Secrets = store.current()
-    suspend fun setPin(pin: String?) = store.replace(current().copy(pin = pin?.takeIf { it.isNotEmpty() }))
-    suspend fun setYouTubeClient(id: String?, secret: String?) = store.replace(current().copy(ytClientId = id?.trim()?.takeIf { it.isNotEmpty() }, ytClientSecret = secret?.trim()?.takeIf { it.isNotEmpty() }))
-    suspend fun setYouTubeRefresh(token: String?) = store.replace(current().copy(ytRefreshToken = token?.takeIf { it.isNotEmpty() }))
-    suspend fun setTmdbKey(key: String?) = store.replace(current().copy(tmdbKey = key?.trim()?.takeIf { it.isNotEmpty() }))
-    suspend fun setYoutubeKey(key: String?) = store.replace(current().copy(youtubeApiKey = key?.trim()?.takeIf { it.isNotEmpty() }))
+
+    /** Read, change and write as one step: two saves at once must never undo each other. */
+    private suspend fun update(change: (Secrets) -> Secrets) = lock.withLock { store.replace(change(store.current())) }
+
+    suspend fun setPin(pin: String?) = update { it.copy(pin = pin?.takeIf { p -> p.isNotEmpty() }) }
+    suspend fun setYouTubeClient(id: String?, secret: String?) = update {
+        it.copy(ytClientId = id?.trim()?.takeIf { v -> v.isNotEmpty() }, ytClientSecret = secret?.trim()?.takeIf { v -> v.isNotEmpty() })
+    }
+    suspend fun setYouTubeRefresh(token: String?) = update { it.copy(ytRefreshToken = token?.takeIf { v -> v.isNotEmpty() }) }
+    suspend fun setTmdbKey(key: String?) = update { it.copy(tmdbKey = key?.trim()?.takeIf { v -> v.isNotEmpty() }) }
+    suspend fun setYoutubeKey(key: String?) = update { it.copy(youtubeApiKey = key?.trim()?.takeIf { v -> v.isNotEmpty() }) }
 }

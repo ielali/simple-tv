@@ -131,8 +131,7 @@ class MetadataService(
         val r = withContext(Dispatchers.IO) { tmdb.check(k) }
         if (r is TmdbClient.Check.Ok) {
             secrets.setTmdbKey(k)
-            refreshLists()
-            checkChannels()
+            scope.launch { runCatching { refreshLists(); checkChannels() } }
         }
         return r
     }
