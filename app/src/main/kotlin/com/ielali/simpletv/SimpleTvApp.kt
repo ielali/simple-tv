@@ -94,6 +94,7 @@ class SimpleTvApp : Application() {
         catalog = CatalogService(appScope, providers, channels, settings, catalogs, loader)
         meta = MetadataService(this, appScope, providers, catalogs, channels, settings, secrets, loader, TmdbClient(HttpFetcher(readTimeoutMs = 15_000)))
         queue = QueuePlayback(this, catalog, catalogs, providers, meta, settings)
+        tv.skipWhenZapping = { ch -> catalog.recentlyFailed(ch.id) }
         ytProgress = com.ielali.simpletv.data.YouTubeProgress(this)
         meta.start()
         guide = GuideService(this, appScope, providers, channels, catalogs, settings, HttpFetcher(readTimeoutMs = 15_000))

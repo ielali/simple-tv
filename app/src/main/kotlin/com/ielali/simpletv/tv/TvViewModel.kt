@@ -50,7 +50,19 @@ data class TvUiState(
     val listGuide: NowNext? = null,
     /** The list's preview window shows the highlighted channel's picture (the player is playing it). */
     val previewOn: Boolean = false,
+    /** A one-line hint under the banner: how the remote works on this channel, or how to undo a skip. */
+    val hint: TvHint? = null,
+    /** The YouTube playlist on screen has stopped playing (errors one after another). */
+    val ytProblem: Boolean = false,
+    /** A film or series channel with nothing to play: still checking its films, or none at all. */
+    val queueEmpty: QueueEmpty? = null,
+    /** Until when the home guard is paused (0 = not paused). */
+    val guardPausedUntil: Long = 0L,
+    val showClock: Boolean = true,
 )
+
+enum class TvHint { CONTROLS, SKIPPED }
+enum class QueueEmpty { CHECKING, NOTHING }
 
 /** Screen adapter: video surface and the settings overlay. Channel state lives in [TvController]. */
 @UnstableApi
@@ -71,6 +83,14 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     /** A live channel playing in the preview window; OK on it carries on without tuning again. */
     private var previewedId: String? = null
 
+    private val hint = MutableStateFlow<TvHint?>(null)
+    private var hintJob: kotlinx.coroutines.Job? = null
+    private val ytProblem = MutableStateFlow<String?>(null)
+    private val queueEmpty = MutableStateFlow<QueueEmpty?>(null)
+    private var emptyRetry: kotlinx.coroutines.Job? = null
+    /** Right on a film, series or playlist: what was skipped and where, so Left can bring it back for 5 s. */
+    private var skipped: Triple<String, Long, Long>? = null
+
     /** YouTube playlist channels (ADR-023): the video playing (channel id to title), where, and commands. */
     private val ytNow = MutableStateFlow<Pair<String, String>?>(null)
     @Volatile private var ytPositionMs = 0L
@@ -82,7 +102,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         simpleTv.channels.channels, controller.current, controller.tuner.pendingDigits, controller.bannerVisible,
         settingsVisible, engine.state, simpleTv.settings.settings, controller.externalUnavailable,
         simpleTv.queue.nowTitle, simpleTv.secrets.secrets, paused, simpleTv.guide.version, controller.listIndex,
-        playing, ytNow,
+        playing, ytNow, hint, ytProblem, queueEmpty,
     ) { values ->
         val current = values[1] as Channel?
         @Suppress("UNCHECKED_CAST")
@@ -106,6 +126,11 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             listIndex = listIndex,
             listGuide = listIndex?.let { simpleTv.guide.nowNext(sorted[it]) },
             previewOn = listIndex != null && sorted[listIndex].playsOnSimpleTv && values[13] == sorted[listIndex].id,
+            hint = values[15] as TvHint?,
+            ytProblem = values[16] != null && values[16] == current?.id,
+            queueEmpty = values[17] as QueueEmpty?,
+            guardPausedUntil = (values[6] as com.ielali.simpletv.data.AppSettings).let { if (it.guardEnabled) it.guardPausedUntil else 0L },
+            showClock = (values[6] as com.ielali.simpletv.data.AppSettings).showClock,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, TvUiState())
 
@@ -125,7 +150,9 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 previewedId = null
                 ytPositionMs = 0L; ytPauseAsked = false
+                ytProblem.value = null; skipped = null
                 playChannel(ch)
+                ch?.let(::maybeTeach)
             }
         }
         // The channel list: it replaces the settings card. Once the viewer rests on a channel for a moment,
@@ -217,7 +244,8 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             if (controller.current.value?.id != channelId) return@launch
             ytPositionMs = seconds * 1000L
             if (title.isNotBlank()) ytNow.value = channelId to title
-            if (state == YT_PLAYING) { ytPauseAsked = false; paused.value = false } else if (state == YT_PAUSED && ytPauseAsked) paused.value = true
+            if (state == YT_STUCK) { ytProblem.value = channelId; return@launch }
+            if (state == YT_PLAYING) { ytPauseAsked = false; paused.value = false; ytProblem.value = null } else if (state == YT_PAUSED && ytPauseAsked) paused.value = true
             if (videoId.isNotBlank() && index >= 0) {
                 runCatching { simpleTv.ytProgress.save(channelId, com.ielali.simpletv.data.YouTubeProgress.Spot(index, videoId, seconds, System.currentTimeMillis())) }
             }
@@ -225,7 +253,23 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun ytAction(a: QueueKeys.Action) {
-        val cmd = when (a) {
+        val undo = a == QueueKeys.Action.PREVIOUS && skipped?.let { System.currentTimeMillis() - it.third < UNDO_MS } == true
+        val cmd = when {
+            undo -> "undo"
+            else -> ytCmd(a)
+        }
+        skipped = if (a == QueueKeys.Action.NEXT) Triple("", 0L, System.currentTimeMillis()) else null
+        when (cmd) {
+            "pause" -> { ytPauseAsked = true; paused.value = true }
+            "play" -> { ytPauseAsked = false; paused.value = false }
+            "next" -> { ytPauseAsked = false; paused.value = false; teach(TvHint.SKIPPED, UNDO_MS) }
+            "prev", "restart", "undo" -> { ytPauseAsked = false; paused.value = false; controller.showBanner() }
+        }
+        _ytCommands.tryEmit(cmd)
+    }
+
+    private fun ytCmd(a: QueueKeys.Action): String {
+        return when (a) {
             QueueKeys.Action.NEXT -> "next"
             QueueKeys.Action.PREVIOUS -> "prev"
             QueueKeys.Action.RESTART -> "restart"
@@ -235,18 +279,33 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             QueueKeys.Action.FORWARD -> "fwd"
             QueueKeys.Action.BACK -> "back"
         }
-        when (cmd) {
-            "pause" -> { ytPauseAsked = true; paused.value = true }
-            "play" -> { ytPauseAsked = false; paused.value = false }
-            "next", "prev", "restart" -> { ytPauseAsked = false; paused.value = false; controller.showBanner() }
-        }
-        _ytCommands.tryEmit(cmd)
+    }
+
+    /** Shows a hint line under the banner for [ms]. */
+    private fun teach(h: TvHint, ms: Long) {
+        hint.value = h
+        controller.showBanner(ms)
+        hintJob?.cancel()
+        hintJob = viewModelScope.launch { delay(ms); hint.value = null }
+    }
+
+    /** Once a day, a film, series or playlist channel says how the remote works on it. */
+    private fun maybeTeach(ch: Channel) {
+        val moves = ch.playlist != null || (ch.type == SourceType.YOUTUBE && com.ielali.simpletv.youtube.YouTubeEmbed.isPlaylist(ch.url))
+        if (!moves) { hint.value = null; return }
+        val prefs = getApplication<Application>().getSharedPreferences("hints", android.content.Context.MODE_PRIVATE)
+        val today = (System.currentTimeMillis() / 86_400_000L).toInt()
+        if (prefs.getInt("controls_day", -1) == today) return
+        prefs.edit().putInt("controls_day", today).apply()
+        teach(TvHint.CONTROLS, 10_000L)
     }
 
     /** What the player should be playing for [ch]: its id when it plays on this screen. */
     private fun expected(ch: Channel?): String? = if (ch != null && ch.playsOnSimpleTv) ch.id else null
 
     private fun leaveQueueItem() {
+        queueEmpty.value = null
+        emptyRetry?.cancel()
         queueItem = null
         paused.value = false
         simpleTv.queue.report(null)
@@ -292,11 +351,24 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun playQueued(ch: Channel, item: QueuePlayback.Playable?, banner: Boolean = false) {
         setPaused(false)
+        emptyRetry?.cancel()
         if (item == null) {
             engine.stop()
             simpleTv.queue.report(null)
+            val spec = ch.playlist
+            queueEmpty.value = if (spec != null && (com.ielali.simpletv.data.RatingRules.hasRules(spec) || spec.skipNoYear))
+                QueueEmpty.CHECKING else QueueEmpty.NOTHING
+            // Films get checked in the background: look again every minute while this channel is on.
+            emptyRetry = viewModelScope.launch {
+                while (true) {
+                    delay(60_000)
+                    if (controller.current.value?.id != ch.id) return@launch
+                    simpleTv.queue.current(ch)?.let { playQueued(ch, it); return@launch }
+                }
+            }
             return
         }
+        queueEmpty.value = null
         queueItem = ch to item.itemId
         simpleTv.queue.report(QueuePlayback.State(ch.id, item.itemId, paused = false))
         if (banner) controller.showBanner()
@@ -322,8 +394,21 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     /** Right, Left, OK (and media keys) on a film or series channel. */
     private fun queueAction(ch: Channel, a: QueueKeys.Action) {
         when (a) {
-            QueueKeys.Action.NEXT -> viewModelScope.launch { playQueued(ch, simpleTv.queue.advance(ch), banner = true) }
-            QueueKeys.Action.PREVIOUS -> viewModelScope.launch { playQueued(ch, simpleTv.queue.back(ch), banner = true) }
+            QueueKeys.Action.NEXT -> viewModelScope.launch {
+                queueItem?.second?.let { skipped = Triple(it, engine.positionMs(), System.currentTimeMillis()) }
+                playQueued(ch, simpleTv.queue.advance(ch))
+                teach(TvHint.SKIPPED, UNDO_MS)
+            }
+            QueueKeys.Action.PREVIOUS -> viewModelScope.launch {
+                val s = skipped?.takeIf { System.currentTimeMillis() - it.third < UNDO_MS && it.first.isNotEmpty() }
+                skipped = null
+                if (s != null) {
+                    simpleTv.queue.save(ch.id, s.first, s.second)
+                    playQueued(ch, simpleTv.queue.current(ch), banner = true)
+                } else {
+                    playQueued(ch, simpleTv.queue.back(ch), banner = true)
+                }
+            }
             QueueKeys.Action.RESTART -> { engine.seekTo(0); setPaused(false); engine.player.play(); controller.showBanner() }
             QueueKeys.Action.TOGGLE_PAUSE -> if (paused.value) queueAction(ch, QueueKeys.Action.PLAY) else queueAction(ch, QueueKeys.Action.PAUSE)
             QueueKeys.Action.PAUSE -> { engine.player.pause(); setPaused(true); viewModelScope.launch { saveQueueProgress() } }
@@ -392,8 +477,12 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         /** YouTube player states the playlist page reports. */
         const val YT_PLAYING = 1
         const val YT_PAUSED = 2
+        /** Sent by the playlist page when videos fail one after another. */
+        const val YT_STUCK = -2
+        /** How long Left brings back what Right just skipped. */
+        const val UNDO_MS = 5_000L
         /** How long the highlight rests on a channel before the preview window tunes it. */
-        const val PREVIEW_DELAY_MS = 800L
+        const val PREVIEW_DELAY_MS = 1_500L
         val LIST_REPEAT_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_PAGE_DOWN,

@@ -42,6 +42,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
@@ -92,41 +93,70 @@ fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
         val videoOn = if (listOpen) state.previewOn else current?.playsOnSimpleTv == true
         // One call site, so the same video view (and its picture) moves between full screen and the window.
         if (videoOn) VideoSurface(vm, if (inPreview) placedAt(previewBox!!, density).zIndex(1f) else Modifier.fillMaxSize())
+
+        // YouTube's rules forbid drawing over its embedded player: while the banner or the paused line
+        // shows, the player makes room for them instead (ADR-024).
+        val ytEmbed = current?.type == SourceType.YOUTUBE && !state.youtubeInApp
+        var bannerBottom by remember { mutableStateOf(0) }
+        val cardShown = current?.type == SourceType.YOUTUBE && (state.youtubeInApp || state.ytProblem) ||
+            (current?.playsOnSimpleTv == true && (state.playback == PlaybackState.TUNING || state.playback == PlaybackState.ERROR)) ||
+            (current?.playlist != null && state.queueEmpty != null)
+        val bannerOn = state.channels.isNotEmpty() && !listOpen &&
+            (state.pendingDigits.isNotEmpty() || (state.bannerVisible && !cardShown))
+        val ytTop = if (ytEmbed && bannerOn) with(density) { bannerBottom.toDp() } else 0.dp
+        val ytBottom = if (ytEmbed && state.paused) PausedBandHeight else 0.dp
+
         when {
             state.channels.isEmpty() -> NoChannels(state.configUrl)
-            current == null || listOpen -> Unit // YouTube stops while the list is open; it reloads after
+            // YouTube stops while the list or the settings card is open; it carries on where it was after.
+            current == null || listOpen || state.settingsVisible -> Unit
             current.playsOnSimpleTv -> Unit
-            current.type == SourceType.YOUTUBE ->
-                if (state.youtubeInApp) ChannelCard(current, stringResource(R.string.opening_youtube))
-                else key(current.id, current.url) { YouTubeSurface(current, vm) }
+            current.type == SourceType.YOUTUBE -> when {
+                state.youtubeInApp -> ChannelCard(current, stringResource(R.string.opening_youtube))
+                state.ytProblem -> ChannelCard(current, stringResource(R.string.yt_problem), spinner = false)
+                else -> key(current.id, current.url) {
+                    YouTubeSurface(current, vm, Modifier.fillMaxSize().padding(top = ytTop, bottom = ytBottom))
+                }
+            }
         }
 
         // While a stream tunes or has no signal, a card keeps the channel's number and name on screen.
-        val streamCard = when {
-            listOpen || current?.playsOnSimpleTv != true -> null
-            state.playback == PlaybackState.TUNING -> stringResource(R.string.tuning)
-            state.playback == PlaybackState.ERROR -> stringResource(R.string.no_signal_retrying)
-            else -> null
-        }
-        if (current != null && streamCard != null) ChannelCard(current, streamCard)
-        if (!listOpen && current?.playsOnSimpleTv == true && state.playback == PlaybackState.REBUFFERING) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner(size = 72) }
+        if (!listOpen && current?.playsOnSimpleTv == true) {
+            val empty = state.queueEmpty
+            when {
+                current.playlist != null && empty != null -> ChannelCard(
+                    current,
+                    stringResource(if (empty == QueueEmpty.CHECKING) R.string.checking_films else R.string.no_films),
+                    spinner = empty == QueueEmpty.CHECKING,
+                )
+                state.playback == PlaybackState.TUNING -> ChannelCard(current, stringResource(R.string.tuning))
+                state.playback == PlaybackState.ERROR ->
+                    ChannelCard(current, stringResource(R.string.no_signal_retrying), detail = stringResource(R.string.no_signal_hint))
+                state.playback == PlaybackState.REBUFFERING ->
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner(size = 72) }
+            }
         }
 
-        // The card already names the channel; the corner banner still shows digits being typed.
-        val cardShown = streamCard != null || (current?.type == SourceType.YOUTUBE && state.youtubeInApp)
-        val bannerOn = state.channels.isNotEmpty() && state.listIndex == null &&
-            (state.pendingDigits.isNotEmpty() || (state.bannerVisible && !cardShown))
         AnimatedVisibility(
             visible = bannerOn,
             enter = fadeIn(), exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopStart),
+            modifier = Modifier.align(Alignment.TopStart).onGloballyPositioned { bannerBottom = it.size.height },
         ) {
-            ChannelBanner(current = current, pendingDigits = state.pendingDigits, nowTitle = state.nowTitle, guide = state.guide)
+            ChannelBanner(
+                current = current, pendingDigits = state.pendingDigits, nowTitle = state.nowTitle, guide = state.guide,
+                hint = when (state.hint) {
+                    TvHint.CONTROLS -> stringResource(R.string.hint_controls)
+                    TvHint.SKIPPED -> stringResource(R.string.hint_skipped)
+                    null -> null
+                },
+            )
         }
-        // The time, with the banner: easy to lose track of in the evening.
+        // The time in the corner while watching (it can be turned off on the page); over YouTube's player
+        // only with the banner, in the room the player leaves for it.
+        val clockOn = state.channels.isNotEmpty() && !listOpen && !state.settingsVisible && state.pendingDigits.isEmpty() &&
+            (bannerOn || (state.showClock && !ytEmbed && !cardShown))
         AnimatedVisibility(
-            visible = bannerOn && state.pendingDigits.isEmpty(),
+            visible = clockOn,
             enter = fadeIn(), exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopEnd),
         ) {
@@ -135,7 +165,20 @@ fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
             }
         }
 
-        if (state.paused && current != null && state.listIndex == null) PausedCard(current, state.nowTitle)
+        if (state.paused && current != null && !listOpen) {
+            if (ytEmbed) PausedBand(Modifier.align(Alignment.BottomCenter)) else PausedCard(current, state.nowTitle)
+        }
+
+        // The caregiver paused the home guard: say so, so nobody wonders why Home behaves differently.
+        val now by produceState(System.currentTimeMillis()) { while (true) { kotlinx.coroutines.delay(15_000); value = System.currentTimeMillis() } }
+        if (state.guardPausedUntil > now && !listOpen && !state.settingsVisible && !ytEmbed) {
+            Text(
+                stringResource(R.string.guard_paused_tv), color = Fg, fontSize = 32.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(32.dp)
+                    .background(BannerBg, RoundedCornerShape(12.dp)).padding(horizontal = 28.dp, vertical = 12.dp),
+            )
+        }
+
         if (listOpen) {
             ChannelListOverlay(state, vm, onPreviewBox = { previewBox = it })
             val box = previewBox
@@ -150,6 +193,21 @@ fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
             }
         }
         if (state.settingsVisible) SettingsOverlay(state.configUrl, state.pin)
+    }
+}
+
+private val PausedBandHeight = 120.dp
+
+/** "Paused" for YouTube channels: a band under the player, never over it. */
+@Composable
+private fun PausedBand(modifier: Modifier) {
+    Row(
+        modifier = modifier.fillMaxWidth().height(PausedBandHeight).background(Color(0xFF0B1220)).padding(horizontal = 48.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(R.string.paused), color = Accent, fontSize = 48.sp, fontWeight = FontWeight.Black)
+        Spacer(Modifier.width(32.dp))
+        Text(stringResource(R.string.paused_hint), color = Fg, fontSize = 32.sp)
     }
 }
 
@@ -199,7 +257,7 @@ private fun styleSubtitles(view: SubtitleView, ctx: android.content.Context) {
 @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
 @UnstableApi
 @Composable
-private fun YouTubeSurface(channel: Channel, vm: TvViewModel) {
+private fun YouTubeSurface(channel: Channel, vm: TvViewModel, modifier: Modifier) {
     val target = remember(channel.url) { YouTubeEmbed.parse(channel.url) }
     if (target == null) {
         CenterMessage(stringResource(R.string.no_signal))
@@ -212,7 +270,7 @@ private fun YouTubeSurface(channel: Channel, vm: TvViewModel) {
     }
     var web by remember { mutableStateOf<WebView?>(null) }
     AndroidView(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier,
         factory = { ctx ->
             WebView(ctx).apply {
                 settings.javaScriptEnabled = true
@@ -252,7 +310,7 @@ private class PlaylistBridge(private val vm: TvViewModel, private val channelId:
 }
 
 @Composable
-private fun ChannelBanner(current: Channel?, pendingDigits: String, nowTitle: String?, guide: NowNext?) {
+private fun ChannelBanner(current: Channel?, pendingDigits: String, nowTitle: String?, guide: NowNext?, hint: String? = null) {
     Row(
         modifier = Modifier
             .padding(48.dp)
@@ -281,6 +339,11 @@ private fun ChannelBanner(current: Channel?, pendingDigits: String, nowTitle: St
             }
             // Live channels: the TV guide's now and next, with how far through the programme we are.
             if (pendingDigits.isEmpty() && guide?.now != null) GuideLines(guide)
+            // How the remote works on this channel (once a day), or how to undo a skip.
+            if (pendingDigits.isEmpty() && hint != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(hint, color = Accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
@@ -324,7 +387,7 @@ private fun ChannelListOverlay(state: TvUiState, vm: TvViewModel, onPreviewBox: 
                 Spacer(Modifier.width(32.dp))
                 Column(Modifier.weight(0.5f).fillMaxHeight()) {
                     Box(
-                        Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                        Modifier.fillMaxWidth(0.8f).aspectRatio(16f / 9f)
                             .background(Color.Black, RoundedCornerShape(12.dp))
                             .onGloballyPositioned { onPreviewBox(it.boundsInRoot()) },
                         contentAlignment = Alignment.Center,
@@ -452,10 +515,7 @@ private fun GuideLines(guide: NowNext, barModifier: Modifier = Modifier.width(56
     }
 }
 
-/**
- * Now and next in the channel list: the programme's own name gets two lines, the times sit above it in
- * smaller type, and the description fills whatever room is left.
- */
+/** Now and next in the channel list, at the banner's readable size: times, the programme, and what is next. */
 @Composable
 private fun ListGuide(guide: NowNext, modifier: Modifier) {
     val ctx = LocalContext.current
@@ -464,11 +524,11 @@ private fun ListGuide(guide: NowNext, modifier: Modifier) {
     val span = (now.stop - now.start).coerceAtLeast(1L)
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.guide_now), color = Accent, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.guide_now), color = Accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(12.dp))
-            Text("${fmt.format(java.util.Date(now.start))}–${fmt.format(java.util.Date(now.stop))}", color = Fg.copy(alpha = 0.75f), fontSize = 24.sp)
+            Text("${fmt.format(java.util.Date(now.start))}–${fmt.format(java.util.Date(now.stop))}", color = Fg, fontSize = 32.sp, maxLines = 1)
         }
-        Text(now.title, color = Fg, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, lineHeight = 36.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(now.title, color = Fg, fontSize = 32.sp, fontWeight = FontWeight.SemiBold, lineHeight = 38.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
         LinearProgressIndicator(
             progress = { ((System.currentTimeMillis() - now.start).toFloat() / span).coerceIn(0f, 1f) },
             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).height(6.dp),
@@ -476,15 +536,10 @@ private fun ListGuide(guide: NowNext, modifier: Modifier) {
             trackColor = Fg.copy(alpha = 0.25f),
         )
         guide.next?.let { next ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.guide_next), color = Fg.copy(alpha = 0.75f), fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(12.dp))
-                Text("${fmt.format(java.util.Date(next.start))}  ${next.title}", color = Fg.copy(alpha = 0.75f), fontSize = 24.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-        now.desc?.let { d ->
-            Spacer(Modifier.height(6.dp))
-            Text(d, color = Fg.copy(alpha = 0.7f), fontSize = 22.sp, lineHeight = 28.sp, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Text(
+                "${stringResource(R.string.guide_next)}  ${fmt.format(java.util.Date(next.start))}  ${next.title}",
+                color = Fg, fontSize = 32.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -512,7 +567,6 @@ private fun NoChannels(configUrl: String) {
         title = stringResource(R.string.no_channels_title),
         hint = stringResource(R.string.no_channels_hint),
         configUrl = configUrl,
-        footer = null,
         modifier = Modifier.fillMaxSize(),
     )
 }
@@ -520,12 +574,12 @@ private fun NoChannels(configUrl: String) {
 @Composable
 private fun SettingsOverlay(configUrl: String, pin: String?) {
     // The page PIN is shown only here, on the TV itself, so whoever is in the room can sign in.
-    val close = stringResource(R.string.settings_close)
     ConfigPrompt(
         title = stringResource(R.string.settings_title),
         hint = stringResource(R.string.settings_hint),
         configUrl = configUrl,
-        footer = if (pin.isNullOrEmpty()) close else stringResource(R.string.settings_pin, pin) + "\n" + close,
+        pin = pin?.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.settings_pin, it) },
+        footer = listOf(stringResource(R.string.settings_escape), stringResource(R.string.settings_close)),
         modifier = Modifier.fillMaxSize().background(Color(0xE60B1220)),
     )
 }
@@ -535,7 +589,7 @@ private fun SettingsOverlay(configUrl: String, pin: String?) {
  * opens it. Both carry the same URL so either works from across the room.
  */
 @Composable
-private fun ConfigPrompt(title: String, hint: String, configUrl: String, footer: String?, modifier: Modifier) {
+private fun ConfigPrompt(title: String, hint: String, configUrl: String, pin: String? = null, footer: List<String> = emptyList(), modifier: Modifier) {
     Row(
         modifier = modifier.padding(64.dp),
         horizontalArrangement = Arrangement.Center,
@@ -551,10 +605,14 @@ private fun ConfigPrompt(title: String, hint: String, configUrl: String, footer:
             Spacer(Modifier.height(16.dp))
             Text(configUrl, color = Accent, fontSize = 48.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(16.dp))
-            Text(stringResource(R.string.scan_hint), color = Fg.copy(alpha = 0.8f), fontSize = 28.sp)
-            if (footer != null) {
-                Spacer(Modifier.height(48.dp))
-                Text(footer, color = Fg.copy(alpha = 0.7f), fontSize = 28.sp)
+            Text(stringResource(R.string.scan_hint), color = Fg, fontSize = 32.sp)
+            if (pin != null) {
+                Spacer(Modifier.height(24.dp))
+                Text(pin, color = Fg, fontSize = 48.sp, fontWeight = FontWeight.Bold)
+            }
+            if (footer.isNotEmpty()) {
+                Spacer(Modifier.height(32.dp))
+                footer.forEach { Text(it, color = Fg.copy(alpha = 0.85f), fontSize = 32.sp) }
             }
         }
         Spacer(Modifier.width(48.dp))
@@ -567,7 +625,7 @@ private fun ConfigPrompt(title: String, hint: String, configUrl: String, footer:
  * (retrying), or the YouTube app opening. Large and centred so it reads from across the room.
  */
 @Composable
-private fun ChannelCard(channel: Channel, status: String) {
+private fun ChannelCard(channel: Channel, status: String, detail: String? = null, spinner: Boolean = true) {
     Column(
         modifier = Modifier.fillMaxSize().background(Color.Black),
         verticalArrangement = Arrangement.Center,
@@ -584,9 +642,12 @@ private fun ChannelCard(channel: Channel, status: String) {
         if (channel.number > 0) Text(channel.number.toString(), color = Accent, fontSize = 120.sp, fontWeight = FontWeight.Black)
         Text(channel.name, color = Fg, fontSize = 56.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(40.dp))
-        Spinner(size = 64)
-        Spacer(Modifier.height(24.dp))
-        Text(status, color = Fg.copy(alpha = 0.75f), fontSize = 32.sp)
+        if (spinner) { Spinner(size = 64); Spacer(Modifier.height(24.dp)) }
+        Text(status, color = Fg, fontSize = 32.sp)
+        if (detail != null) {
+            Spacer(Modifier.height(16.dp))
+            Text(detail, color = Accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 

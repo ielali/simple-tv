@@ -50,7 +50,7 @@ class TvController(
     private val lastChannel: LastChannelStore,
     private val clock: () -> Long = System::currentTimeMillis,
     entryTimeoutMs: Long = 1500L,
-    private val bannerMs: Long = 3500L,
+    private val bannerMs: Long = 6000L,
     private val reopenGraceMs: Long = 5000L,
     private val listIdleMs: Long = 60_000L,
 ) {
@@ -196,19 +196,8 @@ class TvController(
         }
     }
 
-    /**
-     * Nobody touched the list for a minute. Resting on a live channel, the viewer has been watching it
-     * in the preview window, so it becomes the channel; otherwise the list just goes away.
-     */
-    private fun listLeftAlone() {
-        val ch = listChannel()
-        if (ch != null && ch.type == SourceType.STREAM && ch.id != _current.value?.id) {
-            _listIndex.value = null
-            switchTo(ch)
-        } else {
-            closeList()
-        }
-    }
+    /** Nobody touched the list for a minute: it closes and the channel that was on comes back. Only OK changes channel. */
+    private fun listLeftAlone() = closeList()
 
     /** Back to the channel watched before this one. False when there is none. */
     fun previousChannel(): Boolean {
@@ -218,8 +207,11 @@ class TvController(
         return true
     }
 
-    fun channelUp() = switchTo(ChannelNavigator.next(_current.value, sortedChannels))
-    fun channelDown() = switchTo(ChannelNavigator.previous(_current.value, sortedChannels))
+    /** Channels that failed to play a moment ago; channel up/down steps over them (set by the app). */
+    @Volatile var skipWhenZapping: (Channel) -> Boolean = { false }
+
+    fun channelUp() = switchTo(ChannelNavigator.next(_current.value, sortedChannels, skipWhenZapping))
+    fun channelDown() = switchTo(ChannelNavigator.previous(_current.value, sortedChannels, skipWhenZapping))
 
     /** MainActivity reports when its screen starts and stops being visible. */
     fun onAppVisible(visible: Boolean) {
@@ -278,11 +270,11 @@ class TvController(
         }
     }
 
-    fun showBanner() {
+    fun showBanner(forMs: Long = bannerMs) {
         bannerJob?.cancel()
         bannerShown.value = true
         bannerJob = scope.launch {
-            delay(bannerMs)
+            delay(forMs)
             bannerShown.value = false
         }
     }

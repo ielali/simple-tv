@@ -16,17 +16,26 @@ object ChannelNavigator {
         return sorted.firstOrNull { it.number > number } ?: sorted.first()
     }
 
-    fun next(current: Channel?, sorted: List<Channel>): Channel? {
-        if (sorted.isEmpty()) return null
-        if (current == null) return sorted.first()
-        val idx = sorted.indexOfFirst { it.id == current.id }
-        return sorted[(idx + 1).mod(sorted.size)]
-    }
+    /**
+     * Channel up. [skip] steps over channels that just failed to play (ADR-024); when every other
+     * channel would be skipped, the plain next one is used, so the viewer is never stuck.
+     */
+    fun next(current: Channel?, sorted: List<Channel>, skip: (Channel) -> Boolean = { false }): Channel? =
+        step(current, sorted, 1, skip)
 
-    fun previous(current: Channel?, sorted: List<Channel>): Channel? {
+    fun previous(current: Channel?, sorted: List<Channel>, skip: (Channel) -> Boolean = { false }): Channel? =
+        step(current, sorted, -1, skip)
+
+    private fun step(current: Channel?, sorted: List<Channel>, dir: Int, skip: (Channel) -> Boolean): Channel? {
         if (sorted.isEmpty()) return null
-        if (current == null) return sorted.last()
-        val idx = sorted.indexOfFirst { it.id == current.id }
-        return sorted[(idx - 1).mod(sorted.size)]
+        val idx = current?.let { c -> sorted.indexOfFirst { it.id == c.id } } ?: -1
+        val start = if (idx < 0) (if (dir > 0) -1 else 0) else idx
+        val plain = sorted[(start + dir).mod(sorted.size)]
+        for (k in 1..sorted.size) {
+            val c = sorted[(start + dir * k).mod(sorted.size)]
+            if (c.id == current?.id) break
+            if (!skip(c)) return c
+        }
+        return plain
     }
 }

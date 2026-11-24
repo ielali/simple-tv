@@ -37,8 +37,8 @@ class CatalogRulesTest {
     @Test
     fun `refresh time is validated`() {
         assertEquals("07:05", RefreshSchedule.normalise("7:05"))
-        assertEquals("21:00", RefreshSchedule.normalise("25:00"))
-        assertEquals("21:00", RefreshSchedule.normalise(null))
+        assertEquals("04:00", RefreshSchedule.normalise("25:00"))
+        assertEquals("04:00", RefreshSchedule.normalise(null))
     }
 
     // ---- status and diff

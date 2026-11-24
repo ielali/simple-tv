@@ -63,6 +63,25 @@ class HomeGuardService : AccessibilityService() {
         // The guard starts after an update or a crash with the Google TV home already in front, and no
         // window change follows to wake it: look once it has settled, and bring Simple TV back.
         checkFrontSoon("guard started")
+        // When a pause ends (by time, or resumed early on the page), the TV goes back to Simple TV.
+        scope.launch {
+            var before = 0L
+            (application as SimpleTvApp).settings.settings
+                .collect { s ->
+                    val until = s.guardPausedUntil
+                    val wasPaused = before > System.currentTimeMillis()
+                    before = until
+                    pauseEnd?.cancel()
+                    if (until > System.currentTimeMillis()) {
+                        pauseEnd = scope.launch {
+                            kotlinx.coroutines.delay(until - System.currentTimeMillis() + 500L)
+                            backToSimpleTv("pause ended")
+                        }
+                    } else if (wasPaused) {
+                        backToSimpleTv("pause resumed")
+                    }
+                }
+        }
         androidx.core.content.ContextCompat.registerReceiver(
             this, screenReceiver,
             android.content.IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON) },
@@ -75,6 +94,44 @@ class HomeGuardService : AccessibilityService() {
      * turn the TV straight back on, so the guard stands down while the screen is off (and for a moment
      * after), and looks again once the TV is switched back on.
      */
+    private var pauseEnd: Job? = null
+
+    private fun backToSimpleTv(why: String) {
+        if (!config().enabled || tv.appVisible.value || tv.isExternalFront()) return
+        goHome(why)
+    }
+
+    /**
+     * The caregiver's way in without the web page (when the Wi-Fi itself is the problem): holding BACK
+     * for 5 seconds pauses the guard for 15 minutes and opens Android's Wi-Fi settings (ADR-024).
+     */
+    private var backDownAt = 0L
+    private var backFired = false
+
+    private fun watchBackHold(event: KeyEvent) {
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) {
+                backDownAt = SystemClock.uptimeMillis(); backFired = false
+            } else if (!backFired && backDownAt > 0 && SystemClock.uptimeMillis() - backDownAt >= BACK_HOLD_MS) {
+                backFired = true
+                maintenance()
+            }
+            KeyEvent.ACTION_UP -> backDownAt = 0L
+        }
+    }
+
+    private fun maintenance() {
+        val app = application as SimpleTvApp
+        Log.i(TAG, "BACK held: pausing the guard for 15 minutes and opening Wi-Fi settings")
+        app.appScope.launch {
+            app.settings.replace(app.settings.current().copy(guardPausedUntil = System.currentTimeMillis() + 15 * 60_000L))
+        }
+        val wifi = Intent(android.provider.Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { startActivity(wifi) }.onFailure {
+            runCatching { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        }
+    }
+
     @Volatile private var screenOffAt = 0L
     private val screenReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context, intent: Intent) {
@@ -275,6 +332,7 @@ class HomeGuardService : AccessibilityService() {
     override fun onKeyEvent(event: KeyEvent?): Boolean {
         if (event == null) return false
         val code = event.keyCode
+        if (code == KeyEvent.KEYCODE_BACK) watchBackHold(event)
         val now = System.currentTimeMillis()
         val action = if (tv.isExternalFront()) {
             HomeGuardPolicy.onKeyDuringExternal(code, config(), now, tv.tuner.pendingDigits.value.isNotEmpty())
@@ -333,6 +391,7 @@ class HomeGuardService : AccessibilityService() {
     private companion object {
         const val TAG = "HomeGuard"
         const val PICKER_WINDOW_MS = 30_000L
+        const val BACK_HOLD_MS = 5_000L
         const val SAMPLE_INTERVAL_MS = 1_500L
         const val MAX_NODES = 300
     }

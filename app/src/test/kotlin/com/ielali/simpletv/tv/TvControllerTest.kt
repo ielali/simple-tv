@@ -297,14 +297,25 @@ class TvControllerTest {
     }
 
     @Test
-    fun `left resting on another live channel, the list tunes it after a minute`() = runTest {
+    fun `left alone, the list closes and the channel that was on stays on`() = runTest {
         val r = rig(last = 1)
         r.controller.onAppVisible(true)
         r.controller.openList()
-        r.controller.onListKey(GuardKeys.DPAD_UP) // channel 4, a stream, now in the preview window
+        r.controller.onListKey(GuardKeys.DPAD_UP) // channel 4, a stream, in the preview window
         advanceTimeBy(60_001)
         assertFalse(r.controller.isListOpen())
+        assertEquals("only OK changes channel", 1, r.controller.current.value?.number)
+    }
+
+    @Test
+    fun `channel up steps over channels that just failed`() = runTest {
+        val r = rig(last = 1)
+        r.controller.onAppVisible(true)
+        r.controller.skipWhenZapping = { it.number == 2 || it.number == 3 }
+        r.controller.channelUp()
         assertEquals(4, r.controller.current.value?.number)
+        r.controller.channelDown()
+        assertEquals(1, r.controller.current.value?.number)
     }
 
     @Test

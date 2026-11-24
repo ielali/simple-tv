@@ -121,7 +121,7 @@ object YouTubeEmbed {
         </head><body><div id="p"></div>
         <script>
         var LIST='${target.listId}', WANT=${want?.let { "'$it'" } ?: "null"}, INDEX=$index, SEC=$seconds, SHUFFLE=${target.shuffle};
-        var player=null, placed=false, seekWanted=0, errors=0;
+        var player=null, placed=false, seekWanted=0, errors=0, last=null;
         function report(){try{if(!player||!player.getPlayerState)return;var d=player.getVideoData()||{};
           SimpleTv.report(player.getPlaylistIndex(), d.video_id||'', d.title||'', Math.floor(player.getCurrentTime()||0), player.getPlayerState());}catch(e){}}
         function place(){var pl=player.getPlaylist();if(!pl||!pl.length)return;placed=true;player.setLoop(true);
@@ -132,9 +132,15 @@ object YouTubeEmbed {
           playerVars:{autoplay:1,controls:0,rel:0,modestbranding:1,playsinline:1,iv_load_policy:3,fs:0,origin:'$ORIGIN'},
           events:{onReady:function(e){e.target.loadPlaylist({list:LIST,listType:'playlist',index:INDEX,startSeconds:SEC});},
             onStateChange:function(e){if(!placed)place();if(e.data===1){errors=0;if(seekWanted>0){player.seekTo(seekWanted,true);seekWanted=0;}}report();},
-            onError:function(e){report();if(++errors<25)setTimeout(function(){player.nextVideo();},1500);}}});}
+            onError:function(e){
+              // Only videos that can't play here (removed, private, embedding off) are skipped; never ads.
+              var skippable=(e.data===100||e.data===101||e.data===150);
+              if(skippable&&++errors<5){setTimeout(function(){player.nextVideo();},1500);report();}
+              else{try{SimpleTv.report(player.getPlaylistIndex(),'','',0,-2);}catch(x){}}}}});}
         function stvCmd(c){if(!player)return;try{var t=player.getCurrentTime()||0;
-          if(c==='next')player.nextVideo();else if(c==='prev')player.previousVideo();else if(c==='restart')player.seekTo(0,true);
+          if(c==='next'){last={i:player.getPlaylistIndex(),t:t};player.nextVideo();}
+          else if(c==='undo'&&last){seekWanted=last.t;player.playVideoAt(last.i);last=null;}
+          else if(c==='prev')player.previousVideo();else if(c==='restart')player.seekTo(0,true);
           else if(c==='pause')player.pauseVideo();else if(c==='play')player.playVideo();
           else if(c==='toggle'){if(player.getPlayerState()===1)player.pauseVideo();else player.playVideo();}
           else if(c==='fwd')player.seekTo(t+30,true);else if(c==='back')player.seekTo(Math.max(0,t-30),true);}catch(e){}

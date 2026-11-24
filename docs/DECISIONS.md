@@ -462,3 +462,38 @@ Decision:
 
 Consequences: The household's YouTube account and Premium don't apply to playlist channels. The
 WebView is now destroyed when the channel or the list replaces it, which also stops stray sound.
+
+## ADR-024 Changes after two outside reviews
+
+Context: Two independent reviews of the TV and the config page (November 2026) agreed on most
+points. The household's remote has no number keys, no ★ and no media keys: channel up/down, the
+arrows, OK, Back and the blue Live TV button are the viewer's whole remote.
+
+Decision (TV):
+- The channel list never changes channel by itself: left alone for a minute, or closed with Back,
+  the channel that was on comes back; only OK keeps another. The preview starts after the
+  highlight has rested 1.5 s. The list's guide is at 32sp (times, the programme on up to two lines,
+  next); the description is gone; channel names stay at 40sp.
+- "No signal" adds "Press channel up for another channel." Channel up/down steps over a channel
+  that failed in the last 10 minutes (never when every other channel would be skipped); after 10
+  minutes it gets another try.
+- The banner stays 6 s. Film, series and playlist channels say once a day "Right: next · OK:
+  pause"; after Right, "Skipped · Left goes back", and Left within 5 s brings back what was skipped,
+  where it was. A film channel with nothing to play says "Checking the films…" (or that there is
+  nothing yet) and looks again every minute.
+- A clock in the top corner while watching, switchable on the page.
+- YouTube's embedded-player rules forbid drawing over the player: on embedded YouTube channels the
+  banner and the paused line get room beside the player instead (the player shrinks while they
+  show), the settings card and the channel list stop the player, and the corner clock shows only
+  with the banner. Playlist videos are skipped only for "can't play here" errors (removed,
+  private, embedding off), never for ads; after five in a row, or any other error, the TV says
+  "YouTube isn't playing. Press channel up for another channel."
+- Holding Back for 5 seconds pauses the home guard for 15 minutes and opens Android's Wi-Fi
+  settings, so the caregiver can fix the network without the page; the settings card says so.
+  While the guard is paused the TV says "Simple TV is paused"; when the pause ends, or is resumed
+  early, Simple TV comes back. The PIN on the settings card is 48sp.
+- The daily catalog update defaults to 04:00, when nobody watches (existing choices are kept).
+
+Not adopted: Back as "previous channel" (it stays close/cancel; previous channel goes on a spare
+button the caregiver chooses), keeping channel up/down to live channels only (film channels stay
+in the order, like film channels on a real TV), spoken channel names (later).

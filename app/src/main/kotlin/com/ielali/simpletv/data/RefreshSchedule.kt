@@ -11,7 +11,7 @@ import java.time.ZonedDateTime
  * recent scheduled moment has not been run yet", which also catches up after the TV was switched off.
  */
 object RefreshSchedule {
-    const val DEFAULT_TIME = "21:00"
+    const val DEFAULT_TIME = "04:00"
     private val pattern = Regex("""^([01]?\d|2[0-3]):([0-5]\d)$""")
 
     /** "21:00" style; anything else falls back to the default. */

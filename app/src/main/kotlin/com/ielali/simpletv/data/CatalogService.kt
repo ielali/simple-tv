@@ -98,8 +98,20 @@ class CatalogService(
         return LineupFlags.compute(lineup, catalogs, _failed.value)
     }
 
-    fun reportPlayed(channelId: String) { if (channelId in _failed.value) _failed.value = _failed.value - channelId }
-    fun reportFailed(channelId: String) { _failed.value = _failed.value + channelId }
+    private val failedAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    fun reportPlayed(channelId: String) {
+        failedAt.remove(channelId)
+        if (channelId in _failed.value) _failed.value = _failed.value - channelId
+    }
+    fun reportFailed(channelId: String) {
+        failedAt[channelId] = System.currentTimeMillis()
+        _failed.value = _failed.value + channelId
+    }
+
+    /** Failed within the last 10 minutes: channel up/down steps over it; after that it gets another try. */
+    fun recentlyFailed(channelId: String, now: Long = System.currentTimeMillis()): Boolean =
+        failedAt[channelId]?.let { now - it < 10 * 60_000L } == true
 
     /** Checks every minute whether the daily refresh is due; the first check waits for the TV to settle. */
     fun startScheduler() = scope.launch {

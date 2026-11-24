@@ -35,4 +35,15 @@ class ChannelNavigatorTest {
         assertEquals(ch(3), ChannelNavigator.previous(ch(10), list))
         assertEquals(ch(10), ChannelNavigator.previous(null, list))
     }
+
+    @Test
+    fun `skipping steps over failed channels but never leaves the viewer stuck`() {
+        val list = listOf(1, 2, 3, 4).map { Channel(id = "c$it", number = it, name = "TV $it", url = "http://x/$it") }
+        val failed = setOf("c2", "c3")
+        assertEquals(4, ChannelNavigator.next(list[0], list) { it.id in failed }?.number)
+        assertEquals(1, ChannelNavigator.previous(list[3], list) { it.id in failed }?.number)
+        assertEquals("all others failed: plain next", 2, ChannelNavigator.next(list[0], list) { it.id != "c1" }?.number)
+        assertEquals(1, ChannelNavigator.next(null, list) { false }?.number)
+        assertEquals(4, ChannelNavigator.previous(null, list) { false }?.number)
+    }
 }

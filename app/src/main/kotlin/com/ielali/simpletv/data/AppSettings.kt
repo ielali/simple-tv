@@ -32,6 +32,8 @@ data class AppSettings(
     val listButtons: List<Int> = com.ielali.simpletv.guard.ButtonRoles.DEFAULT_LIST,
     /** Remote buttons that go back to the previous channel. A lone 0 always does. */
     val previousButtons: List<Int> = emptyList(),
+    /** A clock in the top corner while watching (ADR-024). */
+    val showClock: Boolean = true,
     /** Language of Simple TV's screens: "" follows the device, else a key of TvLanguage.SUPPORTED. */
     val language: String = TvLanguage.SYSTEM,
     /** When the TV refreshes every subscription's catalog each day, "HH:mm" in the TV's time zone. */
