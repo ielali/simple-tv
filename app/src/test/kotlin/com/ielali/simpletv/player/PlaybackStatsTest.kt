@@ -7,18 +7,39 @@ import org.junit.Test
 class PlaybackStatsTest {
 
     private var now = 1_000L
-    private val stats = PlaybackStats { now }
+    private val stats = PlaybackStats({ now })
 
     private fun after(ms: Long, state: PlaybackState): PlaybackStats.Event? {
         now += ms
         return stats.onState(state)
     }
 
+    private fun summary(
+        firstPictureMs: Long?, playedMs: Long, stalls: Int = 0, stalledMs: Long = 0, longestStallMs: Long = 0,
+        errors: Int = 0, firstFrameMs: Long? = null,
+    ) = PlaybackStats.Summary(firstFrameMs, firstPictureMs, playedMs, stalls, stalledMs, longestStallMs, errors)
+
     @Test
     fun `first picture is timed from the tune`() {
         assertNull(stats.onTune())
         assertNull(after(500, PlaybackState.TUNING))
         assertEquals(PlaybackStats.Event.FirstPicture(3_200), after(2_700, PlaybackState.PLAYING))
+    }
+
+    @Test
+    fun `the first frame is reported once per channel, beside the first picture`() {
+        assertNull(stats.onFirstFrame())
+        stats.onTune()
+        now += 2_900
+        assertEquals(PlaybackStats.Event.FirstFrame(2_900), stats.onFirstFrame())
+        // The frame is drawn under the tuning card; the card goes when the start buffer has filled.
+        assertEquals(PlaybackStats.Event.FirstPicture(3_200), after(300, PlaybackState.PLAYING))
+        // Drawn again after the video view moved: not a second first frame.
+        now += 5_000
+        assertNull(stats.onFirstFrame())
+        assertEquals(summary(firstPictureMs = 3_200, playedMs = 5_000, firstFrameMs = 2_900), stats.onTune())
+        now += 1_000
+        assertEquals(PlaybackStats.Event.FirstFrame(1_000), stats.onFirstFrame())
     }
 
     @Test
@@ -41,7 +62,7 @@ class PlaybackStatsTest {
         after(11_000, PlaybackState.PLAYING)
         now += 10_000
         assertEquals(
-            PlaybackStats.Summary(firstPictureMs = 3_000, playedMs = 42_000, stalls = 2, stalledMs = 14_600, longestStallMs = 11_000, errors = 0),
+            summary(firstPictureMs = 3_000, playedMs = 42_000, stalls = 2, stalledMs = 14_600, longestStallMs = 11_000),
             stats.onTune(),
         )
     }
@@ -55,7 +76,7 @@ class PlaybackStatsTest {
         assertNull(after(8_000, PlaybackState.ERROR))
         assertEquals(PlaybackStats.Event.StallEnded(lastedMs = 12_000, playedMs = 5_000), after(4_000, PlaybackState.PLAYING))
         assertEquals(
-            PlaybackStats.Summary(firstPictureMs = 2_000, playedMs = 5_000, stalls = 1, stalledMs = 12_000, longestStallMs = 12_000, errors = 1),
+            summary(firstPictureMs = 2_000, playedMs = 5_000, stalls = 1, stalledMs = 12_000, longestStallMs = 12_000, errors = 1),
             stats.onStop(),
         )
     }
@@ -66,10 +87,7 @@ class PlaybackStatsTest {
         after(8_000, PlaybackState.ERROR)
         after(3_000, PlaybackState.ERROR)
         now += 4_000
-        assertEquals(
-            PlaybackStats.Summary(firstPictureMs = null, playedMs = 0, stalls = 0, stalledMs = 0, longestStallMs = 0, errors = 1),
-            stats.onTune(),
-        )
+        assertEquals(summary(firstPictureMs = null, playedMs = 0, errors = 1), stats.onTune())
     }
 
     @Test
@@ -87,7 +105,7 @@ class PlaybackStatsTest {
         after(10_000, PlaybackState.REBUFFERING)
         now += 6_000
         assertEquals(
-            PlaybackStats.Summary(firstPictureMs = 2_000, playedMs = 10_000, stalls = 1, stalledMs = 6_000, longestStallMs = 6_000, errors = 0),
+            summary(firstPictureMs = 2_000, playedMs = 10_000, stalls = 1, stalledMs = 6_000, longestStallMs = 6_000),
             stats.onTune(),
         )
     }
@@ -97,10 +115,7 @@ class PlaybackStatsTest {
         stats.onTune()
         after(2_000, PlaybackState.PLAYING)
         assertNull(after(60_000, PlaybackState.IDLE))
-        assertEquals(
-            PlaybackStats.Summary(firstPictureMs = 2_000, playedMs = 60_000, stalls = 0, stalledMs = 0, longestStallMs = 0, errors = 0),
-            stats.onStop(),
-        )
+        assertEquals(summary(firstPictureMs = 2_000, playedMs = 60_000), stats.onStop())
     }
 
     @Test
@@ -113,6 +128,77 @@ class PlaybackStatsTest {
     }
 
     @Test
+    fun `a blink shorter than a quarter of a second is not a freeze`() {
+        stats.onTune()
+        after(2_000, PlaybackState.PLAYING)
+        after(8_000, PlaybackState.REBUFFERING)
+        assertNull(after(14, PlaybackState.PLAYING))
+        now += 5_000
+        assertEquals(summary(firstPictureMs = 2_000, playedMs = 13_000), stats.onStop())
+    }
+
+    @Test
+    fun `paused time is not played time`() {
+        stats.onTune()
+        after(2_000, PlaybackState.PLAYING)
+        now += 10_000
+        // The TV goes to standby for an hour (the player stays ready), or a film is paused with OK.
+        stats.onPaused(true)
+        stats.onPaused(true)
+        now += 3_600_000
+        stats.onPaused(false)
+        stats.onPaused(false)
+        now += 5_000
+        assertEquals(summary(firstPictureMs = 2_000, playedMs = 15_000), stats.onStop())
+    }
+
+    @Test
+    fun `a freeze during standby counts only from when the screen is back`() {
+        stats.onTune()
+        after(2_000, PlaybackState.PLAYING)
+        now += 10_000
+        stats.onPaused(true)
+        assertNull(after(100_000, PlaybackState.REBUFFERING))
+        now += 50_000
+        stats.onPaused(false)
+        assertEquals(PlaybackStats.Event.StallEnded(lastedMs = 4_000, playedMs = 10_000), after(4_000, PlaybackState.PLAYING))
+    }
+
+    @Test
+    fun `a stream that recovers during standby did not freeze`() {
+        stats.onTune()
+        after(2_000, PlaybackState.PLAYING)
+        now += 10_000
+        stats.onPaused(true)
+        after(60_000, PlaybackState.REBUFFERING)
+        assertNull(after(5_000, PlaybackState.PLAYING))
+        now += 60_000
+        stats.onPaused(false)
+        now += 3_000
+        assertEquals(summary(firstPictureMs = 2_000, playedMs = 13_000), stats.onStop())
+    }
+
+    @Test
+    fun `the wait for the first picture leaves out paused time`() {
+        stats.onTune()
+        now += 1_000
+        stats.onPaused(true)
+        now += 60_000
+        stats.onPaused(false)
+        assertEquals(PlaybackStats.Event.FirstPicture(3_000), after(2_000, PlaybackState.PLAYING))
+    }
+
+    @Test
+    fun `a channel chosen while paused is timed from when playback resumes`() {
+        stats.onPaused(true)
+        now += 30_000
+        stats.onTune()
+        now += 500
+        stats.onPaused(false)
+        assertEquals(PlaybackStats.Event.FirstPicture(2_000), after(2_000, PlaybackState.PLAYING))
+    }
+
+    @Test
     fun `nothing is reported before a tune or after a stop`() {
         assertNull(stats.onState(PlaybackState.PLAYING))
         assertNull(stats.onStop())
@@ -120,6 +206,7 @@ class PlaybackStatsTest {
         after(1_000, PlaybackState.PLAYING)
         stats.onStop()
         assertNull(after(1_000, PlaybackState.REBUFFERING))
+        assertNull(stats.onFirstFrame())
         assertNull(stats.onStop())
     }
 
@@ -132,10 +219,7 @@ class PlaybackStatsTest {
         stats.onTune()
         assertEquals(PlaybackStats.Event.FirstPicture(1_500), after(1_500, PlaybackState.PLAYING))
         now += 3_000
-        assertEquals(
-            PlaybackStats.Summary(firstPictureMs = 1_500, playedMs = 3_000, stalls = 0, stalledMs = 0, longestStallMs = 0, errors = 0),
-            stats.onStop(),
-        )
+        assertEquals(summary(firstPictureMs = 1_500, playedMs = 3_000), stats.onStop())
     }
 
     @Test
@@ -143,18 +227,19 @@ class PlaybackStatsTest {
         val saved = java.util.Locale.getDefault()
         java.util.Locale.setDefault(java.util.Locale.forLanguageTag("ar-EG"))
         try {
+            assertEquals("first frame drawn after 3.1 s", PlaybackStats.Event.FirstFrame(3_100).line())
             assertEquals("first picture after 3.4 s", PlaybackStats.Event.FirstPicture(3_400).line())
             assertEquals(
                 "picture froze for 11.0 s after playing 8.0 s",
                 PlaybackStats.Event.StallEnded(lastedMs = 11_000, playedMs = 8_040).line(),
             )
             assertEquals(
-                "first picture after 3.4 s, played 65.0 s, stalls 3, frozen 31.7 s (longest 17.1 s), errors 0",
-                PlaybackStats.Summary(3_400, 65_000, 3, 31_700, 17_100, 0).line(),
+                "first frame after 3.1 s, first picture after 3.4 s, played 65.0 s, stalls 3, frozen 31.7 s (longest 17.1 s), errors 0",
+                summary(3_400, 65_000, 3, 31_700, 17_100, 0, firstFrameMs = 3_100).line(),
             )
             assertEquals(
-                "no picture, played 0.0 s, stalls 0, frozen 0.0 s (longest 0.0 s), errors 2",
-                PlaybackStats.Summary(null, 0, 0, 0, 0, 2).line(),
+                "no frame, no picture, played 0.0 s, stalls 0, frozen 0.0 s (longest 0.0 s), errors 2",
+                summary(null, 0, errors = 2).line(),
             )
         } finally {
             java.util.Locale.setDefault(saved)

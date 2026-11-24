@@ -95,6 +95,13 @@ class PlaybackEngine(context: Context) {
                     if (phase == PlayerPhase.ENDED && currentChannel != null) _ended.tryEmit(Unit)
                 }
 
+                // Paused by the viewer, or the screen is off: nobody is watching, so the playback
+                // log's clock stops (the player stays ready the whole time).
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = stats.onPaused(!playWhenReady)
+
+                // Logged beside "first picture" (the tuning card going away), which cannot come sooner.
+                override fun onRenderedFirstFrame() = log(stats.onFirstFrame())
+
                 override fun onTracksChanged(tracks: Tracks) = applyWish(tracks)
 
                 override fun onPlayerError(error: PlaybackException) {
@@ -111,7 +118,11 @@ class PlaybackEngine(context: Context) {
     /** Publishes what the viewer sees, and logs how long the picture took or froze (no addresses). */
     private fun show(state: PlaybackState) {
         _state.value = state
-        stats.onState(state)?.let { Log.i(TAG, "${label()}: ${it.line()}") }
+        log(stats.onState(state))
+    }
+
+    private fun log(event: PlaybackStats.Event?) {
+        if (event != null) Log.i(TAG, "${label()}: ${event.line()}")
     }
 
     private fun label(): String = "ch ${currentChannel?.number ?: "-"}"

@@ -609,9 +609,11 @@ Update (more sources and a picker):
 ## ADR-028 Live channels keep a buffer: no live offset of our own, loading never pauses
 
 Context: IPTV channels on the Kogan froze while playing. The dongle's own audio log
-(`tools/tv-playback.py freezes`) for one evening on build 0.1.67 shows it: of four stays of 20 s or
-more, two froze; four freezes of 3.6, 11, 12.8 and 17.1 s in six minutes of viewing, 11% of the
-time. One channel played 25 s, froze 3.6 s, played 8 s, froze 11 s, played 9 s, froze 17 s.
+(`tools/tv-playback.py freezes`) for one evening on build 0.1.67 shows it. Of the four stays of 20 s
+or more, two froze: four freezes of 3.6, 11, 12.8 and 17.1 s, 44.5 s frozen against 267 s played,
+14% of the time. (Counting the sixteen shorter stays too, which are zapping, it is 11%; compare
+builds with the same cut-off.) One channel played 25 s, froze 3.6 s, played 8 s, froze 11 s, played
+9 s, froze 17 s.
 
 What the streams look like (`tools/tv-playback.py probe`; 27 of that lineup's 30 channels, one
 Xtream subscription): HLS, one quality, 10-second segments with one keyframe each, five segments in
@@ -640,7 +642,13 @@ Decision:
 - The picture still starts with 1 s buffered and resumes after a stall with 2 s.
 - `PlaybackStats` (pure) times each channel's first picture and every freeze; the engine logs them
   under `SimpleTvPlayback` with the channel number and no address, so the next change to these
-  numbers can be measured on the TV instead of guessed.
+  numbers can be measured on the TV instead of guessed. "First picture" is the tuning card going
+  away, which is what the viewer waits for: the card covers the video until the player is ready, and
+  with a video track on screen Media3 is not ready before its first frame is drawn. The moment that
+  frame is drawn is logged beside it ("first frame"); the gap between the two is the start buffer
+  filling. Paused time does not count, whether the viewer paused a film or the TV is in standby (the
+  player stays ready through both), and a freeze shorter than a quarter of a second is ignored, as
+  in the audio log's figures.
 
 Consequences: Live channels run about 30 s behind the broadcast instead of about 10. The first
 picture comes no later: either way it needs the redirect, the playlist and the start of one segment,

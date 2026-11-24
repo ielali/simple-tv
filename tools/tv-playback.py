@@ -7,6 +7,8 @@ Commands
   freezes       past viewing on the TV: how long each channel played and every freeze, read from
                 Android's own audio log (`dumpsys media.metrics`, a few hours deep). Nothing has to
                 be running and the TV can be in standby.
+                  --min-seconds 20  stays shorter than this (zapping) are left out of the list and
+                                    of the totals alike; compare builds with the same value
   channels      what kind of streams the lineup holds (HLS, MPEG-TS, YouTube...), as shapes
   probe         per live HLS channel: redirects with timings, playlist shape, one segment's speed
                   --channels 5,9   lineup numbers (default: the first three)
@@ -20,6 +22,9 @@ Commands
                   --channels 3,24  --seconds 60  --settings before,now
                 settings: before (ADR-028's starting point: 6 s live offset, buffer 3 to 30 s),
                 now (three segments behind, buffer 30 s), start2.5 (now, picture after 2.5 s)
+                It counts video as playable in proportion to the bytes downloaded and decodes
+                nothing, so its first-picture times are an estimate; freezes and buffer are what
+                it is for.
 
 The TV's channel list holds stream addresses with the subscription's username and password in
 them. These commands read it over adb (the installed build must be debuggable, as CI builds are)
@@ -316,21 +321,21 @@ def cmd_freezes(args):
     if not stays:
         print("no playback by Telly in the TV's audio log (it keeps a few hours)")
         return
+    shown = [s for s in stays if s["on"] >= args.min_seconds]
     print("One line per time the sound started on a channel (a tune, or a retry). A freeze is the sound")
     print("pausing and starting again; a film paused with OK looks the same.")
     print()
-    for s in stays:
-        if s["on"] < args.min_seconds:
-            continue
-        shown = " ".join("after %.0fs for %.1fs" % f for f in s["freezes"])
-        print("%s  on %5.0fs  played %5.0fs  freezes %d  %s" % (s["at"].strftime("%m-%d %H:%M:%S"), s["on"], s["played"], len(s["freezes"]), shown))
-    long_stays = [s for s in stays if s["on"] >= args.min_seconds]
-    freezes = [f for s in stays for f in s["freezes"]]
+    for s in shown:
+        frozen_at = " ".join("after %.0fs for %.1fs" % f for f in s["freezes"])
+        print("%s  on %5.0fs  played %5.0fs  freezes %d  %s" % (s["at"].strftime("%m-%d %H:%M:%S"), s["on"], s["played"], len(s["freezes"]), frozen_at))
+    # The totals cover the stays listed above and no others, so two builds compare like with like.
+    freezes = [f for s in shown for f in s["freezes"]]
     frozen = sum(f[1] for f in freezes)
-    played = sum(s["played"] for s in stays)
+    played = sum(s["played"] for s in shown)
     print()
-    print("stays of %ds or more: %d, of which froze: %d" % (args.min_seconds, len(long_stays), sum(1 for s in long_stays if s["freezes"])))
-    print("freezes: %d, %.0fs frozen against %.0fs played (%.1f%% of the time)" % (len(freezes), frozen, played, 100 * frozen / max(1.0, frozen + played)))
+    print("stays of %ds or more: %d, of which froze: %d (%d shorter stays left out; --min-seconds 0 counts them)" % (
+        args.min_seconds, len(shown), sum(1 for s in shown if s["freezes"]), len(stays) - len(shown)))
+    print("freezes: %d, %.1fs frozen against %.0fs played (%.1f%% of the time)" % (len(freezes), frozen, played, 100 * frozen / max(1.0, frozen + played)))
     if freezes:
         print("freeze length: median %.1fs, longest %.1fs" % (statistics.median(f[1] for f in freezes), max(f[1] for f in freezes)))
 
@@ -624,7 +629,7 @@ def main():
     commands.add_parser("channels").set_defaults(run=cmd_channels)
 
     freezes = commands.add_parser("freezes")
-    freezes.add_argument("--min-seconds", type=int, default=20, help="leave out shorter stays (default 20)")
+    freezes.add_argument("--min-seconds", type=int, default=20, help="leave shorter stays out of the list and the totals (default 20)")
     freezes.set_defaults(run=cmd_freezes)
 
     probe = commands.add_parser("probe")

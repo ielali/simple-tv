@@ -25,10 +25,11 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    embed-blocked videos are skipped. Check whether ads appear.
 0a. **Check the buffering change on the Kogan (ADR-028).** Install the build, run
    `adb logcat -s SimpleTvPlayback` and watch IPTV channels for an evening: change channel twenty
-   times and stay ten minutes on three of them. Record in ADR-028 the first-picture times, the number
-   of freezes and the frozen share of viewing time, against the evening before the change (4 freezes
-   of 3.6 to 17 s in 6 minutes of viewing, 11% frozen). `tools/tv-playback.py freezes` reads the
-   same figures from the TV's own audio log afterwards, for any build. If channels still freeze right
+   times and stay ten minutes on three of them. Record in ADR-028 the first-frame and first-picture
+   times, the number of freezes and the frozen share of viewing time, against the evening before the
+   change (stays of 20 s or more: 4 freezes of 3.6 to 17 s, 44.5 s frozen against 267 s played, 14%).
+   `tools/tv-playback.py freezes` reads the same figures from the TV's own audio log afterwards, for
+   any build; keep its `--min-seconds` the same for both. If channels still freeze right
    after they start, raise `START_AFTER_MS` in `PlaybackEngine` from 1 s towards 2.5 s and measure
    again (`tools/tv-playback.py model --settings now,start2.5` gives a first idea).
 1. **First device run.** Build `assembleDebug`, sideload on an Android TV box, confirm: app opens

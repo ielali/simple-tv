@@ -105,8 +105,8 @@ three segments behind when it does not say, which is HLS's own rule and ExoPlaye
 engine sets no live offset of its own. That is about 30 seconds on the usual 10-second segments, and
 it is what gives the player something to buffer. Loading never pauses while there is room (the load
 control's minimum equals its maximum, 30 s). A pure `PlaybackStats` times each channel's first
-picture and every freeze; the engine writes them to the log without addresses:
-`adb logcat -s SimpleTvPlayback`.
+frame, first picture (the tuning card going away) and every freeze, leaving out time spent paused or
+in standby; the engine writes them to the log without addresses: `adb logcat -s SimpleTvPlayback`.
 
 ## YouTube
 
