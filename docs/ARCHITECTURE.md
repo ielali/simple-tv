@@ -129,6 +129,9 @@ so config-page changes apply immediately. `GuardSetup` edits the accessibility s
 app holds WRITE_SECURE_SETTINGS (granted once by `tools/tv-admin.sh guard-on`) and re-enables the
 service at app start and boot. An enabled accessibility service also exempts the app from Android's
 background-activity-start limits, which is what lets `BootReceiver` open the TV.
+`BootReceiver` also runs after Simple TV is updated (`MY_PACKAGE_REPLACED`): installing stops the app
+and the guard. When the guard starts, it checks once what is in front and leaves the Google TV home
+if that is where the update or a crash left the TV.
 
 While the current channel plays in the YouTube app (`TvController.isExternalFront`), keys go through
 `HomeGuardPolicy.onKeyDuringExternal`: digits, channel keys and up/down are routed to the controller;

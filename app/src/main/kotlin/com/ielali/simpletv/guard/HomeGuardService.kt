@@ -60,6 +60,18 @@ class HomeGuardService : AccessibilityService() {
                 if (!overYouTube) null else Pair(digits.ifEmpty { ch?.number?.toString() ?: "--" }, if (digits.isEmpty()) ch?.name.orEmpty() else "")
             }.collect { text -> if (text == null) banner.hide() else banner.show(text.first, text.second) }
         }
+        // The guard starts after an update or a crash with the Google TV home already in front, and no
+        // window change follows to wake it: look once it has settled, and bring Simple TV back.
+        scope.launch {
+            for (wait in longArrayOf(1_500L, 4_000L)) {
+                kotlinx.coroutines.delay(wait)
+                val front = runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull()
+                if (HomeGuardPolicy.onWindow(front, config(), System.currentTimeMillis()) == WindowAction.GO_HOME) {
+                    goHome("guard started over $front")
+                    break
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
