@@ -62,12 +62,43 @@ class HomeGuardService : AccessibilityService() {
         }
         // The guard starts after an update or a crash with the Google TV home already in front, and no
         // window change follows to wake it: look once it has settled, and bring Simple TV back.
+        checkFrontSoon("guard started")
+        androidx.core.content.ContextCompat.registerReceiver(
+            this, screenReceiver,
+            android.content.IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON) },
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+    }
+
+    /**
+     * Going into standby, Google TV puts its own home in front. Bringing Simple TV forward then would
+     * turn the TV straight back on, so the guard stands down while the screen is off (and for a moment
+     * after), and looks again once the TV is switched back on.
+     */
+    @Volatile private var screenOffAt = 0L
+    private val screenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: Intent) {
+            when (intent.action) {
+                Intent.ACTION_SCREEN_OFF -> screenOffAt = SystemClock.uptimeMillis()
+                Intent.ACTION_SCREEN_ON -> { screenOffAt = 0L; checkFrontSoon("screen on") }
+            }
+        }
+    }
+
+    private fun asleep(): Boolean {
+        val pm = getSystemService(android.os.PowerManager::class.java)
+        if (pm != null && !pm.isInteractive) return true
+        return screenOffAt != 0L && SystemClock.uptimeMillis() - screenOffAt < 10_000L
+    }
+
+    private fun checkFrontSoon(why: String) {
         scope.launch {
             for (wait in longArrayOf(1_500L, 4_000L)) {
                 kotlinx.coroutines.delay(wait)
+                if (asleep()) return@launch
                 val front = runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull()
                 if (HomeGuardPolicy.onWindow(front, config(), System.currentTimeMillis()) == WindowAction.GO_HOME) {
-                    goHome("guard started over $front")
+                    goHome("$why over $front")
                     break
                 }
             }
@@ -75,6 +106,7 @@ class HomeGuardService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(screenReceiver) }
         if (GuardBridge.service === this) GuardBridge.service = null
         scope.cancel()
         overlay?.hide()
@@ -281,6 +313,8 @@ class HomeGuardService : AccessibilityService() {
     }
 
     private fun goHome(reason: String) {
+        // Never while the TV is off or going off: starting Simple TV would switch it back on.
+        if (asleep()) { Log.i(TAG, "Not returning to Simple TV while the screen is off ($reason)"); return }
         if (!debounce.tryAcquire(SystemClock.uptimeMillis())) return
         Log.i(TAG, "Returning to Simple TV ($reason)")
         runCatching {

@@ -16,8 +16,14 @@ import com.ielali.simpletv.youtube.YouTubeEmbed
  */
 class ExternalPlayer(private val context: Context) : ExternalLauncher {
 
+    /** The TV is off (standby): opening an app now would switch it back on. */
+    private fun asleep(): Boolean =
+        context.getSystemService(android.os.PowerManager::class.java)?.isInteractive == false
+
     override fun open(channel: Channel): Boolean {
         val target = YouTubeEmbed.parse(channel.url) ?: return false
+        // In standby nothing opens; the channel opens when the TV comes back on and Simple TV shows.
+        if (asleep()) return true
         val uri = Uri.parse(YouTubeEmbed.watchUrl(target))
         val candidates = listOf(
             Intent(Intent.ACTION_VIEW, uri).setPackage(HomeGuardPolicy.YOUTUBE_TV),
@@ -38,6 +44,7 @@ class ExternalPlayer(private val context: Context) : ExternalLauncher {
     }
 
     override fun bringAppToFront() {
+        if (asleep()) return
         runCatching {
             context.startActivity(
                 Intent(context, MainActivity::class.java).addFlags(

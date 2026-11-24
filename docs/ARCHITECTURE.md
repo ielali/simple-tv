@@ -132,6 +132,10 @@ background-activity-start limits, which is what lets `BootReceiver` open the TV.
 `BootReceiver` also runs after Simple TV is updated (`MY_PACKAGE_REPLACED`): installing stops the app
 and the guard. When the guard starts, it checks once what is in front and leaves the Google TV home
 if that is where the update or a crash left the TV.
+Going into standby, Google TV puts its own home in front; starting an app then switches the TV back
+on. So the guard never brings Simple TV forward while the screen is off (or for 10 s after it goes
+off), and checks what is in front again when it comes back on. `ExternalPlayer` opens nothing in
+standby either (a night-time catalog refresh could otherwise reopen YouTube).
 
 While the current channel plays in the YouTube app (`TvController.isExternalFront`), keys go through
 `HomeGuardPolicy.onKeyDuringExternal`: digits, channel keys and up/down are routed to the controller;
