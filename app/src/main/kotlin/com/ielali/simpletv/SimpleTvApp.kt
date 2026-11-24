@@ -72,6 +72,8 @@ class SimpleTvApp : Application() {
         private set
 
     /** Subtitles and soundtracks of the film or episode on screen, by channel id (set by the player). */
+    /** Where YouTube playlist channels stopped (ADR-023). */
+    lateinit var ytProgress: com.ielali.simpletv.data.YouTubeProgress
     val nowTracks = kotlinx.coroutines.flow.MutableStateFlow<Pair<String, com.ielali.simpletv.player.TrackPicker.Report>?>(null)
 
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -92,6 +94,7 @@ class SimpleTvApp : Application() {
         catalog = CatalogService(appScope, providers, channels, settings, catalogs, loader)
         meta = MetadataService(this, appScope, providers, catalogs, channels, settings, secrets, loader, TmdbClient(HttpFetcher(readTimeoutMs = 15_000)))
         queue = QueuePlayback(this, catalog, catalogs, providers, meta, settings)
+        ytProgress = com.ielali.simpletv.data.YouTubeProgress(this)
         meta.start()
         guide = GuideService(this, appScope, providers, channels, catalogs, settings, HttpFetcher(readTimeoutMs = 15_000))
         guide.start()

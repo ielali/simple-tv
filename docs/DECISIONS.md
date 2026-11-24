@@ -439,3 +439,26 @@ channel's logo.
 Consequences: Rule 1 now allows this one list besides the video and the banner. Which code the
 Kogan remote's Live TV button sends is unconfirmed; the key log shows it. While a YouTube-app
 channel is on, the list shows over Simple TV and YouTube reopens when it closes.
+
+## ADR-023 YouTube playlist channels play in the embedded player
+
+Context: The caregiver wants channels that play a public YouTube playlist. A playlist link used to
+play only the video in it.
+
+Decision:
+- A playlist link (`watch?v=…&list=…`, `playlist?list=…`, or a playlist id) makes a YouTube channel
+  that plays the list in order, then round again. The caregiver chooses to start at the linked
+  video or the beginning, and in order or shuffled; the choices live in the stored link
+  (`&shuffle=1`). Only real playlists (PL, UU, FL, albums); YouTube Mixes (`RD…`) stay single videos.
+- Playlist channels always use YouTube's official IFrame Player API inside Simple TV, even when
+  other YouTube channels open in the YouTube app. Only there can the TV move through the list and
+  know what plays: Right/Left next or previous video (Left restarts in the first 10 s, as on series
+  channels), OK pauses, and the video's title shows in the banner and the channel list.
+- The page reports the playing video through a `SimpleTv` JavaScript bridge that only receives
+  (index, video id, title, seconds, state). Where the channel stopped is kept per channel
+  (`YouTubeProgress`) and the page resumes there, finding the video again if the list has changed.
+- Videos whose owner blocks embedding are skipped. Playback is signed out: public playlists only,
+  and YouTube may show ads. Rule 6 holds: no stream extraction, nothing but the official player.
+
+Consequences: The household's YouTube account and Premium don't apply to playlist channels. The
+WebView is now destroyed when the channel or the list replaces it, which also stops stray sound.

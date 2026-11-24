@@ -306,4 +306,15 @@ class TvControllerTest {
         assertFalse(r.controller.isListOpen())
         assertEquals(4, r.controller.current.value?.number)
     }
+
+    @Test
+    fun `playlist channels play inside simple tv even when youtube channels open in the app`() {
+        runTest {
+            val r = rig()
+            val pl = Channel(id = "p9", number = 9, name = "Songs", type = SourceType.YOUTUBE,
+                url = "https://www.youtube.com/playlist?list=PLVVfonyXVJI3lLAOb1_wDrgBonbhI6gEK")
+            assertFalse(r.controller.usesExternalPlayer(pl))
+            assertTrue(r.controller.usesExternalPlayer(yt(2)))
+        }
+    }
 }

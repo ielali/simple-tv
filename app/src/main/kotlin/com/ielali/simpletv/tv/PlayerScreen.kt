@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
@@ -96,7 +97,8 @@ fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
             current == null || listOpen -> Unit // YouTube stops while the list is open; it reloads after
             current.playsOnSimpleTv -> Unit
             current.type == SourceType.YOUTUBE ->
-                if (state.youtubeInApp) ChannelCard(current, stringResource(R.string.opening_youtube)) else YouTubeSurface(current)
+                if (state.youtubeInApp) ChannelCard(current, stringResource(R.string.opening_youtube))
+                else key(current.id, current.url) { YouTubeSurface(current, vm) }
         }
 
         // While a stream tunes or has no signal, a card keeps the channel's number and name on screen.
@@ -194,14 +196,21 @@ private fun styleSubtitles(view: SubtitleView, ctx: android.content.Context) {
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled")
+@SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
+@UnstableApi
 @Composable
-private fun YouTubeSurface(channel: Channel) {
+private fun YouTubeSurface(channel: Channel, vm: TvViewModel) {
     val target = remember(channel.url) { YouTubeEmbed.parse(channel.url) }
     if (target == null) {
         CenterMessage(stringResource(R.string.no_signal))
         return
     }
+    val playlist = target as? YouTubeEmbed.Target.Playlist
+    // Built once per channel: a playlist starts where the channel stopped last time.
+    val html = remember(channel.id, channel.url) {
+        if (playlist != null) YouTubeEmbed.playlistHtml(playlist, vm.ytStart(channel)) else YouTubeEmbed.html(target)
+    }
+    var web by remember { mutableStateOf<WebView?>(null) }
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { ctx ->
@@ -217,12 +226,29 @@ private fun YouTubeSurface(channel: Channel) {
                 isFocusableInTouchMode = false
                 webViewClient = WebViewClient()
                 keepScreenOn = true
+                // The playlist page tells the TV what plays; the bridge only receives, it exposes nothing.
+                if (playlist != null) addJavascriptInterface(PlaylistBridge(vm, channel.id), "SimpleTv")
+                loadDataWithBaseURL(YouTubeEmbed.ORIGIN, html, "text/html", "utf-8", null)
+                web = this
             }
         },
-        update = { web ->
-            web.loadDataWithBaseURL(YouTubeEmbed.ORIGIN, YouTubeEmbed.html(target), "text/html", "utf-8", null)
-        },
+        // Gone from the screen (another channel, the channel list): stop the sound and free the player.
+        onRelease = { it.stopLoading(); it.loadUrl("about:blank"); it.destroy() },
     )
+    if (playlist != null) {
+        LaunchedEffect(web) {
+            val w = web ?: return@LaunchedEffect
+            vm.ytCommands.collect { c -> w.evaluateJavascript("stvCmd('$c')", null) }
+        }
+    }
+}
+
+/** Receives reports from a playlist channel's page (on the WebView's own thread). */
+@UnstableApi
+private class PlaylistBridge(private val vm: TvViewModel, private val channelId: String) {
+    @android.webkit.JavascriptInterface
+    fun report(index: Int, videoId: String?, title: String?, seconds: Int, state: Int) =
+        vm.onYtReport(channelId, index, videoId.orEmpty(), title.orEmpty(), seconds, state)
 }
 
 @Composable
@@ -309,7 +335,8 @@ private fun ChannelListOverlay(state: TvUiState, vm: TvViewModel, onPreviewBox: 
                     val title = state.nowTitle
                     val guide = state.listGuide?.takeIf { it.now != null }
                     when {
-                        highlighted.id == state.current?.id && !title.isNullOrBlank() && highlighted.playlist != null ->
+                        highlighted.id == state.current?.id && !title.isNullOrBlank() &&
+                            (highlighted.playlist != null || YouTubeEmbed.isPlaylist(highlighted.url)) ->
                             Text(title, color = Fg, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, lineHeight = 36.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         guide != null -> ListGuide(guide, Modifier.fillMaxWidth().weight(1f))
                     }

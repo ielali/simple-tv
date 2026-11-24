@@ -50,4 +50,40 @@ class YouTubeEmbedTest {
         assertNull(YouTubeEmbed.handleOf("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
         assertNull(YouTubeEmbed.parse("@skynews"))
     }
+
+    @Test
+    fun `playlist links become playlists, starting at the linked video`() {
+        val list = "PLVVfonyXVJI3lLAOb1_wDrgBonbhI6gEK"
+        assertEquals(Target.Playlist(list, "PbL-BAeRDMQ"), YouTubeEmbed.parse("https://www.youtube.com/watch?v=PbL-BAeRDMQ&list=$list"))
+        assertEquals(Target.Playlist(list), YouTubeEmbed.parse("https://www.youtube.com/playlist?list=$list"))
+        assertEquals(Target.Playlist(list, "PbL-BAeRDMQ"), YouTubeEmbed.parse("https://youtu.be/PbL-BAeRDMQ?list=$list"))
+        assertEquals(Target.Playlist(list), YouTubeEmbed.parse(list))
+        assertEquals(Target.Playlist(list, null, shuffle = true), YouTubeEmbed.parse("https://www.youtube.com/playlist?list=$list&shuffle=1"))
+        assertTrue(YouTubeEmbed.isPlaylist("https://m.youtube.com/playlist?list=$list"))
+    }
+
+    @Test
+    fun `a mix is not a playlist, the video in its link plays`() {
+        assertEquals(Target.Video("PbL-BAeRDMQ"), YouTubeEmbed.parse("https://www.youtube.com/watch?v=PbL-BAeRDMQ&list=RDPbL-BAeRDMQ&start_radio=1"))
+    }
+
+    @Test
+    fun `the stored playlist link round-trips`() {
+        val list = "PLVVfonyXVJI3lLAOb1_wDrgBonbhI6gEK"
+        for (t in listOf(Target.Playlist(list), Target.Playlist(list, "PbL-BAeRDMQ"), Target.Playlist(list, null, true), Target.Playlist(list, "PbL-BAeRDMQ", true))) {
+            assertEquals(t, YouTubeEmbed.parse(YouTubeEmbed.playlistSource(t.listId, t.startVideo, t.shuffle)))
+        }
+    }
+
+    @Test
+    fun `the playlist page resumes where the channel stopped and only writes checked ids`() {
+        val t = Target.Playlist("PLVVfonyXVJI3lLAOb1_wDrgBonbhI6gEK", "PbL-BAeRDMQ")
+        val fresh = YouTubeEmbed.playlistHtml(t, null)
+        assertTrue(fresh.contains("WANT='PbL-BAeRDMQ', INDEX=0, SEC=0"))
+        assertTrue(fresh.contains("https://www.youtube.com/iframe_api"))
+        val resumed = YouTubeEmbed.playlistHtml(t, YouTubeEmbed.Resume(index = 7, videoId = "dQw4w9WgXcQ", seconds = 95))
+        assertTrue(resumed.contains("WANT='dQw4w9WgXcQ', INDEX=7, SEC=95"))
+        val odd = YouTubeEmbed.playlistHtml(t, YouTubeEmbed.Resume(index = 2, videoId = "x');alert(1)//", seconds = 3))
+        assertTrue("a bad saved id falls back to the link's video", odd.contains("WANT='PbL-BAeRDMQ'"))
+    }
 }

@@ -111,7 +111,9 @@ class TvController(
     fun usesExternalPlayer(channel: Channel?): Boolean =
         channel?.type == SourceType.YOUTUBE &&
             settings.value.youtubePlayback == YouTubePlayback.YOUTUBE_APP &&
-            !_externalUnavailable.value
+            !_externalUnavailable.value &&
+            // Playlist channels always play inside Simple TV, where the remote can move through them (ADR-023).
+            !com.ielali.simpletv.youtube.YouTubeEmbed.isPlaylist(channel.url)
 
     /** True while the viewer watches the current channel in the YouTube app rather than Simple TV. */
     fun isExternalFront(): Boolean = !_appVisible.value && usesExternalPlayer(_current.value)

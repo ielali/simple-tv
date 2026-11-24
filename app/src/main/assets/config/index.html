@@ -1278,15 +1278,18 @@ screens.add = (() => {
     const ready = p && !yt.busy && yt.name.trim() && num > 0 && !clash;
     body.innerHTML = `<div class="g2">
       <section class="card col g16">
-        <div><h2 class="sec">Paste a YouTube link</h2><p class="muted">A video link, a live link, or a channel ID that starts with UC. A channel ID always plays that channel's live stream.</p></div>
+        <div><h2 class="sec">Paste a YouTube link</h2><p class="muted">A video link, a live link, a public playlist, or a channel ID that starts with UC. A channel ID always plays that channel's live stream.</p></div>
         <label class="field"><span>YouTube link or channel ID</span><span class="inp big ${yt.problem ? 'bad' : ''}"><input id="ytIn" value="${esc(yt.input)}" autocomplete="off" spellcheck="false" inputmode="url" dir="ltr" placeholder="https://www.youtube.com/watch?v=…"></span>
           <span class="hint ${yt.problem ? 'err' : ''}" id="ytHint">${yt.problem ? esc(yt.problem.message) : hasKey ? 'Links that start with @ work too.' : 'Links that start with @ aren’t supported yet.'}</span></label>
         ${yt.problem && yt.problem.code === 'needs_key' ? `<div class="hint">You can turn them on with a YouTube key in <a href="#/settings">TV settings</a>.</div>` : ''}
         ${yt.busy ? '<div class="f g8 muted"><span class="spin"></span>Looking it up…</div>' : p ? '<div><span class="pill ok">' + ico('check', 14, 2.4) + 'Found it</span></div>' : ''}
       </section>
       <section class="card col g16 ${p ? '' : 'hide'}">
-        ${p ? `<div class="thumb" style="${p.thumbnail ? `background-image:url('${esc(p.thumbnail).replace(/'/g, '%27')}')` : ''}">${p.live || p.kind === 'channel' ? `<span class="live">${p.live === false ? 'NOT LIVE NOW' : 'LIVE NOW'}</span>` : ''}${p.thumbnail ? '' : ico('yt', 48)}</div>
-        <div><div class="sec" dir="auto">${esc(p.title || 'YouTube channel')}</div><div class="cap">${p.kind === 'channel' ? (p.live === false ? 'Not live right now · it plays the channel’s live stream when there is one' : 'Live right now · plays whatever the channel is streaming') : esc([p.author, p.live ? 'Live now' : 'Video'].filter(Boolean).join(' · '))}</div></div>
+        ${p ? `<div class="thumb" style="${p.thumbnail ? `background-image:url('${esc(p.thumbnail).replace(/'/g, '%27')}')` : ''}">${p.kind === 'playlist' ? '<span class="live">PLAYLIST</span>' : p.live || p.kind === 'channel' ? `<span class="live">${p.live === false ? 'NOT LIVE NOW' : 'LIVE NOW'}</span>` : ''}${p.thumbnail ? '' : ico('yt', 48)}</div>
+        <div><div class="sec" dir="auto">${esc(p.title || (p.kind === 'playlist' ? 'YouTube playlist' : 'YouTube channel'))}</div><div class="cap">${p.kind === 'playlist' ? esc([p.author, p.count ? plural(p.count, 'video') : 'Playlist', 'plays in order, then starts again'].filter(Boolean).join(' · ')) : p.kind === 'channel' ? (p.live === false ? 'Not live right now · it plays the channel’s live stream when there is one' : 'Live right now · plays whatever the channel is streaming') : esc([p.author, p.live ? 'Live now' : 'Video'].filter(Boolean).join(' · '))}</div></div>
+        ${p.kind === 'playlist' ? `${p.startVideo ? `<div class="field"><span>Start from</span><div class="seg full" role="radiogroup"><button data-plstart="video" class="${yt.plFromStart ? '' : 'on'}" role="radio" aria-checked="${!yt.plFromStart}">The video in the link</button><button data-plstart="begin" class="${yt.plFromStart ? 'on' : ''}" role="radio" aria-checked="${!!yt.plFromStart}">The beginning</button></div></div>` : ''}
+          <div class="field"><span>Order</span><div class="seg full" role="radiogroup"><button data-plshuffle="0" class="${yt.plShuffle ? '' : 'on'}" role="radio" aria-checked="${!yt.plShuffle}">In order</button><button data-plshuffle="1" class="${yt.plShuffle ? 'on' : ''}" role="radio" aria-checked="${!!yt.plShuffle}">Shuffled</button></div></div>
+          <p class="hint">Plays inside Simple TV with YouTube’s own player, signed out. On the remote, Right and Left go to the next or previous video and OK pauses. The TV remembers where it stopped.</p>` : ''}
         <div class="f g12" style="align-items:flex-start">
           <label class="field numfield"><span>Number</span><span class="inp ${clash ? 'bad' : ''}"><input id="ytNum" inputmode="numeric" maxlength="4" value="${esc(yt.number)}"></span></label>
           <label class="field grow"><span>Name on the TV</span><span class="inp"><input id="ytName" value="${esc(yt.name)}" dir="auto" maxlength="80"></span></label>
@@ -1303,15 +1306,24 @@ screens.add = (() => {
     inp.onpaste = () => { clearTimeout(ytT); ytT = setTimeout(lookup, 50); };
     const n = $('#ytNum'); if (n) n.oninput = () => { n.value = n.value.replace(/\D/g, ''); yt.number = n.value; }; if (n) n.onchange = paintYt;
     const nm = $('#ytName'); if (nm) nm.oninput = () => { yt.name = nm.value; $('#ytAdd').disabled = !(yt.name.trim() && parseInt(yt.number, 10) > 0); };
+    $$('[data-plstart]', body).forEach((b) => b.onclick = () => { yt.plFromStart = b.dataset.plstart === 'begin'; paintYt(); });
+    $$('[data-plshuffle]', body).forEach((b) => b.onclick = () => { yt.plShuffle = b.dataset.plshuffle === '1'; paintYt(); });
+    const source = ytSource(p);
     const add = $('#ytAdd'); if (add) add.onclick = async () => {
       try {
-        const r = await saving(() => POST('/api/channels/youtube', { source: p.source, name: yt.name.trim(), number: parseInt(yt.number, 10) }), null);
+        const r = await saving(() => POST('/api/channels/youtube', { source, name: yt.name.trim(), number: parseInt(yt.number, 10) }), null);
         state.lineup = r.lineup; snapshot();
         toast(`${r.channel.name} is channel ${r.channel.number} now.`, { label: 'Open lineup', run: () => go('#/lineup') });
         yt = { input: '', preview: null, problem: null, busy: false, number: '', name: '' }; paintYt();
       } catch (e) { /* toast */ }
     };
-    const pl = $('#ytPlay'); if (pl) pl.onclick = () => playOnTv({ youtube: p.source, name: yt.name.trim() || p.title }, yt.name.trim() || p.title);
+    const pl = $('#ytPlay'); if (pl) pl.onclick = () => playOnTv({ youtube: source, name: yt.name.trim() || p.title }, yt.name.trim() || p.title);
+  }
+  /** A playlist's link with the chosen start and order; anything else as YouTube gave it. */
+  function ytSource(p) {
+    if (!p || p.kind !== 'playlist' || !p.listId) return p && p.source;
+    const sv = !yt.plFromStart && p.startVideo;
+    return 'https://www.youtube.com/' + (sv ? `watch?v=${encodeURIComponent(sv)}&list=` : 'playlist?list=') + encodeURIComponent(p.listId) + (yt.plShuffle ? '&shuffle=1' : '');
   }
   async function lookup() {
     const input = yt.input.trim();
@@ -1320,7 +1332,7 @@ screens.add = (() => {
     try {
       const p = await POST('/api/youtube/preview', { input });
       if (yt.input.trim() !== input) return;
-      yt.preview = p; yt.name = (p.title || '').slice(0, 60);
+      yt.preview = p; yt.name = (p.title || '').slice(0, 60); yt.plFromStart = false; yt.plShuffle = false;
     } catch (e) {
       if (yt.input.trim() !== input) return;
       yt.preview = null; yt.problem = { code: e.body && e.body.code, message: e.message };

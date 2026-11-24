@@ -25,6 +25,7 @@ class YouTubeLookupTest {
             url.contains("forHandle=") -> HttpResult(200, """{"items":[]}""")
             url.contains("/channels?") -> HttpResult(200, """{"items":[{"snippet":{"title":"Sky News","thumbnails":{"high":{"url":"http://i/c.jpg"}}}}]}""")
             url.contains("/search?") -> HttpResult(200, """{"items":[{"id":{"videoId":"x"}}]}""")
+            url.contains("/playlists?") -> HttpResult(200, """{"items":[{"snippet":{"title":"Old songs","channelTitle":"Fairuz","thumbnails":{"high":{"url":"http://i/p.jpg"}}},"contentDetails":{"itemCount":37}}]}""")
             else -> HttpResult(404, "")
         }
     }
@@ -80,5 +81,20 @@ class YouTubeLookupTest {
     fun `garbage is rejected kindly`() {
         assertEquals(YouTubeLookup.INVALID, (lookup.preview("hello world", null) as Result.Problem).code)
         assertEquals(YouTubeLookup.INVALID, (lookup.preview(" ", null) as Result.Problem).code)
+    }
+
+    @Test
+    fun `playlist links preview with their name, and the number of videos with a key`() {
+        val link = "https://www.youtube.com/watch?v=PbL-BAeRDMQ&list=PLVVfonyXVJI3lLAOb1_wDrgBonbhI6gEK"
+        val bare = (lookup.preview(link, null) as Result.Found).preview
+        assertEquals("playlist", bare.kind)
+        assertEquals(link, bare.source)
+        assertEquals("PbL-BAeRDMQ", bare.startVideo)
+        assertEquals("Morning news", bare.title) // from oEmbed in this fake
+        assertNull(bare.count)
+        assertTrue(seen.none { it.first.contains("googleapis") })
+        val keyed = (lookup.preview(link, "k") as Result.Found).preview
+        assertEquals(37, keyed.count)
+        assertTrue(seen.filter { it.first.contains("googleapis") }.all { !it.first.contains("key=") })
     }
 }

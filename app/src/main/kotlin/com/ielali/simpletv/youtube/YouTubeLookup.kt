@@ -21,13 +21,17 @@ class YouTubeLookup(private val fetcher: TextFetcher) {
     data class Preview(
         /** What to store as the channel's source: a channel id (live stream) or a watch link. */
         val source: String,
-        val kind: String, // "video" or "channel"
+        val kind: String, // "video", "channel" or "playlist"
         val title: String? = null,
         val thumbnail: String? = null,
         val author: String? = null,
         /** null when unknown (no key). */
         val live: Boolean? = null,
         val channelId: String? = null,
+        /** Playlists: how many videos (needs the key), and the video the link started at, if any. */
+        val count: Int? = null,
+        val listId: String? = null,
+        val startVideo: String? = null,
     )
 
     sealed interface Result {
@@ -55,7 +59,38 @@ class YouTubeLookup(private val fetcher: TextFetcher) {
             null -> problem(INVALID, "That doesn't look like a YouTube link or channel ID.")
             is YouTubeEmbed.Target.ChannelLive -> channel(target.channelId, apiKey)
             is YouTubeEmbed.Target.Video -> video(target.id, apiKey)
+            is YouTubeEmbed.Target.Playlist -> playlist(target, apiKey)
         }
+    }
+
+    /** A playlist's name from oEmbed (no key); with the key, also how many videos and its picture. */
+    private fun playlist(target: YouTubeEmbed.Target.Playlist, apiKey: String?): Result {
+        val page = "https://www.youtube.com/playlist?list=${target.listId}"
+        val o = (get("https://www.youtube.com/oembed?format=json&url=" + URLEncoder.encode(page, "UTF-8"), null) as? Lookup.Ok)?.value?.let(::obj)
+        var preview = Preview(
+            source = YouTubeEmbed.playlistSource(target.listId, target.startVideo, target.shuffle), kind = "playlist",
+            title = o.str("title"), thumbnail = o.str("thumbnail_url"), author = o.str("author_name"),
+            listId = target.listId, startVideo = target.startVideo,
+        )
+        if (!apiKey.isNullOrBlank()) {
+            when (val r = get("$API/playlists?part=snippet,contentDetails&id=${target.listId}", apiKey)) {
+                is Lookup.Fail -> return r.problem
+                is Lookup.Ok -> {
+                    val item = (obj(r.value)?.get("items") as? JsonArray)?.firstOrNull() as? JsonObject
+                        ?: return problem(NOT_FOUND, "That playlist isn't on YouTube, or it's private.")
+                    val snippet = item["snippet"] as? JsonObject
+                    val thumb = ((snippet?.get("thumbnails") as? JsonObject)?.let { t -> (t["high"] ?: t["medium"] ?: t["default"]) as? JsonObject }).str("url")
+                    preview = preview.copy(
+                        title = preview.title ?: snippet.str("title"),
+                        author = preview.author ?: snippet.str("channelTitle"),
+                        thumbnail = preview.thumbnail ?: thumb,
+                        count = (item["contentDetails"] as? JsonObject).str("itemCount")?.toIntOrNull(),
+                    )
+                }
+            }
+        }
+        // Without a key and no answer from oEmbed the name is unknown; the playlist may still play.
+        return Result.Found(preview)
     }
 
     private fun video(id: String, apiKey: String?): Result {

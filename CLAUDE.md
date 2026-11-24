@@ -58,7 +58,8 @@ app/src/main/kotlin/com/ielali/simpletv/
   player/QueueKeys.kt     Pure: Right/Left/OK on film and series channels (next, start or previous, pause)
   player/TrackPicker.kt   Pure: which subtitle and soundtrack to show for a film channel's wishes
   player/TuneTracker.kt   Pure: tuning / rebuffering / no-signal state and retry backoff
-  youtube/YouTubeEmbed.kt Parses YouTube links/ids and builds the iframe page
+  youtube/YouTubeEmbed.kt Parses YouTube links/ids (videos, live, playlists) and builds the player pages
+  data/YouTubeProgress.kt Where each YouTube playlist channel stopped (ADR-023)
   data/Channel.kt         Channel model + ChannelList (JSON, kotlinx.serialization)
   data/ChannelRepository.kt JSON-file persistence, StateFlow of the list
   data/AppSettings.kt     App-wide settings (YouTube playback mode)
