@@ -41,6 +41,7 @@ class ButtonRolesTest {
         assertEquals(ButtonRoles.Role.CHANNEL_LIST, ButtonRoles.roleOf(GuardKeys.TV, ButtonRoles.DEFAULT_LIST, emptyList()))
         assertEquals(ButtonRoles.Role.CHANNEL_LIST, ButtonRoles.roleOf(GuardKeys.GUIDE, ButtonRoles.DEFAULT_LIST, emptyList()))
         assertEquals(ButtonRoles.Role.PREVIOUS_CHANNEL, ButtonRoles.roleOf(174, emptyList(), listOf(174)))
+        assertEquals("the Kogan remote's Live TV button", ButtonRoles.Role.CHANNEL_LIST, ButtonRoles.roleOf(GuardKeys.FEATURED_APP_1, ButtonRoles.DEFAULT_LIST, emptyList()))
         assertNull(ButtonRoles.roleOf(GuardKeys.INFO, ButtonRoles.DEFAULT_LIST, emptyList()))
     }
 }

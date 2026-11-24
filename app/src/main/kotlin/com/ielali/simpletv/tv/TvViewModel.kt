@@ -48,6 +48,8 @@ data class TvUiState(
     /** The channel list (ADR-022): the highlighted row while it is open, and that channel's guide. */
     val listIndex: Int? = null,
     val listGuide: NowNext? = null,
+    /** The list's preview window shows the highlighted channel's picture (the player is playing it). */
+    val previewOn: Boolean = false,
 )
 
 /** Screen adapter: video surface and the settings overlay. Channel state lives in [TvController]. */
@@ -61,10 +63,19 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     private val settingsVisible = MutableStateFlow(false)
     private val paused = MutableStateFlow(false)
 
+    /**
+     * The channel the player is playing: the current one, or one previewed in the channel list. There
+     * is one player, so a preview replaces the channel (most IPTV accounts allow a single stream).
+     */
+    private val playing = MutableStateFlow<String?>(null)
+    /** A live channel playing in the preview window; OK on it carries on without tuning again. */
+    private var previewedId: String? = null
+
     val uiState: StateFlow<TvUiState> = combine(
         simpleTv.channels.channels, controller.current, controller.tuner.pendingDigits, controller.bannerVisible,
         settingsVisible, engine.state, simpleTv.settings.settings, controller.externalUnavailable,
         simpleTv.queue.nowTitle, simpleTv.secrets.secrets, paused, simpleTv.guide.version, controller.listIndex,
+        playing,
     ) { values ->
         val current = values[1] as Channel?
         @Suppress("UNCHECKED_CAST")
@@ -86,6 +97,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             guide = current?.let { simpleTv.guide.nowNext(it) },
             listIndex = listIndex,
             listGuide = listIndex?.let { simpleTv.guide.nowNext(sorted[it]) },
+            previewOn = listIndex != null && sorted[listIndex].playsOnSimpleTv && values[13] == sorted[listIndex].id,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, TvUiState())
 
@@ -98,25 +110,41 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             controller.current.collectLatest { ch ->
                 saveQueueProgress()
                 ch?.let { c -> viewModelScope.launch { runCatching { simpleTv.guide.touch(c) } } }
-                queueItem = null
-                paused.value = false
-                simpleTv.queue.report(null)
-                when {
-                    ch == null -> engine.stop()
-                    ch.type == SourceType.STREAM -> engine.play(ch)
-                    ch.playlist != null && ch.playsOnSimpleTv -> playQueued(ch, simpleTv.queue.current(ch))
-                    else -> engine.stop()
+                // OK on a live channel already playing in the list's preview window: no new tuning.
+                if (ch != null && ch.type == SourceType.STREAM && ch.id == previewedId && ch.id == playing.value) {
+                    previewedId = null
+                    return@collectLatest
                 }
+                previewedId = null
+                playChannel(ch)
             }
         }
-        // The channel list: it replaces the settings card, and asks the guide about the highlighted channel
-        // once the viewer stops on it.
+        // The channel list: it replaces the settings card. Once the viewer rests on a channel for a moment,
+        // the preview window plays it and the guide is asked about it. Closed without choosing, the channel
+        // that was on comes back.
         viewModelScope.launch {
+            var open = false
+            var openedOn: String? = null
             controller.listIndex.collectLatest { i ->
-                if (i == null) return@collectLatest
-                settingsVisible.value = false
-                delay(400)
-                controller.listChannel()?.let { c -> runCatching { simpleTv.guide.touch(c) } }
+                if (i == null) {
+                    if (!open) return@collectLatest
+                    open = false
+                    val cur = controller.current.value
+                    if (cur?.id == openedOn && playing.value != expected(cur)) {
+                        previewedId = null
+                        playChannel(cur)
+                    }
+                    return@collectLatest
+                }
+                if (!open) {
+                    open = true
+                    openedOn = controller.current.value?.id
+                    settingsVisible.value = false
+                }
+                delay(PREVIEW_DELAY_MS)
+                val ch = controller.listChannel() ?: return@collectLatest
+                viewModelScope.launch { runCatching { simpleTv.guide.touch(ch) } }
+                preview(ch)
             }
         }
         // Tell the config page what subtitles and soundtracks the film on screen has.
@@ -139,7 +167,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             engine.ended.collect {
                 val ch = controller.current.value ?: return@collect
-                if (ch.playlist != null) playQueued(ch, simpleTv.queue.advance(ch))
+                if (ch.playlist != null && playing.value == ch.id) playQueued(ch, simpleTv.queue.advance(ch))
             }
         }
         // Remember where a film or episode stopped, so the channel resumes there.
@@ -152,16 +180,63 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         // Flag channels that keep failing for the lineup page; clear the flag once they play.
         viewModelScope.launch {
             engine.state.collectLatest { st ->
-                val id = controller.current.value?.id ?: return@collectLatest
+                val id = playing.value ?: return@collectLatest
                 when (st) {
                     PlaybackState.PLAYING -> simpleTv.catalog.reportPlayed(id)
                     PlaybackState.ERROR -> {
                         delay(20_000)
-                        if (controller.current.value?.id == id) simpleTv.catalog.reportFailed(id)
+                        if (playing.value == id) simpleTv.catalog.reportFailed(id)
                     }
                     else -> Unit
                 }
             }
+        }
+    }
+
+    /** What the player should be playing for [ch]: its id when it plays on this screen. */
+    private fun expected(ch: Channel?): String? = if (ch != null && ch.playsOnSimpleTv) ch.id else null
+
+    private fun leaveQueueItem() {
+        queueItem = null
+        paused.value = false
+        simpleTv.queue.report(null)
+    }
+
+    /** Plays [ch] as the channel being watched: a stream, or a film/series channel where it left off. */
+    private suspend fun playChannel(ch: Channel?) {
+        leaveQueueItem()
+        playing.value = expected(ch)
+        when {
+            ch == null -> engine.stop()
+            ch.type == SourceType.STREAM -> engine.play(ch)
+            ch.playlist != null && ch.playsOnSimpleTv -> playQueued(ch, simpleTv.queue.current(ch))
+            else -> engine.stop()
+        }
+    }
+
+    /**
+     * The list's preview window: a live channel plays in it; resting on the channel being watched brings
+     * it back; YouTube, film and series channels show their logo instead (nothing plays).
+     */
+    private suspend fun preview(ch: Channel) {
+        val cur = controller.current.value
+        if (ch.id == cur?.id) {
+            if (playing.value != expected(cur)) { previewedId = null; playChannel(cur) }
+            return
+        }
+        if (ch.type == SourceType.STREAM) {
+            if (playing.value == ch.id) return
+            saveQueueProgress()
+            leaveQueueItem()
+            previewedId = ch.id
+            playing.value = ch.id
+            engine.play(ch)
+        } else if (playing.value != null) {
+            saveQueueProgress()
+            leaveQueueItem()
+            previewedId = null
+            playing.value = null
+            engine.stop()
         }
     }
 
@@ -261,6 +336,8 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
+        /** How long the highlight rests on a channel before the preview window tunes it. */
+        const val PREVIEW_DELAY_MS = 800L
         val LIST_REPEAT_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_PAGE_DOWN,

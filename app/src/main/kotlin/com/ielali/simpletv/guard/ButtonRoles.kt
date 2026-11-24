@@ -9,10 +9,10 @@ object ButtonRoles {
     enum class Role { CHANNEL_LIST, PREVIOUS_CHANNEL }
 
     /**
-     * Out of the box the blue "Live TV" button opens the channel list. Remotes send it as TV or GUIDE,
-     * so both do the same.
+     * Out of the box the blue "Live TV" button opens the channel list. Remotes send it as TV, GUIDE or
+     * (the Kogan remote) FEATURED_APP_1, so all three do the same.
      */
-    val DEFAULT_LIST: List<Int> = listOf(GuardKeys.TV, GuardKeys.GUIDE)
+    val DEFAULT_LIST: List<Int> = listOf(GuardKeys.TV, GuardKeys.GUIDE, GuardKeys.FEATURED_APP_1)
 
     /** Buttons with a fixed job (digits, arrows, OK, BACK, volume, power, Home, Menu...) never take another. */
     fun assignable(keyCode: Int): Boolean =

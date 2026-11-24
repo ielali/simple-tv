@@ -214,10 +214,10 @@ class TvControllerTest {
         r.controller.onAppVisible(true)
         assertEquals(listOf(2), r.launcher.opened)
         r.controller.openList()
-        advanceTimeBy(29_000)
+        advanceTimeBy(59_000)
         assertTrue(r.controller.isListOpen())
         r.controller.onListKey(GuardKeys.DPAD_DOWN) // any key keeps it open longer
-        advanceTimeBy(29_000)
+        advanceTimeBy(59_000)
         assertTrue(r.controller.isListOpen())
         advanceTimeBy(1_001)
         assertFalse(r.controller.isListOpen())
@@ -282,15 +282,27 @@ class TvControllerTest {
     }
 
     @Test
-    fun `ok while watching opens the channel list, and ends typed digits as before`() = runTest {
+    fun `ok while watching shows the banner and ends typed digits, never opens the list`() = runTest {
         val r = rig(last = 1)
         r.controller.onAppVisible(true)
         r.controller.onRemoteKey(GuardKeys.DPAD_CENTER)
-        assertEquals(0, r.controller.listIndex.value)
-        r.controller.onRemoteKey(GuardKeys.BACK)
+        runCurrent()
+        assertFalse(r.controller.isListOpen())
+        assertTrue(r.controller.bannerVisible.value)
         r.controller.onRemoteKey(GuardKeys.DIGIT_0 + 4)
         r.controller.onRemoteKey(GuardKeys.DPAD_CENTER)
         runCurrent()
+        assertFalse(r.controller.isListOpen())
+        assertEquals(4, r.controller.current.value?.number)
+    }
+
+    @Test
+    fun `left resting on another live channel, the list tunes it after a minute`() = runTest {
+        val r = rig(last = 1)
+        r.controller.onAppVisible(true)
+        r.controller.openList()
+        r.controller.onListKey(GuardKeys.DPAD_UP) // channel 4, a stream, now in the preview window
+        advanceTimeBy(60_001)
         assertFalse(r.controller.isListOpen())
         assertEquals(4, r.controller.current.value?.number)
     }

@@ -44,7 +44,7 @@ class HomeGuardPolicyTest {
     @Test
     fun `assistant colour and app keys are swallowed`() {
         listOf(GuardKeys.ASSIST, GuardKeys.SEARCH, GuardKeys.PROG_RED, GuardKeys.BUTTON_3, GuardKeys.ALL_APPS,
-            GuardKeys.FEATURED_APP_1, GuardKeys.VIDEO_APP_8).forEach {
+            GuardKeys.FEATURED_APP_4, GuardKeys.VIDEO_APP_8).forEach {
             assertEquals("key $it", KeyAction.SWALLOW, HomeGuardPolicy.onKey(it, on, now))
         }
     }

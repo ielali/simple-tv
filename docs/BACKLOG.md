@@ -42,7 +42,7 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    SHA-1), supplied by the operator. Sign in with the device account through Credential Manager,
    request `youtube.readonly`, then let the caregiver pick channels from "My subscriptions" and
    "Live now" instead of pasting links. Quota: search costs 100 units of the 10,000/day default.
-7. **Channel logos in the banner.** Load `logoUrl` with Coil, fall back to the number when missing.
+7. **Channel logos in the banner.** Coil is in (the list's preview window uses it); add the logo to the banner.
 9. **Stream health check in the web UI.** "Test" button per channel that has the TV try the URL for
    5 s and report OK / failed with the ExoPlayer error code.
 10. **Hard kiosk (optional).** Device-owner receiver + lock task for fresh installs without a Google
@@ -102,7 +102,7 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 ## Done
 
-- Channel list on the Live TV button with now and next for each channel, a lone 0 for the previous
+- Channel list on the Live TV button with a preview window and now and next for each channel, a lone 0 for the previous
   channel, a clock beside the banner, and remote buttons that can be given these jobs (ADR-022).
 
 - TV guide: now and next in the banner and on the page, from the provider's guide with free XMLTV

@@ -41,7 +41,7 @@ class SettingsMergeTest {
         assertEquals(listOf(GuardKeys.GUIDE), merged.listButtons)
         assertEquals(listOf(1000), merged.previousButtons)
         assertEquals(listOf(999), merged.guardBlockedKeys)
-        assertEquals(listOf(GuardKeys.TV, GuardKeys.GUIDE), AppSettings().listButtons)
+        assertEquals(listOf(GuardKeys.TV, GuardKeys.GUIDE, GuardKeys.FEATURED_APP_1), AppSettings().listButtons)
     }
 
     @Test

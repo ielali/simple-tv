@@ -52,7 +52,7 @@ class TvController(
     entryTimeoutMs: Long = 1500L,
     private val bannerMs: Long = 3500L,
     private val reopenGraceMs: Long = 5000L,
-    private val listIdleMs: Long = 30_000L,
+    private val listIdleMs: Long = 60_000L,
 ) {
     val tuner = ChannelTuner(scope, entryTimeoutMs)
 
@@ -126,7 +126,7 @@ class TvController(
         GuardKeys.CHANNEL_UP, GuardKeys.DPAD_UP, GuardKeys.PAGE_UP -> { channelUp(); true }
         GuardKeys.CHANNEL_DOWN, GuardKeys.DPAD_DOWN, GuardKeys.PAGE_DOWN -> { channelDown(); true }
         GuardKeys.DPAD_CENTER, GuardKeys.ENTER, GuardKeys.NUMPAD_ENTER -> {
-            if (!tuner.onConfirm()) openList() // OK while watching opens the channel list, as on most TVs
+            if (!tuner.onConfirm()) showBanner()
             true
         }
         GuardKeys.INFO, GuardKeys.GUIDE, GuardKeys.HOME, GuardKeys.TV -> { showBanner(); true }
@@ -190,7 +190,21 @@ class TvController(
         listJob?.cancel()
         listJob = scope.launch {
             delay(listIdleMs)
-            closeList() // left alone: the list goes away by itself
+            listLeftAlone()
+        }
+    }
+
+    /**
+     * Nobody touched the list for a minute. Resting on a live channel, the viewer has been watching it
+     * in the preview window, so it becomes the channel; otherwise the list just goes away.
+     */
+    private fun listLeftAlone() {
+        val ch = listChannel()
+        if (ch != null && ch.type == SourceType.STREAM && ch.id != _current.value?.id) {
+            _listIndex.value = null
+            switchTo(ch)
+        } else {
+            closeList()
         }
     }
 

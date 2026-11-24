@@ -1993,7 +1993,7 @@ screens.settings = (() => {
     };
     return `<section class="card col g8">
       <div class="f g12"><div class="grow"><h2 class="sec">Remote buttons</h2><p class="cap">Press a button on the remote, then refresh.</p></div><button class="btn" id="kRefresh">${ico('refresh', 18)}Refresh</button></div>
-      <div class="muted" style="line-height:22px">On the TV, <b>OK</b> or the <b>Live TV</b> button opens the channel list: up and down to choose, OK to watch, Back to close. On film and series channels OK pauses instead. Pressing <b>0</b> on its own goes back to the previous channel. You can give these jobs to other buttons below.</div>
+      <div class="muted" style="line-height:22px">On the TV, the <b>Live TV</b> button opens the channel list. Up and down choose a channel and show it in the preview window; OK watches it; Back goes back to the channel that was on. Pressing <b>0</b> on its own goes back to the previous channel. You can give these jobs to other buttons below.</div>
       ${latest.length ? `<div class="list">${latest.map((k) => { const r = result(k);
         const extra = k.action === 'PASS' || k.action === 'SYSTEM' ? ' · opened another app' : '';
         const right = k.assignable ? picker(k) : k.blocked ? `<button class="btn" data-unblock="${k.keyCode}">Unblock</button>` : r ? `<span class="pill ${r[0]}"><span class="dot"></span>${r[1]}</span>` : k.blockable ? `<button class="btn" data-block="${k.keyCode}">Block this button</button>` : '<span class="pill info">Passed on</span>';

@@ -11,6 +11,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +36,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntOffset
+import coil.compose.AsyncImage
+import kotlin.math.roundToInt
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,23 +79,31 @@ private val Fg = Color(0xFFF2F4F8)
 fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         val current = state.current
+        val listOpen = state.listIndex != null
+        val density = LocalDensity.current
+        // Where the list's preview window is on screen; the video view moves there while the list is open.
+        var previewBox by remember { mutableStateOf<Rect?>(null) }
+        val inPreview = listOpen && previewBox != null
+        val videoOn = if (listOpen) state.previewOn else current?.playsOnSimpleTv == true
+        // One call site, so the same video view (and its picture) moves between full screen and the window.
+        if (videoOn) VideoSurface(vm, if (inPreview) Modifier.placedAt(previewBox!!, density).zIndex(1f) else Modifier.fillMaxSize())
         when {
             state.channels.isEmpty() -> NoChannels(state.configUrl)
-            current == null -> Unit
-            current.playsOnSimpleTv -> VideoSurface(vm)
+            current == null || listOpen -> Unit // YouTube stops while the list is open; it reloads after
+            current.playsOnSimpleTv -> Unit
             current.type == SourceType.YOUTUBE ->
                 if (state.youtubeInApp) ChannelCard(current, stringResource(R.string.opening_youtube)) else YouTubeSurface(current)
         }
 
         // While a stream tunes or has no signal, a card keeps the channel's number and name on screen.
         val streamCard = when {
-            current?.playsOnSimpleTv != true -> null
+            listOpen || current?.playsOnSimpleTv != true -> null
             state.playback == PlaybackState.TUNING -> stringResource(R.string.tuning)
             state.playback == PlaybackState.ERROR -> stringResource(R.string.no_signal_retrying)
             else -> null
         }
         if (current != null && streamCard != null) ChannelCard(current, streamCard)
-        if (current?.playsOnSimpleTv == true && state.playback == PlaybackState.REBUFFERING) {
+        if (!listOpen && current?.playsOnSimpleTv == true && state.playback == PlaybackState.REBUFFERING) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner(size = 72) }
         }
 
@@ -109,16 +130,28 @@ fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
         }
 
         if (state.paused && current != null && state.listIndex == null) PausedCard(current, state.nowTitle)
-        if (state.listIndex != null) ChannelListOverlay(state, vm)
+        if (listOpen) {
+            ChannelListOverlay(state, vm, onPreviewBox = { previewBox = it })
+            val box = previewBox
+            if (box != null && state.previewOn && state.playback != PlaybackState.PLAYING && state.playback != PlaybackState.IDLE) {
+                Box(Modifier.placedAt(box, density).zIndex(2f), contentAlignment = Alignment.Center) {
+                    if (state.playback == PlaybackState.ERROR) {
+                        Text(stringResource(R.string.no_signal_retrying), color = Fg, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                    } else {
+                        Spinner(size = 56)
+                    }
+                }
+            }
+        }
         if (state.settingsVisible) SettingsOverlay(state.configUrl, state.pin)
     }
 }
 
 @UnstableApi
 @Composable
-private fun VideoSurface(vm: TvViewModel) {
+private fun VideoSurface(vm: TvViewModel, modifier: Modifier) {
     AndroidView(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier,
         factory = { ctx ->
             PlayerView(ctx).apply {
                 player = vm.engine.player
@@ -223,60 +256,93 @@ private fun ChannelBanner(current: Channel?, pendingDigits: String, nowTitle: St
 }
 
 /**
- * The channel list (ADR-022): every channel by number, the highlighted one large on the other side
- * with what is on it now and next. Up/Down move, channel up/down move a page, OK watches, BACK closes.
- * It goes away by itself when left alone.
+ * The channel list (ADR-022), laid out like a satellite receiver's: channels by number on one side; on
+ * the other a preview window that plays the highlighted live channel, with what is on now and next.
+ * Up/Down move, channel up/down move a page, OK watches, BACK closes and goes back to the channel that
+ * was on. The video view itself is placed over [onPreviewBox]'s window by [PlayerScreen].
  */
 @UnstableApi
 @Composable
-private fun ChannelListOverlay(state: TvUiState, vm: TvViewModel) {
+private fun ChannelListOverlay(state: TvUiState, vm: TvViewModel, onPreviewBox: (Rect) -> Unit) {
     val index = state.listIndex ?: return
     val channels = state.channels
     val highlighted = channels.getOrNull(index) ?: return
     BoxWithConstraints(
-        Modifier.fillMaxSize().background(Color(0xF00B1220)).padding(horizontal = 48.dp, vertical = 32.dp),
+        Modifier.fillMaxSize().background(Color(0xF20B1220)).padding(horizontal = 48.dp, vertical = 24.dp),
     ) {
         val rows = ((maxHeight - HeaderHeight - 16.dp) / RowHeight).toInt().coerceIn(3, 9)
         SideEffect { vm.controller.listPage = rows }
-        val start = com.ielali.simpletv.tv.ChannelListNav.windowStart(index, channels.size, rows)
+        val start = ChannelListNav.windowStart(index, channels.size, rows)
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().height(HeaderHeight), verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.channel_list_title), color = Fg, fontSize = 48.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(32.dp))
+                Text(
+                    stringResource(R.string.channel_list_hint), color = Fg.copy(alpha = 0.75f), fontSize = 32.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                )
                 Spacer(Modifier.width(24.dp))
-                Text("${index + 1} / ${channels.size}", color = Fg.copy(alpha = 0.7f), fontSize = 32.sp)
-                Spacer(Modifier.weight(1f))
                 Clock(fontSize = 48)
             }
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxSize()) {
-                Column(Modifier.weight(0.55f).fillMaxHeight()) {
+                Column(Modifier.weight(0.58f).fillMaxHeight()) {
                     for (i in start until minOf(start + rows, channels.size)) {
                         ListRow(channels[i], highlighted = i == index, watching = channels[i].id == state.current?.id)
                     }
                 }
-                Spacer(Modifier.width(40.dp))
-                Column(Modifier.weight(0.45f).fillMaxHeight()) {
-                    if (highlighted.number > 0) {
-                        Text(highlighted.number.toString(), color = Accent, fontSize = 96.sp, fontWeight = FontWeight.Black)
+                Spacer(Modifier.width(32.dp))
+                Column(Modifier.weight(0.42f).fillMaxHeight()) {
+                    Box(
+                        Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                            .background(Color.Black, RoundedCornerShape(12.dp))
+                            .onGloballyPositioned { onPreviewBox(it.boundsInRoot()) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (!state.previewOn) PreviewCard(highlighted)
                     }
-                    Text(highlighted.name, color = Fg, fontSize = 48.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    val watching = highlighted.id == state.current?.id
-                    if (watching) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(stringResource(R.string.channel_list_watching), color = Accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                        if (!state.nowTitle.isNullOrBlank()) Text(state.nowTitle, color = Fg.copy(alpha = 0.85f), fontSize = 32.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(12.dp))
+                    Text(highlighted.name, color = Fg, fontSize = 40.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val title = state.nowTitle
+                    if (highlighted.id == state.current?.id && !title.isNullOrBlank() && highlighted.playlist != null) {
+                        Text(title, color = Fg.copy(alpha = 0.85f), fontSize = 32.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                     state.listGuide?.takeIf { it.now != null }?.let { GuideLines(it, Modifier.fillMaxWidth()) }
-                    Spacer(Modifier.weight(1f))
-                    Text(stringResource(R.string.channel_list_hint), color = Fg.copy(alpha = 0.8f), fontSize = 32.sp)
                 }
             }
         }
     }
 }
 
-private val HeaderHeight = 72.dp
-private val RowHeight = 80.dp
+/** The preview window when nothing plays in it: the channel's logo (or number) and what kind it is. */
+@Composable
+private fun PreviewCard(channel: Channel) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        if (!channel.logoUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = channel.logoUrl, contentDescription = null, contentScale = ContentScale.Fit,
+                modifier = Modifier.height(96.dp).width(200.dp),
+            )
+        } else if (channel.number > 0) {
+            Text(channel.number.toString(), color = Accent, fontSize = 72.sp, fontWeight = FontWeight.Black)
+        }
+        val kind = when (channel.type) {
+            SourceType.YOUTUBE -> stringResource(R.string.channel_list_kind_youtube)
+            SourceType.FILMS -> stringResource(R.string.channel_list_kind_films)
+            SourceType.SERIES -> stringResource(R.string.channel_list_kind_series)
+            SourceType.STREAM -> null
+        }
+        if (kind != null) Text(kind, color = Fg.copy(alpha = 0.8f), fontSize = 32.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+/** Places a view at a window's position and size measured elsewhere on the screen (pixels, root coordinates). */
+private fun Modifier.placedAt(box: Rect, d: Density): Modifier = this
+    .offset { IntOffset(box.left.roundToInt(), box.top.roundToInt()) }
+    .size(with(d) { box.width.toDp() }, with(d) { box.height.toDp() })
+
+private val HeaderHeight = 64.dp
+private val RowHeight = 76.dp
 
 @Composable
 private fun ListRow(channel: Channel, highlighted: Boolean, watching: Boolean) {
@@ -292,7 +358,7 @@ private fun ListRow(channel: Channel, highlighted: Boolean, watching: Boolean) {
         Text(
             if (channel.number > 0) channel.number.toString() else "",
             color = if (highlighted) ink else Accent, fontSize = 48.sp, fontWeight = FontWeight.Black,
-            modifier = Modifier.width(128.dp),
+            modifier = Modifier.width(120.dp),
         )
         Text(
             channel.name, color = ink, fontSize = 48.sp, fontWeight = FontWeight.SemiBold,

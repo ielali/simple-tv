@@ -406,9 +406,19 @@ Decision:
   arrows, OK, BACK, volume, power, Home, Menu, media keys) cannot take one (`ButtonRoles`).
 - A clock shows beside the banner and in the list header, in the TV's 12- or 24-hour style.
 
-Update: OK while watching a live channel also opens the list, as on most TVs (it used to show the
-banner; OK still ends typed digits, and pauses film and series channels). The list no longer
-depends on which code the Live TV button sends.
+Update: The Kogan remote's Live TV button sends KEYCODE_FEATURED_APP_1 (297), so that code opens
+the list by default too. OK shows the banner again (opening the list with OK paused YouTube-app
+channels, because OK reaches YouTube there).
+
+Update: The list is laid out like a satellite receiver's. Channels on one side; on the other a
+preview window, 16:9, with the highlighted channel's now and next under it. Resting on a live
+channel for 0.8 s plays it in the window, using the one player: most IPTV accounts allow a single
+stream, so a second player would cut the main picture off. The video view moves into the window
+rather than being rebuilt. OK on a previewed channel carries on without tuning again; BACK puts the
+channel that was on back (a film resumes where it stopped). YouTube, film and series channels show
+their logo (Coil) and kind instead of a picture; the embedded YouTube player stops while the list
+is open. Left untouched for a minute, the list closes, and when it rests on another live channel
+that channel stays on, since the viewer has been watching it.
 
 Consequences: Rule 1 now allows this one list besides the video and the banner. Which code the
 Kogan remote's Live TV button sends is unconfirmed; the key log shows it. While a YouTube-app

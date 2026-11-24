@@ -20,6 +20,8 @@
     <string name="guard_service_label">حارس الشاشة الرئيسية لـ Simple TV</string>
     <string name="guard_service_description">يُبقي التلفاز على Simple TV: زر الصفحة الرئيسية يعيدك إلى هنا، وأزرار المساعد والاختصارات في جهاز التحكم لا تفعل شيئًا. يمكن إيقافه أو إيقافه مؤقتًا من صفحة إعدادات Simple TV.</string>
     <string name="channel_list_title">القنوات</string>
-    <string name="channel_list_watching">تشاهدها الآن</string>
     <string name="channel_list_hint">موافق للمشاهدة · رجوع للإغلاق</string>
+    <string name="channel_list_kind_youtube">يوتيوب</string>
+    <string name="channel_list_kind_films">أفلام</string>
+    <string name="channel_list_kind_series">مسلسلات</string>
 </resources>
