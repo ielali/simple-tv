@@ -81,6 +81,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         vm.controller.onAppVisible(false)
+        // Standby, or another app in front: a live channel gives up its stream until Telly is back.
+        vm.engine.onScreenGone()
         super.onStop()
     }
 

@@ -23,16 +23,21 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    YouTube playlist channel: add a public playlist; check it plays in order, Right/Left/OK work,
    the banner names the video, it resumes after a channel change and a restart, and that
    embed-blocked videos are skipped. Check whether ads appear.
-0a. **Check the buffering change on the Kogan (ADR-028).** With the TV on (with the screen off the
-   log says "no frame drawn" and proves only that streams load), install the build, run
-   `adb logcat -s SimpleTvPlayback` and watch IPTV channels for an evening: change channel twenty
-   times and stay ten minutes on three of them. Record in ADR-028 the first-frame and first-picture
-   times, the number of freezes and the frozen share of viewing time, against the evening before the
-   change (stays of 20 s or more: 4 freezes of 3.6 to 17 s, 44.5 s frozen against 267 s played, 14%).
-   `tools/tv-playback.py freezes` reads the same figures from the TV's own audio log afterwards, for
-   any build; keep its `--min-seconds` the same for both. If channels still freeze right
-   after they start, raise `START_AFTER_MS` in `PlaybackEngine` from 1 s towards 2.5 s and measure
-   again (`tools/tv-playback.py model --settings now,start2.5` gives a first idea).
+0a. **Finish checking the buffering change on the Kogan (ADR-028).** A morning run on build 0.1.89
+   is in ADR-028: 15 channel changes, 17 minutes, no freeze while watching, against 14% frozen the
+   evening before the change. Two things are left, both with the TV on and
+   `adb logcat -s SimpleTvPlayback` running (the TV's log keeps only a few minutes, so start it
+   before watching):
+   - Standby. On a build with `PlaybackEngine.onScreenGone`, watch a live channel, switch the TV
+     off for a minute and on again. The log should say `left` when it goes off and `first picture`
+     about 3 s after it comes on, the tuning card should show in between, and nothing should freeze
+     half a minute later. Do the same on a film channel: it should carry on where it was.
+   - An evening, when the provider is busiest: stay ten minutes on three channels and change channel
+     twenty times. Record the freezes and the frozen share in ADR-028 beside the morning's.
+     `tools/tv-playback.py freezes --since "MM-DD HH:MM"` reads them from the TV's audio log for
+     that evening alone; keep `--min-seconds` at 20 as for the other runs. If channels freeze right
+     after they start, raise `START_AFTER_MS` in `PlaybackEngine` from 1 s towards 2.5 s and measure
+     again (`tools/tv-playback.py model --settings now,start2.5` gives a first idea).
 1. **First device run.** Build `assembleDebug`, sideload on an Android TV box, confirm: app opens
    fullscreen, empty state shows the config URL, config page loads from a phone, adding an HLS
    channel plays. Record device, Android version and remote model in DEPLOYMENT.md.
@@ -60,14 +65,11 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    5 s and report OK / failed with the ExoPlayer error code.
 10. **Hard kiosk (optional).** Device-owner receiver + lock task for fresh installs without a Google
    account. Never hide or suspend the stock Google TV home (ADR-009).
-11. **Last-channel resume and standby.** On resume after HDMI-CEC standby, retune the last channel
-   instead of showing a frozen frame. Today the player is only paused when the screen goes off: it
-   keeps its buffer and keeps asking the provider for the playlist, so the TV holds the account's one
-   stream while nobody watches, and on wake it plays up to 30 s of stale video and then has to
-   recover. Stop the player in `onStop` and tune again in `onStart` (films keep their position).
-   Seen on the Kogan: a channel change while the TV is in standby (Play on TV from the page, for
-   one) starts the stream and plays it with the screen off, because every tune tells the player to
-   play. Decide what a tune in standby should do: wake the TV, or wait until it is on.
+11. **A channel change while the TV is in standby.** Seen on the Kogan: a channel change in standby
+   (Play on TV from the page, for one) starts the stream and plays it with the screen off, because
+   every tune tells the player to play, and it plays on unseen until the channel changes or the TV
+   has been on and off again. Decide what a tune in standby should do: wake the TV, or remember the
+   channel and tune when the screen is on (`PlaybackEngine.onScreenBack` is where that would start).
 12. **Audio-only fallback.** If the box cannot decode video for a stream, keep audio and show the
     logo/name large (radio behaviour) instead of "No signal".
 13. **Tune at once when the number is complete.** After a digit the tuner waits 1.5 s for another
@@ -147,6 +149,10 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- A live channel lets go of its stream when the TV goes to standby or another app is in front, and
+  tunes again from live when Telly is back; films keep their place (ADR-028). It came back from
+  standby playing half a minute of hours-old video and then froze. Device check: item 0a.
 
 - Live channels keep a buffer (ADR-028): no live offset of our own (the stream's hold-back, or three
   segments), loading never pauses below the maximum, and a playback log

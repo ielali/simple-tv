@@ -60,6 +60,9 @@ class PlaybackEngine(context: Context) {
     private var currentChannel: Channel? = null
     private var currentLive = true
 
+    /** The live channel gave up its stream while nobody could see the screen; it tunes again when someone can. */
+    private var letGo = false
+
     private val httpFactory = DefaultHttpDataSource.Factory()
         .setUserAgent(DEFAULT_USER_AGENT)
         .setAllowCrossProtocolRedirects(true)
@@ -95,8 +98,8 @@ class PlaybackEngine(context: Context) {
                     if (phase == PlayerPhase.ENDED && currentChannel != null) _ended.tryEmit(Unit)
                 }
 
-                // Paused by the viewer, or the screen is off: nobody is watching, so the playback
-                // log's clock stops (the player stays ready the whole time).
+                // Paused by the viewer, or Telly is leaving the screen: nobody is watching, so the
+                // playback log's clock stops.
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = stats.onPaused(!playWhenReady)
 
                 // A frame was drawn. With the screen off none ever is: the player still gets ready,
@@ -195,6 +198,7 @@ class PlaybackEngine(context: Context) {
         tracks: TrackPicker.Wish? = null,
     ) {
         retryHandler.removeCallbacksAndMessages(null)
+        letGo = false
         // Each item starts from the player's own track choice; a film's wishes apply once its tracks load.
         wish = tracks
         appliedGroups = -1
@@ -224,8 +228,42 @@ class PlaybackEngine(context: Context) {
     /** Current position, for remembering where a film or episode stopped. */
     fun positionMs(): Long = player.currentPosition
 
+    /**
+     * Telly is off the screen: the TV went to standby, or another app is in front. A live channel
+     * gives up its stream. Kept, the player would ask the provider for the playlist every few seconds
+     * all night, and on the way back play the half minute it still held, hours old, then freeze when
+     * that ran out (ADR-028). A film or episode keeps its place; the activity has already paused it.
+     */
+    fun onScreenGone() {
+        if (currentChannel == null || !currentLive || letGo) return
+        letGo = true
+        retryHandler.removeCallbacksAndMessages(null)
+        logSummary(stats.onStop())
+        player.stop()
+    }
+
+    /**
+     * Telly is on the screen again. A live channel that gave up its stream tunes again, from live;
+     * anything else carries on, unless the viewer had paused it ([viewerPaused]).
+     */
+    fun onScreenBack(viewerPaused: Boolean) {
+        if (currentChannel == null || !letGo) {
+            player.playWhenReady = !viewerPaused
+            return
+        }
+        letGo = false
+        backoff.reset()
+        logSummary(stats.onTune())
+        show(tracker.onTune())
+        _lastError.value = null
+        player.seekToDefaultPosition()
+        player.prepare()
+        player.play()
+    }
+
     fun stop() {
         retryHandler.removeCallbacksAndMessages(null)
+        letGo = false
         wish = null
         _tracks.value = null
         logSummary(stats.onStop())

@@ -424,8 +424,8 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** The screen came back (standby, another app): carry on unless the viewer paused. */
-    fun onScreenResumed() { engine.player.playWhenReady = !paused.value }
+    /** Back on screen (standby, another app): a live channel tunes again; a film carries on unless paused. */
+    fun onScreenResumed() = engine.onScreenBack(viewerPaused = paused.value)
 
     /** Keys the TV owns. Everything else (volume, power, mute) must reach the system untouched. */
     fun handles(keyCode: Int): Boolean = controller.roleOf(keyCode) != null ||

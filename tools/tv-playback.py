@@ -9,6 +9,9 @@ Commands
                 be running and the TV can be in standby.
                   --min-seconds 20  stays shorter than this (zapping) are left out of the list and
                                     of the totals alike; compare builds with the same value
+                  --since "11-25 08:46"  only stays that began at or after this (month-day
+                                    hour:minute, as in the list), to keep one build or one
+                                    evening apart from what the log held before
   channels      what kind of streams the lineup holds (HLS, MPEG-TS, YouTube...), as shapes
   probe         per live HLS channel: redirects with timings, playlist shape, one segment's speed
                   --channels 5,9   lineup numbers (default: the first three)
@@ -332,6 +335,15 @@ def cmd_freezes(args):
     if not stays:
         print("no playback by Telly in the TV's audio log (it keeps a few hours)")
         return
+    if args.since:
+        try:
+            since = datetime.datetime.strptime("2000-" + args.since, "%Y-%m-%d %H:%M")
+        except ValueError:
+            sys.exit('--since takes month-day hour:minute, as in "11-25 08:46"')
+        stays = [s for s in stays if s["at"] >= since]
+        if not stays:
+            print("no playback by Telly since %s in the TV's audio log" % args.since)
+            return
     shown = [s for s in stays if s["on"] >= args.min_seconds]
     print("One line per time the sound started on a channel (a tune, or a retry). A freeze is the sound")
     print("pausing and starting again; a film paused with OK looks the same.")
@@ -643,6 +655,7 @@ def main():
 
     freezes = commands.add_parser("freezes")
     freezes.add_argument("--min-seconds", type=int, default=20, help="leave shorter stays out of the list and the totals (default 20)")
+    freezes.add_argument("--since", help='only stays that began at or after this, as "11-25 08:46"')
     freezes.set_defaults(run=cmd_freezes)
 
     probe = commands.add_parser("probe")

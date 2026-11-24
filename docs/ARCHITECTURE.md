@@ -109,6 +109,12 @@ frame, first picture (player ready with a frame drawn; with the screen off it re
 frame drawn") and every freeze, leaving out paused time; the engine writes them to the log without
 addresses: `adb logcat -s SimpleTvPlayback`.
 
+Off the screen (ADR-028): when the TV goes to standby or another app is in front, `MainActivity`
+pauses the player (`onPause`) and tells the engine (`onStop`, `PlaybackEngine.onScreenGone`). A live
+channel then gives up its stream, so the TV asks the provider for nothing while nobody watches, and
+tunes again from live when Telly is back (`onScreenBack`). A film or episode stays paused where it
+was and carries on.
+
 ## YouTube
 
 `YouTubeEmbed` turns a video id, watch/live URL or channel id into an embed URL for the IFrame player

@@ -235,6 +235,24 @@ class PlaybackStatsTest {
     }
 
     @Test
+    fun `the screen going off ends the stay and the channel is timed again from when it is back`() {
+        stats.onTune()
+        picture(2_000)
+        now += 10_000
+        // Standby: the activity pauses the player, then the live channel lets go of its stream.
+        stats.onPaused(true)
+        now += 300
+        assertEquals(summary(firstPictureMs = 2_000, playedMs = 10_000), stats.onStop())
+        now += 21_000_000
+        // Back on: the engine tunes again and then tells the player to play.
+        assertNull(stats.onTune())
+        stats.onPaused(false)
+        now += 2_800
+        assertEquals(PlaybackStats.Event.FirstFrame(2_800), stats.onFirstFrame())
+        assertEquals(PlaybackStats.Event.FirstPicture(3_000), after(200, PlaybackState.PLAYING))
+    }
+
+    @Test
     fun `nothing is reported before a tune or after a stop`() {
         assertNull(stats.onState(PlaybackState.PLAYING))
         assertNull(stats.onStop())

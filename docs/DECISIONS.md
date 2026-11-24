@@ -665,6 +665,10 @@ Decision:
 - Load control minimum equals maximum (30 s): loading carries on whenever there is room. The maximum
   stays at 30 s, so films use no more memory than before (the Kogan's heap limit is 256 MB).
 - The picture still starts with 1 s buffered and resumes after a stall with 2 s.
+- Off the screen, a live channel lets go of its stream. When the TV goes to standby or another app
+  comes in front (`MainActivity.onStop`), `PlaybackEngine.onScreenGone` stops the player; back on
+  screen, `onScreenBack` tunes the channel again from live, with the tuning card. A film or episode
+  is paused and resumed as before and keeps its place. See the 0.1.89 run below for why.
 - `PlaybackStats` (pure) times each channel's first picture and every freeze; the engine logs them
   under `SimpleTvPlayback` with the channel number and no address, so the next change to these
   numbers can be measured on the TV instead of guessed. "First picture" needs both the player ready
@@ -672,9 +676,9 @@ Decision:
   Media3 draws the frame first ("first frame" in the log) and is ready once the start buffer has
   filled. With the screen off, the app behind another one, or a channel with sound only, it gets
   ready without drawing anything; the log then says "ready, no frame drawn" and the stay's summary
-  "no picture". Paused time does not count, whether the viewer paused a film or the TV went to
-  standby while playing (the player stays ready through both), and a freeze shorter than a quarter
-  of a second is ignored, as in the audio log's figures.
+  "no picture". Paused time does not count (a film paused by the viewer, or the moment between the
+  screen going off and the channel letting go), a stay ends when the screen goes off, and a freeze
+  shorter than a quarter of a second is ignored, as in the audio log's figures.
 
 Consequences: Live channels run about 30 s behind the broadcast instead of about 10. The first
 picture comes no later: either way it needs the redirect, the playlist and the start of one segment,
@@ -698,17 +702,48 @@ table above).
 
 Whether the TV's HTTP stack reuses connections has not been measured, so the second run is the
 cautious figure: the change still removes most freezes, with a thinner buffer. The first picture took
-3.6 to 8.8 s under every setting. It is a model, not the player: the build has not yet run on the
-Kogan (backlog item 0a).
+3.6 to 8.8 s under every setting. It is a model, not the player; the runs on the Kogan follow.
 
 First run on the Kogan (build 0.1.88, 25 November, TV in standby, channels changed from a laptop):
 four channels were ready after 7.5, 4.0, 3.3 and 3.0 s, and the one left on played 35 s without a
 stall. No frame was drawn, as the decoder's own records confirm, because the screen was off. It
 shows the streams load on the TV with the new settings; it is not yet the viewing check of item 0a.
 
+Second run on the Kogan (build 0.1.89, 25 November, TV on from 08:46 to 09:05), from the playback
+log: 15 channel changes over ten channels and 17 minutes of playing, one stay of 11 minutes.
+
+| | Evening before, 0.1.67 | This run, 0.1.89 |
+|---|---|---|
+| Stays of 20 s or more in the TV's audio log | 4 | 5 |
+| Played in them | 267 s | 900 s |
+| Freezes | 4, of 3.6 to 17 s | 0 |
+| Frozen share of the time | 14% | 0% |
+
+The first frame was drawn after 2.0 to 3.3 s (middle value 2.8 s) and the picture was there after
+2.5 to 3.9 s (middle value 3.0 s), over the 13 changes that gave a picture. The other two were the
+same channel, which the provider refused both times (`ERROR_CODE_IO_BAD_HTTP_STATUS`, "No signal").
+No channel froze right after it started. It is one morning and one long stay against one evening,
+so the evening check of item 0a still stands.
+
+The playback log shows one freeze that the audio log does not count, because a failure and its retry
+are two stays there: 7.6 s on the channel that had been on through standby, 33 s after the screen
+came on. That channel was tuned at 02:56 with the screen off and then only paused. The audio log
+has its sound track living 5 h 50 min and playing 30 s: at 08:46 the player went on with the video
+it had held since 02:56, drew its first frame 3.5 s later, ran out, failed with
+`ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT` and froze until the retry put it back on live. The
+real-player rig used for the table above shows the mechanism. Paused, the player rereads the
+playlist all the while (twice in 12 s), and resumed after the stream has moved on it plays on from
+its old position. Stopped, it asks for nothing, and tuned again it asks for the third newest
+segment of the new playlist. Hence the last decision above. It costs a live channel about 3 s of
+tuning card whenever Telly comes back to the screen, also after a short trip to another app, and
+the TV no longer holds the provider's stream while nobody watches. Pausing through standby is older
+than this branch; what the branch added is the size of the buffer that is replayed, 30 s where there
+were 10 at most. The new behaviour has not yet run on the Kogan (item 0a).
+
 Still open: when the first segment arrives slowly, the picture starts with its 1 s and can freeze
-for a couple of seconds straight after (twice in seven model runs). A larger start threshold would
-trade that for a longer wait on every channel change; decide it on the TV with the playback log.
+for a couple of seconds straight after (twice in seven model runs, never in the 13 starts on the
+TV). A larger start threshold would trade that for a longer wait on every channel change; the 1 s
+stays unless the evening check shows such freezes.
 
 Not adopted: OkHttp or Cronet instead of the platform HTTP stack (no measured gain yet), MPEG-TS
 instead of HLS (faster first picture, but a stream with nothing behind it). See backlog item 15.
