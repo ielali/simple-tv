@@ -175,6 +175,15 @@ object XtreamApi {
             ?.take(4)?.takeIf { it.length == 4 && it.all(Char::isDigit) }
             ?: yearInName.find(name)?.value?.trim('(', ')')
 
+    /** The provider's score out of 10 ("rating", or "rating_5based" doubled); 0 means none given. */
+    private fun scoreOf(o: JsonObject): Double? =
+        (o["rating"].asString()?.toDoubleOrNull()?.takeIf { it in 0.1..10.0 }
+            ?: o["rating_5based"].asString()?.toDoubleOrNull()?.takeIf { it in 0.1..5.0 }?.times(2))
+            ?.let { Math.round(it * 10) / 10.0 }
+
+    /** A unix time in seconds as the provider sends it, as epoch millis; nonsense is ignored. */
+    private fun timeOf(s: String?): Long? = s?.trim()?.toLongOrNull()?.takeIf { it in 946_684_800L..4_102_444_800L }?.times(1000)
+
     /** Films (`get_vod_streams`) in the provider's order. */
     fun parseVodStreams(body: String, categories: Map<String, String>): List<CatalogItem> {
         val arr = runCatching { json.parseToJsonElement(body) as? JsonArray }.getOrNull() ?: return emptyList()
@@ -191,6 +200,8 @@ object XtreamApi {
                 logo = o["stream_icon"].asString()?.takeIf { it.startsWith("http") },
                 year = yearOf(o, name),
                 ext = o["container_extension"].asString(),
+                score = scoreOf(o),
+                added = timeOf(o["added"].asString()),
             )
         }.sortedBy { it.first }.map { it.second }
     }
@@ -210,6 +221,8 @@ object XtreamApi {
                 group = categoryId?.let { categories[it] ?: "Category $it" },
                 logo = o["cover"].asString()?.takeIf { it.startsWith("http") },
                 year = yearOf(o, name),
+                score = scoreOf(o),
+                added = timeOf(o["last_modified"].asString()),
             )
         }.sortedBy { it.first }.map { it.second }
     }

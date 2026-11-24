@@ -91,6 +91,12 @@ class MetadataService(
         return details(pid, item)
     }
 
+    /** Where a title's official rating sits on the household country's scale (0 = youngest audience). */
+    fun certOrder(item: CatalogItem, meta: FilmMeta?): Int? {
+        val cert = RatingRules.certOf(meta ?: return null, country()) ?: return null
+        return lists()?.of(item.type, country())?.firstOrNull { it.certification.equals(cert, true) }?.order
+    }
+
     /** May this film play on a channel with [spec]'s rules? */
     fun allowed(spec: PlaylistSpec, item: CatalogItem): Boolean {
         val meta = cached(spec.providerId, item.type, item.id)

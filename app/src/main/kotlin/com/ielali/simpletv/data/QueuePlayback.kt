@@ -49,7 +49,10 @@ class QueuePlayback(
     val nowTitle: StateFlow<Pair<String, String>?> = _nowTitle.asStateFlow()
 
     suspend fun queue(spec: PlaylistSpec): List<QueueEntry> = when (spec.mode) {
-        PlaylistMode.FILM -> PlaylistQueue.films(catalogRepo.catalog(spec.providerId) ?: catalog.ensureCatalog(spec.providerId), spec) { meta.allowed(spec, it) }
+        PlaylistMode.FILM -> PlaylistQueue.films(
+            catalogRepo.catalog(spec.providerId) ?: catalog.ensureCatalog(spec.providerId), spec,
+            meta = { meta.cached(spec.providerId, it.type, it.id) }, certOrder = meta::certOrder,
+        ) { meta.allowed(spec, it) }
         PlaylistMode.SERIES -> {
             val id = spec.seriesId
             if (id == null) emptyList() else {
@@ -61,7 +64,10 @@ class QueuePlayback(
 
     /** The queue from what is already on the TV, never downloading (for listing the lineup). */
     suspend fun queueCached(spec: PlaylistSpec): List<QueueEntry> = when (spec.mode) {
-        PlaylistMode.FILM -> PlaylistQueue.films(catalogRepo.catalog(spec.providerId), spec) { meta.allowed(spec, it) }
+        PlaylistMode.FILM -> PlaylistQueue.films(
+            catalogRepo.catalog(spec.providerId), spec,
+            meta = { meta.cached(spec.providerId, it.type, it.id) }, certOrder = meta::certOrder,
+        ) { meta.allowed(spec, it) }
         PlaylistMode.SERIES -> spec.seriesId?.let { catalogRepo.episodes(spec.providerId, it) }
             ?.let { PlaylistQueue.episodes(it, spec) }.orEmpty()
     }

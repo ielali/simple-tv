@@ -47,6 +47,7 @@ app/src/main/kotlin/com/ielali/simpletv/
   guard/ButtonRoles.kt    Pure: which remote buttons open the list or go to the previous channel
   data/TextClean.kt       Pure: decodes HTML entities in provider names, drops junk guide titles
   data/Years.kt           Pure: a title's production year and film channels' year range
+  data/CatalogSort.kt     Pure: sort orders for film/series lists and film channels (ADR-025)
   tv/TvController.kt      App-scoped TV state: current channel, digits, banner, YouTube-app hand-off.
                           Android-free; driven by the screen and, over YouTube, by the guard
   tv/ExternalPlayer.kt    Opens the YouTube app / brings Simple TV forward from app context

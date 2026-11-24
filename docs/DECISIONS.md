@@ -511,3 +511,23 @@ Decision (page):
 Not adopted: Back as "previous channel" (it stays close/cancel; previous channel goes on a spare
 button the caregiver chooses), keeping channel up/down to live channels only (film channels stay
 in the order, like film channels on a real TV), spoken channel names (later).
+
+## ADR-025 Sorting films and series
+
+Context: The caregiver wants film and series lists sortable by year, rating, name and other useful
+measures.
+
+Decision:
+- The TV sorts (`CatalogSort`), so long lists sort as a whole before they are paged: name A to Z,
+  newest or oldest year, highest score, official age rating (youngest audience first, on the
+  household country's scale) and recently added. Titles without the value go last; ties go by name.
+- The provider's own score ("rating", or "rating_5based" doubled) and the date it added each film
+  ("added") or series ("last_modified") are now kept from the catalog. A score from TMDB, once a
+  title is checked, wins over the provider's; so do a checked title's year and rating.
+- The page's film and series lists (Add, and the film editor's search) have a Sort menu, remembered
+  per kind on that device. A film channel's Order is A to Z, Newest first, Oldest first, Best score
+  first, Recently added or Shuffled (`PlaylistSpec.sort`). Shuffled ignores the sort; hand-picked
+  films keep the order they were picked in.
+
+Consequences: Sorting by score or rating changes as the TV checks more films' details. Scores and
+dates appear after the next catalog refresh.

@@ -266,6 +266,9 @@ const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const nf = new Intl.NumberFormat('en');
 const fmtN = (n) => nf.format(n || 0);
+/** Sort orders for film and series lists (the TV sorts; titles without the value go last). */
+const SORT_CHOICES = [['name', 'Name A to Z'], ['newest', 'Newest first'], ['oldest', 'Oldest first'], ['score', 'Highest score'], ['rating', 'Age rating, youngest first'], ['added', 'Recently added']];
+const sortMenu = (id, value) => `<label class="inp jobpick" style="flex:0 1 230px"><span class="sr">Sort</span><select id="${id}" aria-label="Sort">${SORT_CHOICES.map(([k, l]) => `<option value="${k}" ${k === (value || 'name') ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`;
 const plural = (n, one, many) => fmtN(n) + ' ' + (n === 1 ? one : (many || one + 's'));
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } },
@@ -1117,6 +1120,7 @@ screens.add = (() => {
     if (more) { cat.loadingMore = true; paintItems(); }
     const qs = new URLSearchParams({ type: cat.type, offset: more ? cat.items.length : 0, limit: 50 });
     if (cat.q.trim()) qs.set('q', cat.q.trim()); else if (cat.category != null) qs.set('category', cat.category);
+    if (cat.type !== 'live') qs.set('sort', store.get('stv.sort.' + cat.type, 'name'));
     const my = (loadItems.seq = (loadItems.seq || 0) + 1);
     let r;
     try { r = await GET(`/api/catalog/${encodeURIComponent(cat.pid)}/items?${qs}`); }
@@ -1201,7 +1205,7 @@ screens.add = (() => {
       list = cat.items.map((it) => `<label class="chk"><input type="checkbox" data-item="${esc(it.id)}" ${cat.selected.has(it.id) ? 'checked' : ''} ${it.inLineup ? 'disabled' : ''}>${logoBox(it.name, it.logo)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span><span class="cap" dir="auto">${esc(it.group || 'No category')}</span></span>${it.inLineup ? `<span class="pill ok"><span class="dot"></span>In your lineup as ${esc(it.lineupNumber)}</span>` : ''}<button class="ibtn bd" type="button" data-try="${esc(it.id)}" aria-label="Play ${esc(it.name)} on the TV" title="Play on TV">${ico('play', 18)}</button></label>`).join('');
     } else {
       list = `<div class="postergrid">${cat.items.map((it) => {
-        const inner = `${posterHtml(it)}<div class="cap">${esc([it.year, minutesText(it.minutes), scoreText(it.score)].filter(Boolean).join(' · '))}</div>`;
+        const inner = `${posterHtml(it)}<div class="cap">${esc([it.year, it.rating, minutesText(it.minutes), scoreText(it.score)].filter(Boolean).join(' · '))}</div>`;
         return `<button type="button" data-details="${esc(it.id)}" data-name="${esc(it.name)}" aria-label="About ${esc(it.name)}">${inner}</button>`;
       }).join('')}</div>`;
     }
@@ -1211,7 +1215,7 @@ screens.add = (() => {
       : cat.type === 'film' ? `<a class="btn" href="#/film/new?mode=film&pid=${encodeURIComponent(cat.pid)}&cat=${encodeURIComponent(c.id)}&pick=1">Pick films by hand</a>` : '';
     const n = cat.selected.size; const start = nextNumber();
     el.innerHTML = `
-      <div class="f fw g12"><div class="grow" style="min-width:180px"><h2 class="sec" dir="auto">${esc(title)}</h2><div class="cap">${esc(sub)}</div></div>${allBtn}</div>
+      <div class="f fw g12"><div class="grow" style="min-width:180px"><h2 class="sec" dir="auto">${esc(title)}</h2><div class="cap">${esc(sub)}</div></div>${cat.type !== 'live' ? sortMenu('itemSort', store.get('stv.sort.' + cat.type, 'name')) : ''}${allBtn}</div>
       ${callout}
       ${cat.items.length ? list : `<p class="muted" style="padding:12px 0">${searching ? 'Nothing matches. Try fewer letters.' : 'Nothing in this category.'}</p>`}
       ${moreLine('moreItems', cat.loadingMore, cat.items.length, cat.total, unit()[1])}
@@ -1226,6 +1230,7 @@ screens.add = (() => {
       showDetails(pid, cat.type === 'series' ? 'SERIES' : 'FILM', id, name, action);
     });
     infinite('catalog', 'moreItems', () => loadItems(true));
+    const so = $('#itemSort', el); if (so) so.onchange = () => { store.set('stv.sort.' + cat.type, so.value); loadItems(false); };
     const cs = $('#clearSel', el); if (cs) cs.onclick = () => { cat.selected.clear(); paintItems(); };
     const as = $('#addSel', el); if (as) as.onclick = () => addItems({ itemIds: [...cat.selected.keys()] }, n, [c && c.name].concat([...cat.selected.values()].map((x) => (x && x.name) || '')));
     const aa = $('#addAll', el); if (aa) aa.onclick = () => addItems({ categories: [c.id] }, c.count, [c.name]);
@@ -1683,6 +1688,7 @@ screens.film = (() => {
     const sp = f.spec; const type = sp.mode === 'SERIES' ? 'series' : 'film';
     const qs = new URLSearchParams({ type, limit: 30, offset: more ? f.results.length : 0 });
     if (f.q.trim()) qs.set('q', f.q.trim()); else if (f.pickCat != null && type === 'film') qs.set('category', f.pickCat);
+    qs.set('sort', store.get('stv.sort.' + type, 'name'));
     const [yf, yt] = type === 'series' ? [f.yrFrom, f.yrTo] : [sp.minYear, sp.maxYear];
     if (yf) qs.set('from', yf); if (yt) qs.set('to', yt);
     const my = (search.seq = (search.seq || 0) + 1);
@@ -1712,11 +1718,11 @@ screens.film = (() => {
             ${isFilm ? `
               <div class="field"><span>Where the films come from</span><div class="seg full" role="radiogroup"><button data-src="cats" class="${f.source === 'cats' ? 'on' : ''}" role="radio" aria-checked="${f.source === 'cats'}">Categories</button><button data-src="pick" class="${f.source === 'pick' ? 'on' : ''}" role="radio" aria-checked="${f.source === 'pick'}">Hand-picked</button></div></div>
               ${f.source === 'cats' ? (f.cats ? (f.cats.length ? `${f.cats.length > 8 ? findBox('fCatFind', f.catFind, `Find a category (${fmtN(f.cats.length)})`) : ''}<div id="fCatChips"></div>` : `<p class="muted">${f.catLoaded ? 'This subscription has no films.' : 'The film list isn’t on the TV yet. Refresh the subscription first.'}</p>`) : '<div class="skel" style="height:44px"></div>')
-                : `<label class="inp big">${ico('search', 20)}<span class="sr">Search films</span><input id="fQ" type="search" value="${esc(f.q)}" placeholder="Search films to add" autocomplete="off" dir="auto"></label><div id="fResults" class="col g4"></div>`}
-              ${f.source === 'cats' ? `<div class="field"><span>Order</span><div class="seg full" role="radiogroup"><button data-shuffle="0" class="${sp.shuffle ? '' : 'on'}" role="radio" aria-checked="${!sp.shuffle}">In order</button><button data-shuffle="1" class="${sp.shuffle ? 'on' : ''}" role="radio" aria-checked="${sp.shuffle}">Shuffled</button></div><span class="hint">Shuffled mixes the films once. The TV then plays them one after another.</span></div>` : ''}`
+                : `<label class="inp big">${ico('search', 20)}<span class="sr">Search films</span><input id="fQ" type="search" value="${esc(f.q)}" placeholder="Search films to add" autocomplete="off" dir="auto"></label><div class="f fw g8" style="align-items:center"><span class="cap grow">Sort the films below</span>${sortMenu('fSort', store.get('stv.sort.film', 'name'))}</div><div id="fResults" class="col g4"></div>`}
+              ${f.source === 'cats' ? `<div class="field"><span>Order</span><div class="selrow" role="radiogroup" aria-label="Order">${PLAY_ORDERS.map(([k, l]) => { const on = playOrder(sp) === k; return `<button class="chip ${on ? 'on' : ''}" data-order="${k}" role="radio" aria-checked="${on}">${l}</button>`; }).join('')}</div><span class="hint">${playOrder(sp) === 'shuffle' ? 'Shuffled mixes the films once. The TV then plays them one after another.' : playOrder(sp) === 'score' ? 'Uses TMDB scores once the films are checked, else the provider’s own.' : 'The TV plays them one after another in this order. Films without the information go last.'}</span></div>` : ''}`
             : `
               ${sp.seriesId && f.seriesInfo ? `<div class="f g12 card" style="padding:12px">${posterHtml({ name: f.seriesName || f.name, poster: f.seriesDetails && f.seriesDetails.poster }, 'sm')}<div class="grow"><div style="font-weight:700" dir="auto">${esc(f.seriesName || f.name)}</div><div class="cap">${plural(f.seriesInfo.seasons, 'season')} · ${plural(f.seriesInfo.episodes, 'episode')}</div></div>${f.id ? '<span class="pill ok">Selected</span>' : '<button class="btn ghost" id="otherSeries">Choose another</button>'}</div>`
-                : sp.seriesId ? '<div class="skel" style="height:80px"></div>' : `${yearsField(f.yrFrom, f.yrTo, false)}<label class="field"><span>Series</span><span class="inp big">${ico('search', 20)}<input id="fQ" type="search" value="${esc(f.q)}" placeholder="Search series" autocomplete="off" dir="auto"></span></label><div id="fResults" class="col g4"></div>`}
+                : sp.seriesId ? '<div class="skel" style="height:80px"></div>' : `${yearsField(f.yrFrom, f.yrTo, false)}<label class="field"><span>Series</span><span class="inp big">${ico('search', 20)}<input id="fQ" type="search" value="${esc(f.q)}" placeholder="Search series" autocomplete="off" dir="auto"></span></label><div class="f fw g8" style="align-items:center"><span class="cap grow">Sort the series below</span>${sortMenu('fSort', store.get('stv.sort.series', 'name'))}</div><div id="fResults" class="col g4"></div>`}
               ${f.progress ? `<div class="f fw g12 card" style="padding:12px"><span class="icobox ok">${ico('check', 20, 2.2)}</span><div class="grow" style="min-width:160px"><div style="font-weight:600">Stopped at ${esc(f.progress.resume.split(' · ')[0].replace(/^S/, 's'))}</div><div class="cap">The TV picks up from here next time.</div></div><button class="btn" id="restart">Start again</button></div>` : ''}`}
             ${isFilm ? `<details class="limits" ${sp.minYear || sp.maxYear || sp.maxRating || sp.minScore || f.limitsOpen ? 'open' : ''}><summary>${ico('right', 18)}<span class="grow">Limit what plays</span><span class="cap">${esc(limitsSummary(sp))}</span></summary><div class="col g16" style="padding-top:12px">${yearsField(sp.minYear, sp.maxYear, true, sp.skipNoYear) + ratingRules(sp)}</div></details>` : seriesRating()}
             <div class="field"><span>Subtitles</span><div class="seg full" role="radiogroup">${SUB_CHOICES.map(([k, l]) => `<button data-sub="${k}" class="${(sp.subtitles || '') === k ? 'on' : ''}" role="radio" aria-checked="${(sp.subtitles || '') === k}" ${k === 'ar' ? 'lang="ar"' : ''}>${l}</button>`).join('')}</div>
@@ -1764,6 +1770,9 @@ screens.film = (() => {
     $$('[data-pick-series]', box).forEach((b) => b.onclick = () => { f.spec.seriesId = b.dataset.pickSeries; f.seriesName = b.dataset.name; if (!f.name.trim()) f.name = b.dataset.name.slice(0, 60); f.seriesInfo = null; paint(); loadSide(); });
     infinite('results', 'moreResults', () => search(true));
   }
+  /** A film channel's play order: by name, year, score or date added, or shuffled. */
+  const PLAY_ORDERS = [['name', 'A to Z'], ['newest', 'Newest first'], ['oldest', 'Oldest first'], ['score', 'Best score first'], ['added', 'Recently added'], ['shuffle', 'Shuffled']];
+  const playOrder = (sp) => sp.shuffle ? 'shuffle' : (sp.sort || 'name');
   /** One line saying which limits are on, shown on the closed "Limit what plays". */
   function limitsSummary(sp) {
     const parts = [];
@@ -1873,7 +1882,13 @@ screens.film = (() => {
     const sa = $('#seriesAbout', el); if (sa) sa.onclick = () => showDetails(sp.providerId, 'SERIES', sp.seriesId, f.seriesName || f.name);
     $$('[data-sub]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'subtitles', b.dataset.sub); paint(); });
     $$('[data-audio]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'audio', b.dataset.audio); paint(); });
-    $$('[data-shuffle]', el).forEach((b) => b.onclick = () => { sp.shuffle = b.dataset.shuffle === '1'; if (!sp.shuffle) sp.seed = 0; paint(); loadQueue(); });
+    $$('[data-order]', el).forEach((b) => b.onclick = () => {
+      const k = b.dataset.order;
+      sp.shuffle = k === 'shuffle'; if (!sp.shuffle) sp.seed = 0;
+      setOpt(sp, 'sort', k === 'shuffle' || k === 'name' ? null : k);
+      paint(); loadQueue();
+    });
+    const fs = $('#fSort', el); if (fs) fs.onchange = () => { store.set('stv.sort.' + (sp.mode === 'SERIES' ? 'series' : 'film'), fs.value); search(); };
     const q = $('#fQ', el); if (q) q.oninput = () => { f.q = q.value; clearTimeout(sT); sT = setTimeout(search, 250); };
     const os = $('#otherSeries', el); if (os) os.onclick = () => { sp.seriesId = null; f.seriesInfo = null; f.queue = null; paint(); loadSide(); };
     const rs = $('#restart', el); if (rs) rs.onclick = async () => { try { await saving(() => POST(`/api/channels/${encodeURIComponent(f.id)}/restart`), 'It starts from the first episode next time.'); f.progress = null; paint(); loadQueue(); } catch (e) { /* toast */ } };

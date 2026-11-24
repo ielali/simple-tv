@@ -32,9 +32,21 @@ object PlaylistQueue {
      * [allow] applies the channel's rating rules. It runs after shuffling, so the order stays the
      * same while more films get checked.
      */
-    fun films(catalog: Catalog?, spec: PlaylistSpec, allow: (CatalogItem) -> Boolean = { true }): List<QueueEntry> {
+    fun films(
+        catalog: Catalog?,
+        spec: PlaylistSpec,
+        meta: (CatalogItem) -> FilmMeta? = { null },
+        certOrder: (CatalogItem, FilmMeta?) -> Int? = { _, _ -> null },
+        allow: (CatalogItem) -> Boolean = { true },
+    ): List<QueueEntry> {
         val base = candidates(catalog, spec)
-        val ordered = if (spec.shuffle && spec.titles.isEmpty()) base.shuffled(Random(spec.seed)) else base
+        val sortKey = CatalogSort.key(spec.sort)
+        val ordered = when {
+            spec.titles.isNotEmpty() -> base
+            spec.shuffle -> base.shuffled(Random(spec.seed))
+            sortKey != null && sortKey != CatalogSort.Key.NAME -> CatalogSort.sort(base, sortKey, meta, certOrder)
+            else -> base
+        }
         return finish(ordered.filter(allow).map { it.toEntry() }, spec)
     }
 

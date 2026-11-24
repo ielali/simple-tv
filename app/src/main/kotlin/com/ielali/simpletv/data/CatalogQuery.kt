@@ -53,6 +53,8 @@ object CatalogQuery {
         country: String = "",
         minYear: Int? = null,
         maxYear: Int? = null,
+        sort: CatalogSort.Key? = null,
+        certOrder: (CatalogItem, FilmMeta?) -> Int? = { _, _ -> null },
     ): Page {
         val words = q.orEmpty().lowercase().split(' ').map { it.trim() }.filter { it.isNotEmpty() }
         val years = minYear != null || maxYear != null
@@ -64,10 +66,11 @@ object CatalogQuery {
         }
         val inLineup = lineup.filter { it.providerId == providerId && it.sourceId != null }
             .associate { it.sourceId!! to it.number }
-        val from = offset.coerceIn(0, matching.size)
-        val page = matching.drop(from).take(limit.coerceIn(1, MAX_LIMIT)).map {
+        val sorted = if (sort == null) matching else CatalogSort.sort(matching, sort, details, certOrder)
+        val from = offset.coerceIn(0, sorted.size)
+        val page = sorted.drop(from).take(limit.coerceIn(1, MAX_LIMIT)).map {
             ItemView(
-                id = it.id, name = it.name, logo = it.logo, group = it.group, year = it.year, minutes = it.minutes,
+                id = it.id, name = it.name, logo = it.logo, group = it.group, year = it.year, minutes = it.minutes, score = it.score,
                 inLineup = it.id in inLineup, lineupNumber = inLineup[it.id],
             ).withDetails(details(it), country)
         }
@@ -75,7 +78,7 @@ object CatalogQuery {
     }
 
     private fun ItemView.withDetails(m: FilmMeta?, country: String) =
-        if (m == null) this else copy(poster = m.poster ?: logo, rating = RatingRules.certOf(m, country) ?: m.providerRating, score = m.score, year = year ?: m.year)
+        if (m == null) this else copy(poster = m.poster ?: logo, rating = RatingRules.certOf(m, country) ?: m.providerRating, score = m.score ?: score, year = year ?: m.year)
 }
 
 /** Channels the caregiver should look at, shown as warnings in the lineup (never deleted silently). */

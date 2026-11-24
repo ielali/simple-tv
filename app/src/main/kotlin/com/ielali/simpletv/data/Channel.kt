@@ -56,6 +56,8 @@ data class PlaylistSpec(
     val maxYear: Int? = null,
     /** With a year range: leave out films whose year is unknown. */
     val skipNoYear: Boolean = false,
+    /** Play order when not shuffled (FILM mode, categories): a CatalogSort key; null = by name. */
+    val sort: String? = null,
 )
 
 /**

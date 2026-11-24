@@ -24,6 +24,10 @@ data class CatalogItem(
     val headers: Map<String, String> = emptyMap(),
     /** Live channels: the provider's TV guide id. */
     val epgId: String? = null,
+    /** The provider's own score out of 10, when it gives one. */
+    val score: Double? = null,
+    /** When the provider added it (epoch millis), for "Recently added". */
+    val added: Long? = null,
 )
 
 @Serializable

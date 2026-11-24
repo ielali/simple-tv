@@ -373,6 +373,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
                 channels.current().channels, pid,
                 details = { app.meta.cached(pid, it.type, it.id) }, country = app.meta.country(),
                 minYear = Years.parse(qp["from"]), maxYear = Years.parse(qp["to"]),
+                sort = com.ielali.simpletv.data.CatalogSort.key(qp["sort"]), certOrder = app.meta::certOrder,
             )
             call.respond(ItemsResponse(catalog != null, app.catalog.isRunning(pid), page))
         }
