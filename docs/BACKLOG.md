@@ -78,13 +78,21 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
     before the first picture whatever the player does: a redirect (0.9 s), the playlist (0.8 s) and
     the start of one 10-second segment over a line with 0.3 s round trips (about 2 s). Options, each
     to be measured with the playback log before adopting: OkHttp as the HTTP stack (already in the
-    APK through Coil) for firmer connection reuse; opening the connection to the provider while
-    digits are being typed; a per-subscription "MPEG-TS instead of HLS" switch, which starts faster
-    but has no buffer at all behind it.
+    APK through Coil) for firmer connection reuse, which in ADR-028's model is the difference
+    between 14 s and 23 s of buffer (it is not known whether the platform stack reuses connections
+    on the Kogan; compare first-frame times and freezes with each); opening the connection to the
+    provider while digits are being typed; a per-subscription "MPEG-TS instead of HLS" switch, which
+    starts faster but has no buffer at all behind it.
 16. **A live MPEG-TS stream that ends is not retried.** When the server closes a plain `.ts` stream
     the player reports "ended", not an error, so `PlaybackEngine` does not retry and the last frame
     stays on screen until the viewer changes channel (found by reading the code; the Kogan's channels
     are HLS, which does not end). Retry a live channel that ends, like any other failure.
+17. **A real-player test for live start position and buffering.** ADR-028's table came from running
+    Media3 itself on the JVM: Robolectric, two renderers that discard their samples, a local
+    `ServerSocket` serving a five-segment live playlist. As a unit test it would pin "starts three
+    segments behind, keeps loading" against the next change to `PlaybackEngine` or a Media3 bump.
+    Needs Robolectric as a test dependency (its own commit) and a small synthetic MPEG-TS segment in
+    test resources (not a recording of a real channel); adds about half a minute to the unit tests.
 
 ## Later
 

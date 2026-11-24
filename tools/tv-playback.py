@@ -22,9 +22,13 @@ Commands
                   --channels 3,24  --seconds 60  --settings before,now
                 settings: before (ADR-028's starting point: 6 s live offset, buffer 3 to 30 s),
                 now (three segments behind, buffer 30 s), start2.5 (now, picture after 2.5 s)
+                  --fresh-connections  open a new connection for every request
                 It counts video as playable in proportion to the bytes downloaded and decodes
                 nothing, so its first-picture times are an estimate; freezes and buffer are what
-                it is for.
+                it is for. It reuses connections unless told otherwise; whether the TV's HTTP
+                stack does has not been measured, so run it both ways when that matters.
+                `before` starts on the newest segment, which is what Media3 1.5.1 itself does
+                with those settings (checked with the real player, see ADR-028).
 
 The TV's channel list holds stream addresses with the subscription's username and password in
 them. These commands read it over adb (the installed build must be debuggable, as CI builds are)
@@ -183,6 +187,7 @@ def follow(url, headers, hops=5):
 
 
 _local = threading.local()
+keep_alive = True
 
 
 def pooled_get(url, headers, on_progress=None, hops=5):
@@ -208,6 +213,9 @@ def pooled_get(url, headers, on_progress=None, hops=5):
         location = r.getheader("Location")
         if r.status in REDIRECTS and location:
             r.read()
+            if not keep_alive:
+                c.close()
+                pool.pop(p.netloc, None)
             url = urljoin(url, location)
             continue
         total = int(r.getheader("Content-Length") or 0)
@@ -221,6 +229,9 @@ def pooled_get(url, headers, on_progress=None, hops=5):
                 on_progress(got, total)
             else:
                 chunks.append(b)
+        if not keep_alive:
+            c.close()
+            pool.pop(p.netloc, None)
         return url, r.status, b"".join(chunks)
     raise IOError("too many redirects")
 
@@ -594,6 +605,8 @@ class ModelPlayer:
 
 
 def cmd_model(args):
+    global keep_alive
+    keep_alive = not args.fresh_connections
     names = args.settings.split(",")
     unknown = [n for n in names if n not in SETTINGS]
     if unknown:
@@ -647,6 +660,7 @@ def main():
     model.add_argument("--channels")
     model.add_argument("--seconds", type=float, default=60)
     model.add_argument("--settings", default="before,now")
+    model.add_argument("--fresh-connections", action="store_true")
     model.set_defaults(run=cmd_model)
 
     args = parser.parse_args()

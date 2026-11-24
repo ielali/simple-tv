@@ -627,16 +627,41 @@ Two settings of ours turned that line into freezes:
 - `PlaybackEngine` asked to play 6 s behind live. ExoPlayer starts at the segment that contains that
   point, which is the newest one, so the player never held more than one segment. Whenever the next
   segment was published late, found late (the playlist is reread every 10 s) or downloaded slowly,
-  the picture froze until it arrived.
+  the picture froze until it arrived. The 6 s is only a starting point: these playlists carry no
+  hold-back and the engine set no speed range, so Media3 plays at exactly 1.0 and never moves towards
+  or away from live by itself.
 - The load control had a 3 s minimum and a 30 s maximum. ExoPlayer stops loading at the maximum and
   starts again only below the minimum, so with a full buffer it would wait until 3 s were left before
-  fetching a segment that needs 3 to 12 s.
+  fetching a segment that needs 3 to 12 s. On a live channel the buffer could only get that full
+  after freezes had pushed playback some 30 s back; for films, and for live channels as soon as the
+  first setting is put right, it would bite every time the buffer filled.
+
+A second review read the first point differently: the engine also passed an explicit start position
+of 0, an explicit position is used as written, so build 0.1.67 would have started 50 s back at the
+oldest segment and the 6 s would never have applied. That holds for every explicit position except
+0. Media3 creates the first period before it knows the stream, and when the stream arrives a
+position of 0 is taken to mean "the default position" (`MaskingMediaSource`). To settle it the real
+Media3 1.5.1 player was run on the JVM (Robolectric, renderers that discard their samples) against
+a local playlist shaped like the provider's, five 10-second segments:
+
+| Settings | Segments asked for first | Starts | Buffered after 6 s |
+|---|---|---|---|
+| 0.1.67: offset 6 s, start position 0, buffer 3 to 30 s | the newest only | 10 s behind the end | 5 s |
+| This change: no offset, default position, buffer 30 s | third newest, then the two after | 30 s behind | 25 s |
+| Offset 6 s kept, default position | the newest only | 10 s behind | 5 s |
+| No offset, start position 0 | third newest, then the two after | 30 s behind | 25 s |
+| Offset 6 s, start position 5 s | the oldest, then the three after | 45 s behind | 30 s, loading stopped |
+
+So the offset was in effect, removing it is what gives the buffer, and the last row shows the load
+control stopping at its maximum.
 
 Decision:
 - No live offset of our own. A live stream plays as far behind as it asks for (HLS hold-back, DASH
   presentation delay), or three segments behind when it does not say: HLS's rule (RFC 8216) and
   ExoPlayer's default. On this provider that is 30 s behind, with 20 to 30 s buffered.
-- A live channel starts at the stream's default position (`C.TIME_UNSET`) instead of an explicit 0.
+- A live channel is started with `C.TIME_UNSET`, the stream's default position, instead of an
+  explicit 0. Media3 already treated that 0 as the default (see the table), so this changes nothing
+  on screen; it says what is meant and does not lean on a special case.
 - Load control minimum equals maximum (30 s): loading carries on whenever there is room. The maximum
   stays at 30 s, so films use no more memory than before (the Kogan's heap limit is 256 MB).
 - The picture still starts with 1 s buffered and resumes after a stall with 2 s.
@@ -653,15 +678,27 @@ Decision:
 Consequences: Live channels run about 30 s behind the broadcast instead of about 10. The first
 picture comes no later: either way it needs the redirect, the playlist and the start of one segment,
 about 3.5 s on this provider. The player cannot hide a line that stays slower than the stream for
-longer than its buffer; it then freezes once and carries on further behind.
+longer than its buffer; it then freezes once and carries on further behind, because playback speed
+stays at 1.0 and nothing catches up. From 30 s behind in a 50 s playlist there are about 20 s of such
+slack; past that the position falls out of the playlist and the engine's behind-live-window retry
+puts it back at the default position.
 
 Checked so far with a real-time model of ExoPlayer's rules (`tools/tv-playback.py model`: start
 position, playlist rereads, one segment at a time, the load control), run from a laptop on the same
-network against six of the
-channels, one minute each per setting: with the old settings all six runs froze, ten freezes, 16% of
-the time frozen, 8 s buffered on average; with the new ones one run froze once for 2 s right after
-its start, 0.6% frozen, 23 s buffered on average. The first picture took 3.6 to 8.8 s either way. It
-is a model, not the player: the build has not yet run on the Kogan (backlog item 0a).
+network, one minute per channel and setting. Its old settings start where the real player does (the
+table above).
+
+| Model run | Settings | Runs that froze | Freezes | Time frozen | Average buffer |
+|---|---|---|---|---|---|
+| Connections reused, six channels | old | 6 of 6 | 10 | 16% | 8 s |
+| | new | 1 of 6 | 1 (2 s, right after the start) | 0.6% | 23 s |
+| New connection per request, four channels | old | 4 of 4 | 6 | 12% | 8 s |
+| | new | 1 of 4 | 2 (about 2 s each) | 2% | 14 s |
+
+Whether the TV's HTTP stack reuses connections has not been measured, so the second run is the
+cautious figure: the change still removes most freezes, with a thinner buffer. The first picture took
+3.6 to 8.8 s under every setting. It is a model, not the player: the build has not yet run on the
+Kogan (backlog item 0a).
 
 Still open: when the first segment arrives slowly, the picture starts with its 1 s and can freeze
 for a couple of seconds straight after (twice in seven model runs). A larger start threshold would
