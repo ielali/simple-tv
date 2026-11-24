@@ -508,6 +508,12 @@ Decision (page):
 - "Erase Simple TV" (Advanced, asked twice, behind the PIN) signs out of YouTube, deletes all of
   Simple TV's data on the box and restarts it as new.
 
+Update: Moving channels on the Lineup page uses pointer events instead of the browser's
+drag-and-drop, so it works with a finger as well as a mouse; near the window's top or bottom the
+page scrolls (faster closer to the edge) and more channels are shown as it reaches the end. The
+Lineup also has a card view (List / Cards, remembered per device): each channel's logo large, or
+its initials, with number, name, type and what's on; cards can be dragged and edited too.
+
 Not adopted: Back as "previous channel" (it stays close/cancel; previous channel goes on a spare
 button the caregiver chooses), keeping channel up/down to live channels only (film channels stay
 in the order, like film channels on a real TV), spoken channel names (later).

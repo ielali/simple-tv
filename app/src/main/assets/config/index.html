@@ -121,12 +121,35 @@ button,input,select{font:inherit;color:inherit}
 .lrow.bad{background:var(--warnbg)}
 .lrow.dragging{opacity:.4}
 .lrow.dropbefore{box-shadow:inset 0 3px 0 var(--primary)}
+.lrow.dropafter{box-shadow:inset 0 -3px 0 var(--primary)}
+.card.cardsview,.phone .card.cardsview,.tablet .card.cardsview{padding:0;background:none;border:0;box-shadow:none}
+.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(172px,1fr));gap:12px}
+.phone .lgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.lcard{position:relative;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;background:var(--card);overflow:hidden;min-width:0}
+.lcard.sel{outline:2px solid var(--primary);outline-offset:-1px}
+.lcard.bad{background:var(--warnbg)}
+.lcard.dragging{opacity:.4}
+.lcard.dropbefore{box-shadow:inset 4px 0 0 var(--primary)}
+.lcard.dropafter{box-shadow:inset -4px 0 0 var(--primary)}
+.lclogo{position:relative;aspect-ratio:16/10;background:var(--tint);display:grid;place-items:center;border-bottom:1px solid var(--line)}
+.lclogo img{position:absolute;left:14%;top:16%;width:72%;height:68%;object-fit:contain}
+.lclogo .ini{font-weight:800;font-size:30px;letter-spacing:.02em;color:var(--muted)}
+.lcnum{position:absolute;top:8px;left:8px;min-width:36px;height:30px;padding:0 8px;border-radius:8px;background:var(--gold);color:#0B1220;font-weight:800;font-size:16px;display:grid;place-items:center}
+.lcnum.playing{box-shadow:0 0 0 3px var(--primary)}
+.lcard .grip{position:absolute;top:6px;right:6px;width:34px;height:34px;border-radius:8px;background:var(--card);border:1px solid var(--line)}
+.lcbody{padding:10px 12px 2px;display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
+.lcbody .nm{font-weight:700;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.lcbody .rowsub{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.lcbody .guideline{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.lcact{display:flex;justify-content:flex-end;gap:4px;padding:2px 8px 8px}
+.lcpanel{grid-column:1/-1;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+body.rowdrag{user-select:none;-webkit-user-select:none;cursor:grabbing}
+body.rowdrag .grip{cursor:grabbing}
 .nm{font-weight:700;font-size:16px;line-height:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rowsub{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;flex-wrap:wrap}
 .flag{display:flex;align-items:center;gap:6px;color:var(--warnink);font-weight:600;font-size:12px;line-height:16px;margin-top:4px}
 .editpanel{margin:0 0 8px;padding:16px;border-radius:14px;border:1px solid var(--primary);background:var(--card)}
 .grip{color:var(--muted);width:28px;display:grid;place-items:center;flex:none;cursor:grab;touch-action:none}
-.phone .grip{display:none}
 .callout{background:var(--hl);color:#1c1c1c;border-radius:16px;padding:16px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 .callout .btn{background:#1c1c1c;color:#fcfcfc;border-color:transparent}
 .tvcard{background:var(--navy);color:#F2F4F8;border-radius:20px;padding:24px;display:flex;align-items:center;gap:24px}
@@ -882,7 +905,7 @@ screens.lineup = (() => {
     const isOpen = open === r.id;
     const changed = (() => { const s = saved.find((x) => x.id === r.id); return s && (s.number !== r.number || s.name !== r.name); })();
     return `<div class="lrow ${isOpen ? 'sel' : ''} ${flagged ? 'bad' : ''}" data-row="${esc(r.id)}">
-      <div class="grip" draggable="true" title="Drag to move" aria-hidden="true">${ico('grip')}</div>
+      <div class="grip" title="Drag to move" aria-hidden="true">${ico('grip')}</div>
       <div class="num ${playing ? 'playing' : ''}" data-id="${esc(r.id)}" ${bad ? 'style="box-shadow:0 0 0 2px var(--errink)"' : ''}>${esc(r.number)}</div>
       ${logoBox(r.name, r.logoUrl)}
       <div class="grow">
@@ -943,7 +966,7 @@ screens.lineup = (() => {
         <label class="field numfield"><span>Number</span><span class="inp ${clash || invalid(r) ? 'bad' : ''}"><input inputmode="numeric" pattern="[0-9]*" maxlength="4" value="${esc(r.number)}" data-f="number" aria-describedby="numHint"></span></label>
         <label class="field grow"><span>Name</span><span class="inp"><input value="${esc(r.name)}" data-f="name" dir="auto" maxlength="80"></span></label>
       </div>
-      <div class="hint ${clash || invalid(r) ? 'err' : ''}" id="numHint">${clash ? `Number ${esc(r.number)} is already ${esc(clash.name)}. Pick another number.` : invalid(r) ? 'Use a number from 1 to 9999.' : 'The number your viewer types on the remote.'}</div>
+      <div class="hint ${clash || invalid(r) ? 'err' : ''}" id="numHint">${clash ? `Number ${esc(r.number)} is already ${esc(clash.name)}. Pick another number.` : invalid(r) ? 'Use a number from 1 to 9999.' : 'Its place when changing channel up and down.'}</div>
       ${r.type === 'YOUTUBE' && r.source ? `<div class="hint">YouTube: <span dir="ltr">${esc(r.source)}</span></div>` : ''}
       ${r.type === 'STREAM' ? `<div data-gmatch="${esc(r.id)}" class="col g4"><div class="skel" style="width:50%"></div></div>` : ''}
       <div class="f fw g8">
@@ -954,11 +977,36 @@ screens.lineup = (() => {
       </div>
     </div>`;
   }
+  /** Card view: the channel's logo large (its initials when there is none), number, name and what's on. */
+  function cardHtml(r, bad) {
+    const playing = state.now && state.now.channel && state.now.channel.id === r.id;
+    const flagged = r.flag;
+    const isOpen = open === r.id;
+    const changed = (() => { const sv = saved.find((x) => x.id === r.id); return sv && (sv.number !== r.number || sv.name !== r.name); })();
+    return `<div class="lcard ${isOpen ? 'sel' : ''} ${flagged ? 'bad' : ''}" data-row="${esc(r.id)}">
+      <div class="lclogo"><span class="ini" aria-hidden="true">${esc(initials(r.name))}</span>${r.logoUrl ? `<img src="${esc(r.logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>
+      <div class="lcnum ${playing ? 'playing' : ''}" ${bad ? 'style="box-shadow:0 0 0 2px var(--errink)"' : ''}>${esc(r.number)}</div>
+      <div class="grip" title="Drag to move" aria-hidden="true">${ico('grip')}</div>
+      <div class="lcbody">
+        <div class="nm" dir="auto">${esc(r.name)}</div>
+        <div class="rowsub"><span class="badge ${TYPE_BADGE[r.type]}">${TYPE_LABEL[r.type]}</span>${changed ? '<span class="pill info">Changed</span>' : ''}${playing ? '<span class="pill ok">On the TV</span>' : ''}</div>
+        ${flagged ? `<div class="flag">${ico('alert', 14)}${esc(FLAG_TEXT[flagged] || '')}</div>` : ''}
+        ${r.type === 'STREAM' ? `<div class="guideline" data-guide="${esc(r.id)}">${guideLine(r.id)}</div>` : ''}
+      </div>
+      <div class="lcact">
+        <button class="ibtn bd" data-play="${esc(r.id)}" aria-label="Play ${esc(r.name)} on the TV" title="Play on TV">${ico('play', 18)}</button>
+        <button class="ibtn" data-edit="${esc(r.id)}" aria-label="Edit ${esc(r.name)}" aria-expanded="${isOpen}" title="Edit">${ico(isOpen ? 'close' : 'pencil', 18)}</button>
+      </div>
+    </div>
+    ${isOpen ? `<div class="lcpanel">${editPanel(r)}</div>` : ''}`;
+  }
   function paint() {
     const el = $('#content'); if (!el || !rows) return;
+    const cards = store.get('stv.lineupView', 'list') === 'cards';
     const f = FILTERS.find((x) => x[0] === filter) || FILTERS[0];
     const bad = conflicts();
     const visible = rows.filter(f[2]);
+    visibleTotal = visible.length;
     const shown = visible.slice(0, shownCount);
     const n = changeCount();
     const sortedByNumber = rows.every((r, i) => i === 0 || rows[i - 1].number < r.number);
@@ -968,6 +1016,8 @@ screens.lineup = (() => {
         <a class="btn pri" href="#/add">${ico('plus', 18, 2)}Add channel</a>
         <button class="btn" id="renumber" ${rows.length < 2 ? 'disabled' : ''}>Renumber 1…${rows.length || 1} in this order</button>
         <button class="btn" id="sortNum" ${sortedByNumber ? 'disabled' : ''}>Sort by number</button>
+        <span class="grow"></span>
+        <div class="seg" role="radiogroup" aria-label="View">${[['list', 'List'], ['cards', 'Cards']].map(([k, l]) => `<button data-view="${k}" class="${(cards ? 'cards' : 'list') === k ? 'on' : ''}" role="radio" aria-checked="${(cards ? 'cards' : 'list') === k}">${l}</button>`).join('')}</div>
       </div>
       <div class="chips scroll" role="toolbar" aria-label="Show">
         ${FILTERS.map(([k, label, fn]) => { const c = rows.filter(fn).length; return (k === 'all' || c) ? `<button class="chip ${filter === k ? 'on' : ''}" data-filter="${k}" aria-pressed="${filter === k}">${label} <span class="c">${fmtN(c)}</span></button>` : ''; }).join('')}
@@ -977,14 +1027,15 @@ screens.lineup = (() => {
         <div class="grow"><div style="font-weight:700">${plural(n, 'change')} not saved yet</div><div class="cap">${blocked ? 'Give every channel its own number to save.' : 'The TV keeps its current lineup until you save.'}</div></div>
         <button class="btn" id="discard">Discard</button><button class="btn pri" id="save" ${blocked ? 'disabled' : ''}>Save to TV</button>
       </div>` : ''}
-      ${rows.length ? `<section class="card" id="rows">
-        ${shown.map((r) => rowHtml(r, bad.has(r.id))).join('') || `<p class="muted">No channels here.</p>`}
+      ${rows.length ? `<section class="card ${cards ? 'cardsview' : ''}" id="rows">
+        ${(cards ? (shown.length ? `<div class="lgrid">${shown.map((r) => cardHtml(r, bad.has(r.id))).join('')}</div>` : '') : shown.map((r) => rowHtml(r, bad.has(r.id))).join('')) || `<p class="muted">No channels here.</p>`}
         <div style="padding:0 8px">${moreLine('moreRows', false, shown.length, visible.length, 'channels')}</div>
       </section>` : `<section class="card col g12"><div class="icobox t">${ico('tv', 22)}</div><h2 class="sec">Nothing on the TV yet</h2><p class="muted">Add your first channel and it appears on the TV straight away.</p><div><a class="btn pri" href="#/add">Add channel</a></div></section>`}`;
     bind(el);
   }
   function bind(el) {
     $$('[data-filter]', el).forEach((b) => b.onclick = () => { filter = b.dataset.filter; shownCount = PAGE; paint(); });
+    $$('[data-view]', el).forEach((b) => b.onclick = () => { store.set('stv.lineupView', b.dataset.view); paint(); });
     infinite('lineup', 'moreRows', () => { const y = window.scrollY; shownCount += PAGE; paint(); window.scrollTo(0, y); });
     $$('[data-edit]', el).forEach((b) => b.onclick = () => { open = open === b.dataset.edit ? null : b.dataset.edit; paint(); const i = $(`[data-panel="${CSS.escape(b.dataset.edit)}"] input[data-f="name"]`); if (i) i.focus(); });
     if (open && $(`[data-gmatch="${CSS.escape(open)}"]`)) { if (matches[open]) paintMatch(open); else loadMatch(open); }
@@ -1024,17 +1075,85 @@ screens.lineup = (() => {
     rest.forEach((r, k) => { r.number = sortedNums[k]; });
     rows = rest; paint();
   }
+  /*
+   * Moving channels by dragging their handle, with a mouse or a finger. Pointer events rather than the
+   * browser's own drag-and-drop: that one barely scrolls at the window's edge and doesn't work on
+   * phones. Near the top or bottom of the window the page scrolls, faster the closer the pointer is,
+   * and more channels are shown as it reaches the end of the ones on screen.
+   */
+  let drag = null; // { id, over, after, x, y }
+  let visibleTotal = 0;
   function dragging(el) {
-    let dragId = null;
     $$('.grip', el).forEach((g) => {
-      g.addEventListener('dragstart', (e) => { dragId = g.closest('[data-row]').dataset.row; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragId); } catch (x) { /* ie */ } g.closest('.lrow').classList.add('dragging'); });
-      g.addEventListener('dragend', () => { $$('.lrow', el).forEach((r) => r.classList.remove('dragging', 'dropbefore')); });
+      g.onpointerdown = (e) => {
+        if (e.button !== 0 || drag) return;
+        e.preventDefault();
+        drag = { id: g.closest('[data-row]').dataset.row, over: null, after: false, x: e.clientX, y: e.clientY };
+        document.body.classList.add('rowdrag');
+        markDrag();
+        window.addEventListener('pointermove', onDragMove);
+        window.addEventListener('pointerup', onDragUp);
+        window.addEventListener('pointercancel', onDragCancel);
+        requestAnimationFrame(dragTick);
+      };
     });
-    $$('.lrow', el).forEach((row) => {
-      row.addEventListener('dragover', (e) => { if (!dragId) return; e.preventDefault(); $$('.lrow', el).forEach((r) => r.classList.remove('dropbefore')); row.classList.add('dropbefore'); });
-      row.addEventListener('drop', (e) => { e.preventDefault(); const target = row.dataset.row; if (dragId && target !== dragId) reorder(dragId, target); dragId = null; });
+    markDrag();
+  }
+  /** The dragged row, and a line where it will land, follow the pointer (also after the list is redrawn). */
+  function markDrag() {
+    $$('.lrow, .lcard').forEach((r) => {
+      const id = r.dataset.row;
+      r.classList.toggle('dragging', !!drag && id === drag.id);
+      r.classList.toggle('dropbefore', !!drag && id === drag.over && !drag.after);
+      r.classList.toggle('dropafter', !!drag && id === drag.over && drag.after);
     });
   }
+  function locateDrop() {
+    const hit = document.elementFromPoint(drag.x, drag.y);
+    const row = hit && hit.closest('.lrow, .lcard');
+    if (row && row.dataset.row && row.dataset.row !== drag.id) {
+      const b = row.getBoundingClientRect();
+      drag.over = row.dataset.row;
+      drag.after = row.classList.contains('lcard') ? drag.x > b.left + b.width / 2 : drag.y > b.top + b.height / 2;
+    }
+    markDrag();
+  }
+  function onDragMove(e) { if (!drag) return; drag.x = e.clientX; drag.y = e.clientY; locateDrop(); }
+  function dragTick() {
+    if (!drag) return;
+    const edge = Math.min(110, window.innerHeight / 5);
+    const h = window.innerHeight;
+    let dy = 0;
+    if (drag.y < edge) dy = -Math.ceil(((edge - drag.y) / edge) * 22);
+    else if (drag.y > h - edge) dy = Math.ceil(((drag.y - (h - edge)) / edge) * 22);
+    if (dy) {
+      window.scrollBy(0, dy);
+      // Reaching the end of the channels on screen: show more, so a channel can go anywhere.
+      if (dy > 0 && shownCount < visibleTotal && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 400) {
+        const y = window.scrollY; shownCount += PAGE; paint(); window.scrollTo(0, y);
+      }
+      locateDrop();
+    }
+    requestAnimationFrame(dragTick);
+  }
+  function endDrag(drop) {
+    window.removeEventListener('pointermove', onDragMove);
+    window.removeEventListener('pointerup', onDragUp);
+    window.removeEventListener('pointercancel', onDragCancel);
+    const d = drag; drag = null;
+    document.body.classList.remove('rowdrag');
+    markDrag();
+    if (!drop || !d || !d.over || d.over === d.id) return;
+    let before = d.over;
+    if (d.after) {
+      const i = rows.findIndex((r) => r.id === d.over);
+      const next = rows.slice(i + 1).find((r) => r.id !== d.id);
+      before = next ? next.id : null;
+    }
+    if (before !== d.id) reorder(d.id, before);
+  }
+  function onDragUp() { endDrag(true); }
+  function onDragCancel() { endDrag(false); }
   function remove(id) {
     const i = rows.findIndex((r) => r.id === id); if (i < 0) return;
     const [r] = rows.splice(i, 1); open = null; paint();
