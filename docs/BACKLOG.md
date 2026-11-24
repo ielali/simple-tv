@@ -17,9 +17,12 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    TV guide: check the free guide presets download (their links were not reachable from the build
    sandbox), how long a guide takes to read on the Kogan, and which lineup channels match. YouTube:
    sign in with a household OAuth client and check that live subscriptions show as "Live now".
-   Channel list: press the blue Live TV button on the Kogan remote, from Simple TV and from YouTube;
-   check in Remote buttons which code it sends (TV or GUIDE), that the list reads from the sofa,
-   that holding Down scrolls, and that a lone 0 goes back to the previous channel.
+   Channel list: press Live TV (FEATURED_APP_1) from Simple TV and from YouTube; check the preview
+   window plays the highlighted stream after a moment, OK keeps it without re-tuning, Back brings the
+   old channel back, the list reads from the sofa, holding Down scrolls, and a lone 0 goes back.
+   YouTube playlist channel: add a public playlist; check it plays in order, Right/Left/OK work,
+   the banner names the video, it resumes after a channel change and a restart, and that
+   embed-blocked videos are skipped. Check whether ads appear.
 1. **First device run.** Build `assembleDebug`, sideload on an Android TV box, confirm: app opens
    fullscreen, empty state shows the config URL, config page loads from a phone, adding an HLS
    channel plays. Record device, Android version and remote model in DEPLOYMENT.md.
