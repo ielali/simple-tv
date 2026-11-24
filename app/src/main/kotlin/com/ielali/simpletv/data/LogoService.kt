@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
@@ -119,13 +120,19 @@ class LogoService(
     private fun nameKey(ch: Channel) = GuideMatch.normalise(ch.name)
     private fun ytChannelId(ch: Channel) = (YouTubeEmbed.parse(ch.url) as? YouTubeEmbed.Target.ChannelLive)?.channelId
 
-    /** The caregiver turns a found logo off (or back on, which looks again). */
+    /** The caregiver turns a found logo off, or asks the TV to find one now (asking every source again). */
     suspend fun setOff(channelId: String, off: Boolean) {
         lock.withLock {
             val cur = _found.value[channelId] ?: Found()
             save(_found.value + (channelId to if (off) cur.copy(off = true) else Found()))
         }
-        if (!off) assignAll()
+        if (!off) {
+            assignAll()
+            if (_found.value[channelId]?.url == null) {
+                withTimeoutOrNull(25_000) { runCatching { lookOnline(force = setOf(channelId)) } }
+                assignAll()
+            }
+        }
     }
 
     /** The caregiver chooses a logo (from the picker or a picture address). */
@@ -134,7 +141,7 @@ class LogoService(
     }
 
     /** Asks Wikidata and YouTube about channels nothing else found a logo for. */
-    suspend fun lookOnline() = onlineLock.withLock {
+    suspend fun lookOnline(force: Set<String> = emptySet()) = onlineLock.withLock {
         val now = clock()
         val lineup = channels.current().channels
         val have = _found.value
@@ -145,7 +152,7 @@ class LogoService(
 
         // YouTube: the channel's picture (subscriptions first, they cost nothing).
         val subs = subPictures()
-        val ytWanted = lineup.filter { it.type == SourceType.YOUTUBE && it.logoUrl.isNullOrBlank() && (ytChannelId(it)?.let(subs::containsKey) != true) && due(yt[it.url]) }
+        val ytWanted = lineup.filter { it.type == SourceType.YOUTUBE && it.logoUrl.isNullOrBlank() && (ytChannelId(it)?.let(subs::containsKey) != true) && (if (force.isEmpty()) due(yt[it.url]) else it.id in force) }
         val auth = ytAuth()
         if (ytWanted.isNotEmpty() && auth != null) {
             val targets = ytWanted.mapNotNull { ch -> YouTubeEmbed.parse(ch.url)?.let { ch.id to it } }.toMap()
@@ -154,7 +161,9 @@ class LogoService(
         }
 
         // Live channels: Wikidata by name, then by brand. A few per run, to be polite.
-        val names = missing.filter { it.type == SourceType.STREAM }.map(::nameKey).filter { it.isNotEmpty() && due(wiki[it]) }.distinct().take(25)
+        val forced = missing.filter { it.id in force }.map(::nameKey).toSet()
+        val names = missing.filter { it.type == SourceType.STREAM }.map(::nameKey)
+            .filter { it.isNotEmpty() && (if (force.isEmpty()) due(wiki[it]) else it in forced) }.distinct().take(25)
         for (key in names) {
             val ch = missing.first { nameKey(it) == key }
             val url = runCatching { withContext(Dispatchers.IO) { wikiLogo(ch.name) } }.getOrElse { if (it is IOException) return@withLock else null }

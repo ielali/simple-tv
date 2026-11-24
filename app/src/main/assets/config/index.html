@@ -1056,7 +1056,7 @@ screens.lineup = (() => {
       ? `<span class="logo" style="display:grid"><img src="${esc(r.foundLogo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()"></span><span class="cap">${esc(LOGO_FROM[r.logoSource] || 'found automatically')}</span>`
       : `<span class="cap">${r.logoOff ? 'none, you removed it' : 'none found yet'}</span>`;
     const btns = (r.foundLogo ? `<button class="btn ghost" type="button" data-logopick>${r.logoSource === 'chosen' ? 'Change' : 'Choose another'}</button><button class="btn ghost" type="button" data-logooff="${esc(r.id)}">Remove it</button>` : `<button class="btn ghost" type="button" data-logopick>Choose a logo</button>`)
-      + (r.logoOff || r.logoSource === 'chosen' ? `<button class="btn ghost" type="button" data-logoon="${esc(r.id)}">Find one automatically</button>` : '');
+      + (!r.foundLogo || r.logoSource === 'chosen' ? `<button class="btn ghost" type="button" data-logoon="${esc(r.id)}">Find one automatically</button>` : '');
     return `<div class="col g8" data-logobox="${esc(r.id)}"><div class="f fw g8" style="align-items:center"><span style="font-weight:600">Logo:</span>${what}${btns}</div>
       <div data-logopicker class="hide col g8">${findBox('lFind-' + r.id, r.name, 'Search for a logo, like Netflix or Al Jazeera')}
         <div data-logoresults class="logogrid"></div>
@@ -1087,7 +1087,14 @@ screens.lineup = (() => {
     urlIn.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); picker.querySelector('[data-logouse]').click(); } };
   }
   async function choose(id, url) { await logoCall(id, { url }, 'Logo saved. The TV shows it now.'); }
-  async function setLogoOff(id, off) { await logoCall(id, { off }, off ? 'Logo removed.' : 'Looking for a logo. It shows when one is found.'); }
+  async function setLogoOff(id, off) {
+    if (off) { await logoCall(id, { off }, 'Logo removed.'); return; }
+    const b = $(`[data-logoon="${CSS.escape(id)}"]`); if (b) { b.disabled = true; b.textContent = 'Looking…'; }
+    const view = await logoCall(id, { off }, null);
+    if (!view) return;
+    const c = view.channels.find((x) => x.id === id);
+    toast(c && c.foundLogo ? 'Found one. The TV shows it now.' : 'No logo found for this name. Choose one instead, or paste a picture address.');
+  }
   async function logoCall(id, body, done) {
     try {
       const view = await saving(() => PUT(`/api/channels/${encodeURIComponent(id)}/found-logo`, body), done);
@@ -1097,7 +1104,8 @@ screens.lineup = (() => {
         list.forEach((x) => { const c = fresh.get(x.id); if (c) { x.foundLogo = c.foundLogo; x.logoOff = c.logoOff; x.logoSource = c.logoSource; } });
       }
       paint();
-    } catch (e) { /* toast */ }
+      return view;
+    } catch (e) { return null; }
   }
   function editPanel(r) {
     const idx = rows.indexOf(r);

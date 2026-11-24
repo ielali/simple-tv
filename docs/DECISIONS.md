@@ -598,5 +598,7 @@ Update (more sources and a picker):
   API key or the signed-in account. Pictures are refreshed within 30 days (API policy).
 - The edit panel says where a logo came from and has "Choose a logo": a search of iptv-org and
   Wikidata (and the channel's YouTube picture), or a pasted picture address. A chosen logo stays
-  until changed; "Find one automatically" goes back to the automatic one.
+  until changed. "Find one automatically" is offered whenever a channel has no automatic logo: it
+  asks every source again for that channel at once (ignoring the week's wait for misses) and says
+  whether one was found.
   (`GET /api/channels/{id}/logo-choices?q=`, `PUT /api/channels/{id}/found-logo {url}`.)
