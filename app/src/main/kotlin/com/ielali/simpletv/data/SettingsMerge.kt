@@ -23,6 +23,9 @@ object SettingsMerge {
         guardPausedUntil = settings.guardPausedUntil.coerceAtLeast(0L),
         language = TvLanguage.normalise(settings.language),
         catalogRefreshTime = RefreshSchedule.normalise(settings.catalogRefreshTime),
+        guideSources = settings.guideSources?.map { it.trim() }?.filter { s ->
+            GuidePresets.find(s) != null || s.startsWith("https://", true) || s.startsWith("http://", true)
+        }?.distinct()?.take(6),
         ratingCountry = settings.ratingCountry.trim().uppercase().takeIf { it.length == 2 && it.all(Char::isLetter) }.orEmpty(),
     )
 }

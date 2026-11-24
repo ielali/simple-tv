@@ -82,12 +82,37 @@ class ContentRoutes(private val app: SimpleTvApp) {
     )
     @Serializable data class TmdbKey(val key: String = "")
     @Serializable data class Control(val action: String = "")
+    @Serializable data class GuideNow(val channels: Map<String, com.ielali.simpletv.data.NowNext>, val now: Long)
+    @Serializable data class GuideSourceView(
+        val id: String, val label: String, val kind: String, val chosen: Boolean,
+        val fetchedAt: Long = 0L, val ok: Boolean = true, val error: String? = null, val channels: Int = 0,
+        /** Guide links the caregiver typed are shown back; provider and preset addresses are not. */
+        val url: String? = null,
+    )
+    @Serializable data class GuideView(val sources: List<GuideSourceView>, val refreshing: Boolean, val usingDefault: Boolean, val region: String)
+    @Serializable data class GuideSources(val sources: List<String>? = null)
+    @Serializable data class GuideChannelView(val key: String, val name: String, val source: String)
+    @Serializable data class GuideMatchView(val channelId: String, val match: com.ielali.simpletv.data.GuideService.Match, val nowNext: com.ielali.simpletv.data.NowNext? = null)
+    @Serializable data class GuideMatchSet(val channelId: String, val key: String? = null)
     @Serializable data class PlayItem(val itemId: String = "")
     @Serializable data class TmdbKeyState(val hasTmdbKey: Boolean)
     @Serializable data class QueuePreview(val playlist: PlaylistSpec, val offset: Int = 0, val limit: Int = QUEUE_PAGE)
 
     @Serializable data class YouTubeInput(val input: String = "")
     @Serializable data class YouTubeKey(val key: String = "")
+    @Serializable data class YtClient(val clientId: String? = null, val clientSecret: String? = null)
+    @Serializable data class YtAccountView(
+        val hasClient: Boolean, val clientId: String? = null, val connected: Boolean, val accountName: String? = null,
+        val pending: com.ielali.simpletv.data.YouTubeSuggestions.Pending? = null, val error: String? = null, val now: Long,
+    )
+    @Serializable data class YtSuggestion(
+        val channelId: String, val title: String, val thumbnail: String? = null,
+        val live: Boolean = false, val liveTitle: String? = null, val lineupNumber: Int? = null,
+    )
+    @Serializable data class YtSuggestions(
+        val connected: Boolean, val accountName: String? = null, val items: List<YtSuggestion> = emptyList(),
+        val fetchedAt: Long = 0L, val liveCheckedAt: Long = 0L, val checking: Boolean = false, val error: String? = null,
+    )
     @Serializable data class KeyState(val hasYoutubeKey: Boolean)
 
     @Serializable
@@ -206,6 +231,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
         filmRoutes()
         youtubeRoutes()
         detailsRoutes()
+        guideRoutes()
         playRoutes()
     }
 
@@ -451,6 +477,67 @@ class ContentRoutes(private val app: SimpleTvApp) {
         }
     }
 
+    private suspend fun guideView(): GuideView {
+        val chosen = app.guide.chosenIds().toSet()
+        val inUse = app.guide.sources()
+        val views = inUse.map { s ->
+            val st = app.guide.status(s.id)
+            GuideSourceView(
+                id = s.id, label = s.label, kind = if (s.provider) "provider" else if (s.id.startsWith("url:")) "link" else "preset",
+                chosen = true, fetchedAt = st?.fetchedAt ?: 0L, ok = st?.ok ?: true, error = st?.error, channels = st?.channels?.size ?: 0,
+                url = s.url.takeIf { s.id.startsWith("url:") },
+            )
+        } + com.ielali.simpletv.data.GuidePresets.ALL.filter { it.id !in chosen }.map { GuideSourceView(it.id, it.label, "preset", chosen = false) }
+        return GuideView(views, app.guide.refreshing, app.settings.current().guideSources == null, app.guide.region())
+    }
+
+    private fun Route.guideRoutes() {
+        get("/api/guide/now") {
+            val lineup = channels.current().channels.filter { it.type == SourceType.STREAM }
+            call.respond(GuideNow(lineup.mapNotNull { ch -> app.guide.nowNext(ch)?.let { ch.id to it } }.toMap(), System.currentTimeMillis()))
+        }
+        get("/api/guide") { call.respond(guideView()) }
+        put("/api/guide/sources") {
+            val req = call.receive<GuideSources>()
+            val merged = com.ielali.simpletv.data.SettingsMerge.sanitize(app.settings.current().copy(guideSources = req.sources))
+            app.settings.replace(merged)
+            app.appScope.launch { app.guide.refresh(force = true) }
+            call.respond(guideView())
+        }
+        post("/api/guide/refresh") {
+            app.appScope.launch { app.guide.refresh(force = true) }
+            call.respond(HttpStatusCode.Accepted, guideView().copy(refreshing = true))
+        }
+        get("/api/guide/channels") {
+            val q = call.request.queryParameters["q"].orEmpty()
+            call.respond(app.guide.search(q).map { GuideChannelView(it.key, it.names.firstOrNull() ?: it.id, app.guide.label(it.source) ?: it.source) })
+        }
+        get("/api/guide/match/{channelId}") {
+            val ch = channels.current().channels.firstOrNull { it.id == call.parameters["channelId"] }
+                ?: return@get call.fail(HttpStatusCode.NotFound, "That channel isn't on the TV any more.")
+            call.respond(GuideMatchView(ch.id, app.guide.match(ch), app.guide.nowNext(ch)))
+        }
+        put("/api/guide/match") {
+            val req = call.receive<GuideMatchSet>()
+            val ch = channels.current().channels.firstOrNull { it.id == req.channelId }
+                ?: return@put call.fail(HttpStatusCode.NotFound, "That channel isn't on the TV any more.")
+            app.guide.setOverride(ch.id, req.key)
+            if (req.key == null) app.appScope.launch { runCatching { app.guide.touch(ch) } }
+            call.respond(GuideMatchView(ch.id, app.guide.match(ch), app.guide.nowNext(ch)))
+        }
+    }
+
+    private fun ytAccount(): YtAccountView {
+        val s = app.ytSuggestions
+        return YtAccountView(
+            hasClient = s.hasClient(),
+            // The client ID is not a secret (it shows on Google's sign-in page); the secret never leaves the TV.
+            clientId = s.clientId(),
+            connected = s.connected(), accountName = s.cache().accountName,
+            pending = s.pending, error = s.error, now = System.currentTimeMillis(),
+        )
+    }
+
     private fun Route.youtubeRoutes() {
         post("/api/youtube/preview") {
             val input = call.receive<YouTubeInput>().input
@@ -458,6 +545,34 @@ class ContentRoutes(private val app: SimpleTvApp) {
                 is YouTubeLookup.Result.Found -> call.respond(r.preview)
                 is YouTubeLookup.Result.Problem -> call.fail(HttpStatusCode.UnprocessableEntity, r.message, r.code)
             }
+        }
+        get("/api/youtube/account") { call.respond(ytAccount()) }
+        put("/api/youtube/client") {
+            val req = call.receive<YtClient>()
+            app.ytSuggestions.saveClient(req.clientId, req.clientSecret)
+            call.respond(ytAccount())
+        }
+        post("/api/youtube/connect") {
+            if (!app.ytSuggestions.hasClient()) return@post call.fail(HttpStatusCode.BadRequest, "Add the client ID and secret first.")
+            app.ytSuggestions.connect()
+            call.respond(ytAccount())
+        }
+        post("/api/youtube/disconnect") {
+            app.ytSuggestions.disconnect()
+            call.respond(ytAccount())
+        }
+        get("/api/youtube/suggestions") {
+            val s = app.ytSuggestions
+            s.freshen()
+            val c = s.cache()
+            val live = c.live.groupBy { it.channelId }
+            val lineup = channels.current().channels.filter { it.type == SourceType.YOUTUBE }
+            fun inLineup(id: String) = lineup.firstOrNull { it.url.contains(id) }?.number
+            val items = c.subs.map { sub ->
+                val l = live[sub.id]?.firstOrNull()
+                YtSuggestion(sub.id, sub.title, sub.thumbnail, l != null, l?.title, inLineup(sub.id))
+            }.sortedWith(compareBy({ !it.live }, { it.title.lowercase() }))
+            call.respond(YtSuggestions(s.connected(), c.accountName, items, c.fetchedAt, c.liveCheckedAt, s.checking, s.error))
         }
         put("/api/youtube/key") {
             app.secrets.setYoutubeKey(call.receive<YouTubeKey>().key)

@@ -9,6 +9,7 @@ import com.ielali.simpletv.SimpleTvApp
 import com.ielali.simpletv.config.NetworkAddress
 import com.ielali.simpletv.data.Channel
 import com.ielali.simpletv.data.ChannelList
+import com.ielali.simpletv.data.NowNext
 import com.ielali.simpletv.data.QueuePlayback
 import com.ielali.simpletv.data.SecretsStore
 import com.ielali.simpletv.data.SourceType
@@ -42,6 +43,8 @@ data class TvUiState(
     val pin: String? = null,
     /** A film or episode paused with OK. */
     val paused: Boolean = false,
+    /** Live channels: what is on now and next, from the TV guide. */
+    val guide: NowNext? = null,
 )
 
 /** Screen adapter: video surface and the settings overlay. Channel state lives in [TvController]. */
@@ -58,7 +61,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     val uiState: StateFlow<TvUiState> = combine(
         simpleTv.channels.channels, controller.current, controller.tuner.pendingDigits, controller.bannerVisible,
         settingsVisible, engine.state, simpleTv.settings.settings, controller.externalUnavailable,
-        simpleTv.queue.nowTitle, simpleTv.secrets.secrets, paused,
+        simpleTv.queue.nowTitle, simpleTv.secrets.secrets, paused, simpleTv.guide.version,
     ) { values ->
         val current = values[1] as Channel?
         @Suppress("UNCHECKED_CAST")
@@ -75,6 +78,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             nowTitle = now?.takeIf { it.first == current?.id && current.playlist != null }?.second,
             pin = (values[9] as SecretsStore.Secrets).pin,
             paused = values[10] as Boolean,
+            guide = current?.let { simpleTv.guide.nowNext(it) },
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, TvUiState())
 
@@ -86,6 +90,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             controller.current.collectLatest { ch ->
                 saveQueueProgress()
+                ch?.let { c -> viewModelScope.launch { runCatching { simpleTv.guide.touch(c) } } }
                 queueItem = null
                 paused.value = false
                 simpleTv.queue.report(null)

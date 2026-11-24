@@ -38,4 +38,6 @@ data class AppSettings(
     val ratingOnBanner: Boolean = false,
     /** Never play titles TMDB marks as adult, on any film channel. */
     val hideAdult: Boolean = true,
+    /** Free TV guides (preset ids) and guide links to use; null = the default for the TV's region. */
+    val guideSources: List<String>? = null,
 )

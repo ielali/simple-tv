@@ -130,7 +130,7 @@ object LineupRepair {
             if (ch.providerId != provider.id || ch.type != SourceType.STREAM) return@map ch
             val item = ch.sourceId?.let(byId::get) ?: byUrl[ch.url]
             if (item?.url == null) ch
-            else ch.copy(sourceId = item.id, url = item.url, headers = auth + item.headers)
+            else ch.copy(sourceId = item.id, url = item.url, headers = auth + item.headers, epgId = item.epgId ?: ch.epgId)
         }
     }
 }

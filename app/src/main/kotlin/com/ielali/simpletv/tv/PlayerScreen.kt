@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -39,6 +41,7 @@ import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
 import com.ielali.simpletv.R
 import com.ielali.simpletv.data.Channel
+import com.ielali.simpletv.data.NowNext
 import com.ielali.simpletv.data.SourceType
 import com.ielali.simpletv.data.playsOnSimpleTv
 import com.ielali.simpletv.player.PlaybackState
@@ -82,7 +85,7 @@ fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
             enter = fadeIn(), exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopStart),
         ) {
-            ChannelBanner(current = current, pendingDigits = state.pendingDigits, nowTitle = state.nowTitle)
+            ChannelBanner(current = current, pendingDigits = state.pendingDigits, nowTitle = state.nowTitle, guide = state.guide)
         }
 
         if (state.paused && current != null) PausedCard(current, state.nowTitle)
@@ -165,7 +168,7 @@ private fun YouTubeSurface(channel: Channel) {
 }
 
 @Composable
-private fun ChannelBanner(current: Channel?, pendingDigits: String, nowTitle: String?) {
+private fun ChannelBanner(current: Channel?, pendingDigits: String, nowTitle: String?, guide: NowNext?) {
     Row(
         modifier = Modifier
             .padding(48.dp)
@@ -192,6 +195,36 @@ private fun ChannelBanner(current: Channel?, pendingDigits: String, nowTitle: St
             if (pendingDigits.isEmpty() && !nowTitle.isNullOrBlank()) {
                 Text(nowTitle, color = Fg.copy(alpha = 0.8f), fontSize = 32.sp)
             }
+            // Live channels: the TV guide's now and next, with how far through the programme we are.
+            if (pendingDigits.isEmpty() && guide?.now != null) GuideLines(guide)
+        }
+    }
+}
+
+@Composable
+private fun GuideLines(guide: NowNext) {
+    val ctx = LocalContext.current
+    val fmt = remember { android.text.format.DateFormat.getTimeFormat(ctx) }
+    val now = guide.now ?: return
+    val at = System.currentTimeMillis()
+    val span = (now.stop - now.start).coerceAtLeast(1L)
+    Spacer(Modifier.height(8.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.guide_now), color = Accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.width(16.dp))
+        Text("${fmt.format(java.util.Date(now.start))}–${fmt.format(java.util.Date(now.stop))}  ${now.title}", color = Fg, fontSize = 32.sp, maxLines = 1)
+    }
+    LinearProgressIndicator(
+        progress = { ((at - now.start).toFloat() / span).coerceIn(0f, 1f) },
+        modifier = Modifier.padding(vertical = 8.dp).width(560.dp).height(8.dp),
+        color = Accent,
+        trackColor = Fg.copy(alpha = 0.25f),
+    )
+    guide.next?.let { next ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.guide_next), color = Fg.copy(alpha = 0.8f), fontSize = 32.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(16.dp))
+            Text("${fmt.format(java.util.Date(next.start))}  ${next.title}", color = Fg.copy(alpha = 0.8f), fontSize = 32.sp, maxLines = 1)
         }
     }
 }

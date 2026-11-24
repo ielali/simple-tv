@@ -43,6 +43,7 @@ object ProviderImport {
             group = it.group,
             headers = it.headers,
             sourceId = it.id,
+            epgId = it.epgId,
         )
     }
 }

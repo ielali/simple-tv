@@ -78,6 +78,8 @@ data class Channel(
     val sourceId: String? = null,
     /** Film and series channels only. */
     val playlist: PlaylistSpec? = null,
+    /** The provider's TV guide id for this channel (Xtream `epg_channel_id`, M3U `tvg-id`). */
+    val epgId: String? = null,
 )
 
 /** Streams, films and series play on Simple TV's own player (YouTube uses the WebView or the YouTube app). */

@@ -8,6 +8,8 @@
     <string name="settings_hint">افتح هذا العنوان على هاتف أو حاسوب لتغيير القنوات:</string>
     <string name="scan_hint">أو امسح الرمز بكاميرا الهاتف.</string>
     <string name="settings_pin">رمز الصفحة: %1$s</string>
+    <string name="guide_now">الآن</string>
+    <string name="guide_next">التالي</string>
     <string name="paused">متوقف مؤقتًا</string>
     <string name="paused_hint">اضغط موافق للمتابعة</string>
     <string name="settings_close">اضغط زر الرجوع للإغلاق</string>

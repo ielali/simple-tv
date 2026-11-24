@@ -99,6 +99,7 @@ object XtreamApi {
                 logoUrl = o["stream_icon"].asString()?.takeIf { it.startsWith("http") },
                 group = categoryId?.let { categories[it] ?: "Category $it" },
                 sourceId = id,
+                epgId = o["epg_channel_id"].asString()?.trim(),
             )
         }.sortedBy { it.first }.map { it.second }
     }

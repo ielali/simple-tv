@@ -20,6 +20,7 @@ class ProviderLoader(private val fetcher: TextFetcher) {
             val channels: List<Channel>,
             val source: String,
             val account: XtreamApi.Account?,
+            val guideUrl: String? = null,
         ) : Result
 
         data class Failed(val message: String) : Result
@@ -54,13 +55,14 @@ class ProviderLoader(private val fetcher: TextFetcher) {
                 logo = ch.logoUrl,
                 url = ch.url,
                 headers = ch.headers,
+                epgId = ch.epgId,
             )
         }
         val extra = if (provider.kind == ProviderKind.XTREAM && live.source == SOURCE_API) {
             val ua = live.channels.firstOrNull()?.headers?.get("User-Agent") ?: agentsFor(provider).first()
             loadVodAndSeries(provider, ua)
         } else emptyList()
-        return CatalogResult.Loaded(Catalog(provider.id, now, live.source, liveItems + extra), live.account)
+        return CatalogResult.Loaded(Catalog(provider.id, now, live.source, liveItems + extra, live.guideUrl), live.account)
     }
 
     private fun loadVodAndSeries(provider: Provider, ua: String): List<CatalogItem> {
@@ -205,7 +207,7 @@ class ProviderLoader(private val fetcher: TextFetcher) {
                     if (provider.kind == ProviderKind.XTREAM) "Check the username and password." else "Check the playlist link."
                 continue
             }
-            return Attempt(Result.Loaded(withUserAgent(channels, agent), "M3U playlist", null), null)
+            return Attempt(Result.Loaded(withUserAgent(channels, agent), "M3U playlist", null, M3uParser.guideUrl(response.body)), null)
         }
         return Attempt(null, failure)
     }

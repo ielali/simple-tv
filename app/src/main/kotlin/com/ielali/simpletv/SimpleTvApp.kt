@@ -6,7 +6,9 @@ import com.ielali.simpletv.data.CatalogRepository
 import com.ielali.simpletv.data.CatalogService
 import com.ielali.simpletv.data.ChannelRepository
 import com.ielali.simpletv.data.HttpFetcher
+import com.ielali.simpletv.data.GuideService
 import com.ielali.simpletv.data.MetadataService
+import com.ielali.simpletv.data.YouTubeSuggestions
 import com.ielali.simpletv.data.TmdbClient
 import com.ielali.simpletv.data.ProviderLoader
 import com.ielali.simpletv.data.QueuePlayback
@@ -57,6 +59,14 @@ class SimpleTvApp : Application() {
     lateinit var meta: MetadataService
         private set
 
+    /** YouTube suggestions from the household's subscriptions. */
+    lateinit var ytSuggestions: YouTubeSuggestions
+        private set
+
+    /** The TV guide: now and next on live channels. */
+    lateinit var guide: GuideService
+        private set
+
     /** Film and series channels: what plays next and where each stopped. */
     lateinit var queue: QueuePlayback
         private set
@@ -83,6 +93,10 @@ class SimpleTvApp : Application() {
         meta = MetadataService(this, appScope, providers, catalogs, channels, settings, secrets, loader, TmdbClient(HttpFetcher(readTimeoutMs = 15_000)))
         queue = QueuePlayback(this, catalog, catalogs, providers, meta, settings)
         meta.start()
+        guide = GuideService(this, appScope, providers, channels, catalogs, settings, HttpFetcher(readTimeoutMs = 15_000))
+        guide.start()
+        val http = HttpFetcher(readTimeoutMs = 20_000)
+        ytSuggestions = YouTubeSuggestions(this, appScope, secrets, com.ielali.simpletv.youtube.YouTubeAccount(http, http))
         catalog.startScheduler()
         configServer = ConfigServer(this, CONFIG_PORT).also { it.start() }
     }

@@ -100,5 +100,7 @@ dependencies {
     implementation(libs.zxing.core)
 
     testImplementation(libs.junit)
+    // A real XmlPullParser for the TV guide reader's tests (Android provides its own at run time).
+    testImplementation("net.sf.kxml:kxml2:2.3.0")
     testImplementation(libs.kotlinx.coroutines.test)
 }

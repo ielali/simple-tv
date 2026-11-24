@@ -13,11 +13,21 @@ object M3uParser {
 
     private val attrRegex = Regex("""([\w-]+)="([^"]*)"""")
 
+    /** The playlist's own guide: `#EXTM3U x-tvg-url="…"` (or `url-tvg`), first link when several. */
+    fun guideUrl(text: String): String? {
+        val header = text.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() } ?: return null
+        if (!header.startsWith("#EXTM3U", ignoreCase = true)) return null
+        val attrs = attrRegex.findAll(header).associate { it.groupValues[1].lowercase() to it.groupValues[2] }
+        return (attrs["x-tvg-url"] ?: attrs["url-tvg"])?.split(',', ' ')?.map { it.trim() }
+            ?.firstOrNull { it.startsWith("http://", true) || it.startsWith("https://", true) }
+    }
+
     fun parse(text: String): List<Channel> {
         val result = mutableListOf<Channel>()
         var pendingName: String? = null
         var pendingLogo: String? = null
         var pendingGroup: String? = null
+        var pendingEpg: String? = null
         var pendingHeaders = mutableMapOf<String, String>()
 
         for (raw in text.lineSequence()) {
@@ -29,6 +39,7 @@ object M3uParser {
                     pendingName = line.substringAfterLast(',', "").trim().ifBlank { attrs["tvg-name"] ?: "" }
                     pendingLogo = attrs["tvg-logo"]?.takeIf { it.isNotBlank() }
                     pendingGroup = attrs["group-title"]?.takeIf { it.isNotBlank() }
+                    pendingEpg = attrs["tvg-id"]?.trim()?.takeIf { it.isNotBlank() }
                     pendingHeaders = mutableMapOf()
                 }
                 line.startsWith("#EXTVLCOPT:http-user-agent=", ignoreCase = true) ->
@@ -49,8 +60,9 @@ object M3uParser {
                         group = pendingGroup,
                         headers = pendingHeaders.toMap(),
                         sourceId = sourceIdFor(line),
+                        epgId = pendingEpg,
                     )
-                    pendingName = null; pendingLogo = null; pendingGroup = null
+                    pendingName = null; pendingLogo = null; pendingGroup = null; pendingEpg = null
                     pendingHeaders = mutableMapOf()
                 }
             }

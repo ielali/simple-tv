@@ -22,6 +22,8 @@ data class CatalogItem(
     val ext: String? = null,
     val url: String? = null,
     val headers: Map<String, String> = emptyMap(),
+    /** Live channels: the provider's TV guide id. */
+    val epgId: String? = null,
 )
 
 @Serializable
@@ -41,6 +43,8 @@ data class Catalog(
     val loadedAt: Long,
     val source: String,
     val items: List<CatalogItem> = emptyList(),
+    /** An M3U playlist's own XMLTV guide link (`x-tvg-url` / `url-tvg`), when it names one. */
+    val guideUrl: String? = null,
 ) {
     fun of(type: CatalogType): List<CatalogItem> = items.filter { it.type == type }
 }
