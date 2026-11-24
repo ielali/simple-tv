@@ -605,3 +605,59 @@ Update (more sources and a picker):
   asks every source again for that channel at once (ignoring the week's wait for misses) and says
   whether one was found.
   (`GET /api/channels/{id}/logo-choices?q=`, `PUT /api/channels/{id}/found-logo {url}`.)
+
+## ADR-028 Live channels keep a buffer: no live offset of our own, loading never pauses
+
+Context: IPTV channels on the Kogan froze while playing. The dongle's own audio log
+(`tools/tv-playback.py freezes`) for one evening on build 0.1.67 shows it: of four stays of 20 s or
+more, two froze; four freezes of 3.6, 11, 12.8 and 17.1 s in six minutes of viewing, 11% of the
+time. One channel played 25 s, froze 3.6 s, played 8 s, froze 11 s, played 9 s, froze 17 s.
+
+What the streams look like (`tools/tv-playback.py probe`; 27 of that lineup's 30 channels, one
+Xtream subscription): HLS, one quality, 10-second segments with one keyframe each, five segments in
+the playlist (50 s), no hold-back or date tags, 1.7 to 2.9 Mbit/s. Every request goes through a
+redirect and the servers are about 0.3 s away per round trip: the playlist takes 1.5 s, and a
+segment usually 3 to 5 s but sometimes 12 s, slower than it plays. Wi-Fi was ruled out (0% loss,
+8 ms to the router), and so was the guide call made on each channel change (it does not delay the
+stream; `tools/tv-playback.py guide-call`).
+
+Two settings of ours turned that line into freezes:
+- `PlaybackEngine` asked to play 6 s behind live. ExoPlayer starts at the segment that contains that
+  point, which is the newest one, so the player never held more than one segment. Whenever the next
+  segment was published late, found late (the playlist is reread every 10 s) or downloaded slowly,
+  the picture froze until it arrived.
+- The load control had a 3 s minimum and a 30 s maximum. ExoPlayer stops loading at the maximum and
+  starts again only below the minimum, so with a full buffer it would wait until 3 s were left before
+  fetching a segment that needs 3 to 12 s.
+
+Decision:
+- No live offset of our own. A live stream plays as far behind as it asks for (HLS hold-back, DASH
+  presentation delay), or three segments behind when it does not say: HLS's rule (RFC 8216) and
+  ExoPlayer's default. On this provider that is 30 s behind, with 20 to 30 s buffered.
+- A live channel starts at the stream's default position (`C.TIME_UNSET`) instead of an explicit 0.
+- Load control minimum equals maximum (30 s): loading carries on whenever there is room. The maximum
+  stays at 30 s, so films use no more memory than before (the Kogan's heap limit is 256 MB).
+- The picture still starts with 1 s buffered and resumes after a stall with 2 s.
+- `PlaybackStats` (pure) times each channel's first picture and every freeze; the engine logs them
+  under `SimpleTvPlayback` with the channel number and no address, so the next change to these
+  numbers can be measured on the TV instead of guessed.
+
+Consequences: Live channels run about 30 s behind the broadcast instead of about 10. The first
+picture comes no later: either way it needs the redirect, the playlist and the start of one segment,
+about 3.5 s on this provider. The player cannot hide a line that stays slower than the stream for
+longer than its buffer; it then freezes once and carries on further behind.
+
+Checked so far with a real-time model of ExoPlayer's rules (`tools/tv-playback.py model`: start
+position, playlist rereads, one segment at a time, the load control), run from a laptop on the same
+network against six of the
+channels, one minute each per setting: with the old settings all six runs froze, ten freezes, 16% of
+the time frozen, 8 s buffered on average; with the new ones one run froze once for 2 s right after
+its start, 0.6% frozen, 23 s buffered on average. The first picture took 3.6 to 8.8 s either way. It
+is a model, not the player: the build has not yet run on the Kogan (backlog item 0a).
+
+Still open: when the first segment arrives slowly, the picture starts with its 1 s and can freeze
+for a couple of seconds straight after (twice in seven model runs). A larger start threshold would
+trade that for a longer wait on every channel change; decide it on the TV with the playback log.
+
+Not adopted: OkHttp or Cronet instead of the platform HTTP stack (no measured gain yet), MPEG-TS
+instead of HLS (faster first picture, but a stream with nothing behind it). See backlog item 15.

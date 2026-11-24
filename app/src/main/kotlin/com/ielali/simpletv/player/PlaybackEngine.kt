@@ -3,6 +3,8 @@ package com.ielali.simpletv.player
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import android.util.Log
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -25,9 +27,11 @@ import kotlinx.coroutines.flow.asSharedFlow
 /**
  * Owns the single ExoPlayer instance for STREAM channels.
  *
- * Tuned for live TV: short initial buffer so channel changes feel snappy, keeps retrying a failed
- * stream like a TV would, and no user-visible controls (the remote IS the control). [state] drives
- * the tuning card, the stall spinner and "No signal".
+ * Tuned for live TV: the picture starts after a second of buffered video so channel changes feel
+ * snappy, then the player keeps as much in hand as the stream allows so a slow moment on the line does
+ * not freeze the picture (ADR-028). Keeps retrying a failed stream like a TV would, and has no
+ * user-visible controls (the remote IS the control). [state] drives the tuning card, the stall
+ * spinner and "No signal".
  */
 @UnstableApi
 class PlaybackEngine(context: Context) {
@@ -50,6 +54,7 @@ class PlaybackEngine(context: Context) {
     private var appliedGroups = -1
 
     private val tracker = TuneTracker()
+    private val stats = PlaybackStats(SystemClock::elapsedRealtime)
     private val backoff = RetryBackoff()
     private val retryHandler = Handler(Looper.getMainLooper())
     private var currentChannel: Channel? = null
@@ -62,13 +67,15 @@ class PlaybackEngine(context: Context) {
         .setReadTimeoutMs(8_000)
 
     val player: ExoPlayer = ExoPlayer.Builder(context)
-        .setMediaSourceFactory(
-            DefaultMediaSourceFactory(DefaultDataSource.Factory(context, httpFactory))
-                .setLiveTargetOffsetMs(6_000)
-        )
+        // No live offset of our own: a live stream plays as far behind as it asks for, or three
+        // segments behind when it does not say (HLS's rule). Closer than that there is nothing left to
+        // buffer, and every slow segment freezes the picture (ADR-028).
+        .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, httpFactory)))
         .setLoadControl(
             DefaultLoadControl.Builder()
-                .setBufferDurationsMs(3_000, 30_000, 1_000, 2_000)
+                // Minimum equal to maximum: loading carries on whenever there is room. A lower minimum
+                // makes the player stop at the maximum and wait until that little is left.
+                .setBufferDurationsMs(BUFFER_MS, BUFFER_MS, START_AFTER_MS, RESUME_AFTER_MS)
                 .build()
         )
         .setWakeMode(C.WAKE_MODE_NETWORK)
@@ -84,7 +91,7 @@ class PlaybackEngine(context: Context) {
                         else -> PlayerPhase.IDLE
                     }
                     if (phase == PlayerPhase.READY) backoff.reset()
-                    _state.value = tracker.onPhase(phase)
+                    show(tracker.onPhase(phase))
                     if (phase == PlayerPhase.ENDED && currentChannel != null) _ended.tryEmit(Unit)
                 }
 
@@ -92,13 +99,26 @@ class PlaybackEngine(context: Context) {
 
                 override fun onPlayerError(error: PlaybackException) {
                     _lastError.value = error.errorCodeName
-                    _state.value = tracker.onError()
+                    Log.i(TAG, "${label()}: ${error.errorCodeName}")
+                    show(tracker.onError())
                     // Falling behind the live window just needs a jump back to live; anything else
                     // (network, server, bad stream) is retried with a growing delay, like a TV.
                     scheduleRetry(immediate = error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW)
                 }
             })
         }
+
+    /** Publishes what the viewer sees, and logs how long the picture took or froze (no addresses). */
+    private fun show(state: PlaybackState) {
+        _state.value = state
+        stats.onState(state)?.let { Log.i(TAG, "${label()}: ${it.line()}") }
+    }
+
+    private fun label(): String = "ch ${currentChannel?.number ?: "-"}"
+
+    private fun logSummary(summary: PlaybackStats.Summary?) {
+        if (summary != null) Log.i(TAG, "${label()}: left; ${summary.line()}")
+    }
 
     private fun scheduleRetry(immediate: Boolean) {
         val channel = currentChannel ?: return
@@ -172,17 +192,17 @@ class PlaybackEngine(context: Context) {
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
             .build()
         backoff.reset()
+        logSummary(stats.onTune())
         currentChannel = channel
         currentLive = live
-        _state.value = tracker.onTune()
+        show(tracker.onTune())
         _lastError.value = null
         // The data source sets User-Agent itself (overriding request properties), so apply it here:
         // imported channels carry the User-Agent their provider accepted.
         httpFactory.setUserAgent(headers["User-Agent"] ?: DEFAULT_USER_AGENT)
         httpFactory.setDefaultRequestProperties(headers - "User-Agent")
-        val builder = MediaItem.Builder().setUri(url)
-        if (live) builder.setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(6_000).build())
-        player.setMediaItem(builder.build(), startPositionMs.coerceAtLeast(0L))
+        // A live channel starts where the stream says live playback should start, not at a position of ours.
+        player.setMediaItem(MediaItem.fromUri(url), if (live) C.TIME_UNSET else startPositionMs.coerceAtLeast(0L))
         player.prepare()
         player.play()
     }
@@ -196,19 +216,31 @@ class PlaybackEngine(context: Context) {
         retryHandler.removeCallbacksAndMessages(null)
         wish = null
         _tracks.value = null
+        logSummary(stats.onStop())
         currentChannel = null
         player.stop()
         player.clearMediaItems()
-        _state.value = tracker.onStop()
+        show(tracker.onStop())
     }
 
     fun release() {
         retryHandler.removeCallbacksAndMessages(null)
+        logSummary(stats.onStop())
         currentChannel = null
         player.release()
     }
 
     private companion object {
         const val DEFAULT_USER_AGENT = "SimpleTV/0.1 (Android TV)"
+
+        /** `adb logcat -s SimpleTvPlayback` shows first-picture times and freezes per channel. */
+        const val TAG = "SimpleTvPlayback"
+
+        /** How much video the player keeps in hand; a live stream offers less (its distance from live). */
+        const val BUFFER_MS = 30_000
+
+        /** The picture starts once this much is buffered, and comes back after a stall with this much. */
+        const val START_AFTER_MS = 1_000
+        const val RESUME_AFTER_MS = 2_000
     }
 }

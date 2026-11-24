@@ -62,6 +62,7 @@ app/src/main/kotlin/com/ielali/simpletv/
   player/QueueKeys.kt     Pure: Right/Left/OK on film and series channels (next, start or previous, pause)
   player/TrackPicker.kt   Pure: which subtitle and soundtrack to show for a film channel's wishes
   player/TuneTracker.kt   Pure: tuning / rebuffering / no-signal state and retry backoff
+  player/PlaybackStats.kt Pure: first-picture time and freezes per channel, for the playback log (ADR-028)
   youtube/YouTubeEmbed.kt Parses YouTube links/ids (videos, live, playlists) and builds the player pages
   data/YouTubeProgress.kt Where each YouTube playlist channel stopped (ADR-023)
   data/Channel.kt         Channel model + ChannelList (JSON, kotlinx.serialization)
@@ -106,6 +107,9 @@ app/src/main/kotlin/com/ielali/simpletv/
 app/src/main/assets/config/index.html   Caregiver web UI (vanilla JS, one file, no build step);
                                         built from docs/design/handoff/Main.dc.html
 tools/tv-admin.sh                       adb admin: status, install, guard-on/off, stock, debloat, restore
+tools/tv-playback.py                    adb measurements: past freezes on the TV, stream shapes,
+                                        provider timings, a model of the player's buffering (ADR-028);
+                                        prints no stream address, host or credential
 tools/debloat/*.txt                     Reversible debloat lists (disable, never uninstall)
 tools/test/tv-admin.test.sh             Runs tv-admin.sh against a fake adb (CI runs it)
 app/src/test/kotlin/...                 JVM unit tests for everything without Android deps

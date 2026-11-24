@@ -93,12 +93,20 @@ queue-preview body; the page loads the next page as the end of a list scrolls in
 
 ## Playback
 
-`PlaybackEngine` wraps a single `ExoPlayer`: short start buffer for quick zapping, 6 s live offset,
-per-channel HTTP headers (User-Agent applied through the data source factory), and retries for any
-playback error: at once for behind-live-window, otherwise 3 s doubling to 30 s, for as long as the
-channel stays on. A pure `TuneTracker` turns player events into what the viewer sees: TUNING (card
-with number, name and spinner until the first picture), REBUFFERING (small spinner over the frozen
-frame), ERROR ("No signal. Trying again…" until the picture plays) and PLAYING.
+`PlaybackEngine` wraps a single `ExoPlayer`: the picture starts after one second of buffered video
+for quick zapping, per-channel HTTP headers (User-Agent applied through the data source factory), and
+retries for any playback error: at once for behind-live-window, otherwise 3 s doubling to 30 s, for
+as long as the channel stays on. A pure `TuneTracker` turns player events into what the viewer sees:
+TUNING (card with number, name and spinner until the first picture), REBUFFERING (small spinner over
+the frozen frame), ERROR ("No signal. Trying again…" until the picture plays) and PLAYING.
+
+Buffering (ADR-028): a live channel plays as far behind the broadcast as the stream asks for, or
+three segments behind when it does not say, which is HLS's own rule and ExoPlayer's default; the
+engine sets no live offset of its own. That is about 30 seconds on the usual 10-second segments, and
+it is what gives the player something to buffer. Loading never pauses while there is room (the load
+control's minimum equals its maximum, 30 s). A pure `PlaybackStats` times each channel's first
+picture and every freeze; the engine writes them to the log without addresses:
+`adb logcat -s SimpleTvPlayback`.
 
 ## YouTube
 

@@ -23,6 +23,14 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    YouTube playlist channel: add a public playlist; check it plays in order, Right/Left/OK work,
    the banner names the video, it resumes after a channel change and a restart, and that
    embed-blocked videos are skipped. Check whether ads appear.
+0a. **Check the buffering change on the Kogan (ADR-028).** Install the build, run
+   `adb logcat -s SimpleTvPlayback` and watch IPTV channels for an evening: change channel twenty
+   times and stay ten minutes on three of them. Record in ADR-028 the first-picture times, the number
+   of freezes and the frozen share of viewing time, against the evening before the change (4 freezes
+   of 3.6 to 17 s in 6 minutes of viewing, 11% frozen). `tools/tv-playback.py freezes` reads the
+   same figures from the TV's own audio log afterwards, for any build. If channels still freeze right
+   after they start, raise `START_AFTER_MS` in `PlaybackEngine` from 1 s towards 2.5 s and measure
+   again (`tools/tv-playback.py model --settings now,start2.5` gives a first idea).
 1. **First device run.** Build `assembleDebug`, sideload on an Android TV box, confirm: app opens
    fullscreen, empty state shows the config URL, config page loads from a phone, adding an HLS
    channel plays. Record device, Android version and remote model in DEPLOYMENT.md.
@@ -51,9 +59,31 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 10. **Hard kiosk (optional).** Device-owner receiver + lock task for fresh installs without a Google
    account. Never hide or suspend the stock Google TV home (ADR-009).
 11. **Last-channel resume and standby.** On resume after HDMI-CEC standby, retune the last channel
-   instead of showing a frozen frame.
+   instead of showing a frozen frame. Today the player is only paused when the screen goes off: it
+   keeps its buffer and keeps asking the provider for the playlist, so the TV holds the account's one
+   stream while nobody watches, and on wake it plays up to 30 s of stale video and then has to
+   recover. Stop the player in `onStop` and tune again in `onStart` (films keep their position).
 12. **Audio-only fallback.** If the box cannot decode video for a stream, keep audio and show the
     logo/name large (radio behaviour) instead of "No signal".
+13. **Tune at once when the number is complete.** After a digit the tuner waits 1.5 s for another
+    one, even when no longer number exists: with channels 1 to 31, "5" and "12" cannot be the start
+    of anything else. Let `ChannelTuner` commit immediately when no channel number starts with the
+    typed digits plus one more. Saves 1.5 s on most typed channel changes; record the rule in an ADR.
+14. **Guide download while a channel plays.** The provider's whole XMLTV guide is read every 12 hours
+    and after lineup changes, on the same line as the stream. On the Kogan, check with
+    `adb logcat -s SimpleTvPlayback` whether a freeze lines up with it; if it does, do it while the
+    TV is in standby or after a channel has played steadily for a few minutes.
+15. **Faster first picture (measure first).** On the Kogan's provider a channel needs about 3.5 s
+    before the first picture whatever the player does: a redirect (0.9 s), the playlist (0.8 s) and
+    the start of one 10-second segment over a line with 0.3 s round trips (about 2 s). Options, each
+    to be measured with the playback log before adopting: OkHttp as the HTTP stack (already in the
+    APK through Coil) for firmer connection reuse; opening the connection to the provider while
+    digits are being typed; a per-subscription "MPEG-TS instead of HLS" switch, which starts faster
+    but has no buffer at all behind it.
+16. **A live MPEG-TS stream that ends is not retried.** When the server closes a plain `.ts` stream
+    the player reports "ended", not an error, so `PlaybackEngine` does not retry and the last frame
+    stays on screen until the viewer changes channel (found by reading the code; the Kogan's channels
+    are HLS, which does not end). Retry a live channel that ends, like any other failure.
 
 ## Later
 
@@ -104,6 +134,10 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- Live channels keep a buffer (ADR-028): no live offset of our own (the stream's hold-back, or three
+  segments), loading never pauses below the maximum, and a playback log
+  (`adb logcat -s SimpleTvPlayback`) with first-picture times and freezes. Device check: item 0a.
 
 - Channel list on the Live TV button with a preview window and now and next for each channel, a lone 0 for the previous
   channel, a clock beside the banner, and remote buttons that can be given these jobs (ADR-022).
