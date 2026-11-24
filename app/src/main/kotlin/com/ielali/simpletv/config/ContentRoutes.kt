@@ -83,6 +83,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
     )
     @Serializable data class TmdbKey(val key: String = "")
     @Serializable data class Control(val action: String = "")
+    @Serializable data class FoundLogo(val off: Boolean = false)
     @Serializable data class GuideNow(val channels: Map<String, com.ielali.simpletv.data.NowNext>, val now: Long)
     @Serializable data class GuideSourceView(
         val id: String, val label: String, val kind: String, val chosen: Boolean,
@@ -153,7 +154,12 @@ class ContentRoutes(private val app: SimpleTvApp) {
 
     private suspend fun lineup(): ApiViews.Lineup {
         val list = channels.current().channels
-        val base = ApiViews.lineup(list, app.catalog.flags(list))
+        val found = app.logos.found.value
+        val base = ApiViews.lineup(
+            list, app.catalog.flags(list),
+            found.mapNotNull { (k, v) -> v.url?.let { k to it } }.toMap(),
+            found.filterValues { it.off }.keys,
+        )
         // Film and series rows say how big the queue is and where it stopped (from the cached catalog).
         return base.copy(channels = base.channels.map { v ->
             val spec = v.playlist ?: return@map v
@@ -428,6 +434,14 @@ class ContentRoutes(private val app: SimpleTvApp) {
             if (providers.find(spec.providerId) == null) return@post call.fail(HttpStatusCode.NotFound, "Choose a subscription first.")
             call.respond(queueView(spec, null, req.offset, req.limit))
         }
+        // A logo the TV found by itself: turn it off for this channel, or look again (ADR-027).
+        put("/api/channels/{id}/found-logo") {
+            val id = call.parameters["id"].orEmpty()
+            if (channels.current().channels.none { it.id == id }) return@put call.fail(HttpStatusCode.NotFound, "That channel isn't on the TV any more.")
+            val req = call.receive<FoundLogo>()
+            app.logos.setOff(id, req.off)
+            call.respond(lineup())
+        }
         post("/api/channels/{id}/restart") {
             val id = call.parameters["id"].orEmpty()
             val ch = channels.current().channels.firstOrNull { it.id == id && it.playlist != null }
@@ -599,7 +613,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
             val title = app.queue.nowTitle.value?.takeIf { it.first == ch?.id && ch?.playlist != null }?.second
             call.respond(
                 NowPlaying(
-                    channel = ch?.let { ApiViews.channel(it) }, title = title, since = tv.since,
+                    channel = ch?.let { ApiViews.channel(it, foundLogo = app.logos.logoFor(it.id)) }, title = title, since = tv.since,
                     startedFromApp = tv.startedFromApp, preview = ch != null && ch.number == 0,
                     tracks = app.nowTracks.value?.takeIf { it.first == ch?.id && ch?.playlist != null }?.second,
                     itemId = app.queue.state.value?.takeIf { it.channelId == ch?.id }?.itemId,
@@ -666,7 +680,7 @@ class ContentRoutes(private val app: SimpleTvApp) {
             onTv { app.tv.playFromApp(channel) }
             call.respond(
                 NowPlaying(
-                    channel = ApiViews.channel(channel), since = app.tv.since, startedFromApp = true,
+                    channel = ApiViews.channel(channel, foundLogo = app.logos.logoFor(channel.id)), since = app.tv.since, startedFromApp = true,
                     preview = channel.number == 0, now = System.currentTimeMillis(),
                 )
             )

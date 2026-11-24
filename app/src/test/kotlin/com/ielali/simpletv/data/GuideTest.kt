@@ -22,7 +22,7 @@ class GuideTest {
     private val xml = """<?xml version="1.0" encoding="UTF-8"?>
         <tv>
           <channel id="ABC.au"><display-name>ABC TV Sydney</display-name><display-name>ABC</display-name></channel>
-          <channel id="Seven.au"><display-name>7 Sydney</display-name></channel>
+          <channel id="Seven.au"><display-name>7 Sydney</display-name><icon src="https://img.example/7.png"/><icon src="https://img.example/7b.png"/></channel>
           <channel id="Other.us"><display-name>Other</display-name></channel>
           <programme start="20261124180000 +1100" stop="20261124190000 +1100" channel="ABC.au">
             <title lang="en">ABC News</title><desc>The day's news.</desc><category>News</category>
@@ -46,6 +46,14 @@ class GuideTest {
         assertEquals("News", progs[0].second.category)
         assertEquals("The day's news.", progs[0].second.desc)
         assertEquals("S36 E4", progs[1].second.episode)
+    }
+
+    @Test
+    fun `xmltv reader keeps a channel's first web logo`() {
+        val parser = KXmlParser().apply { setInput(StringReader(xml)) }
+        val icons = mutableMapOf<String, String>()
+        XmltvReader.read(parser, t("20261124060000"), t("20261126000000"), { true }, { _, _ -> }, { _, _ -> }, { id, url -> icons[id] = url })
+        assertEquals(mapOf("Seven.au" to "https://img.example/7.png"), icons)
     }
 
     @Test

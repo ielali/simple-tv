@@ -35,12 +35,16 @@ object ApiViews {
         /** Film and series channels: how many items the queue holds, and where it stopped. */
         val queueSize: Int? = null,
         val resume: String? = null,
+        /** A logo the TV found for a channel without one (ADR-027); never saved into the channel. */
+        val foundLogo: String? = null,
+        /** The caregiver turned the found logo off. */
+        val logoOff: Boolean = false,
     )
 
     @Serializable
     data class Lineup(val channels: List<ChannelView>, val nextNumber: Int)
 
-    fun channel(c: Channel, flag: String? = null) = ChannelView(
+    fun channel(c: Channel, flag: String? = null, foundLogo: String? = null, logoOff: Boolean = false) = ChannelView(
         id = c.id,
         number = c.number,
         name = c.name,
@@ -51,10 +55,17 @@ object ApiViews {
         source = c.url.takeIf { c.type == SourceType.YOUTUBE },
         playlist = c.playlist,
         flag = flag,
+        foundLogo = foundLogo?.takeIf { c.logoUrl.isNullOrBlank() && !logoOff },
+        logoOff = logoOff && c.logoUrl.isNullOrBlank(),
     )
 
-    fun lineup(channels: List<Channel>, flags: Map<String, String>) = Lineup(
-        channels = channels.sortedBy { it.number }.map { channel(it, flags[it.id]) },
+    fun lineup(
+        channels: List<Channel>,
+        flags: Map<String, String>,
+        foundLogos: Map<String, String> = emptyMap(),
+        logosOff: Set<String> = emptySet(),
+    ) = Lineup(
+        channels = channels.sortedBy { it.number }.map { channel(it, flags[it.id], foundLogos[it.id], it.id in logosOff) },
         nextNumber = nextNumber(channels),
     )
 

@@ -34,6 +34,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.key
@@ -83,6 +84,20 @@ private val Fg = Color(0xFFF2F4F8)
 @UnstableApi
 @Composable
 fun PlayerScreen(state: TvUiState, vm: TvViewModel) {
+    val found by vm.foundLogos.collectAsState()
+    androidx.compose.runtime.CompositionLocalProvider(LocalFoundLogos provides found) { PlayerBody(state, vm) }
+}
+
+/** Logos found for channels without one (ADR-027). */
+private val LocalFoundLogos = androidx.compose.runtime.staticCompositionLocalOf<Map<String, String>> { emptyMap() }
+
+/** The channel's own logo, else one the TV found for it. */
+@Composable
+private fun logoOf(channel: Channel): String? =
+    channel.logoUrl?.takeIf { it.isNotBlank() } ?: LocalFoundLogos.current[channel.id]
+
+@Composable
+private fun PlayerBody(state: TvUiState, vm: TvViewModel) {
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         val current = state.current
         val listOpen = state.listIndex != null
@@ -413,9 +428,10 @@ private fun ChannelListOverlay(state: TvUiState, vm: TvViewModel, onPreviewBox: 
 @Composable
 private fun PreviewCard(channel: Channel) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        if (!channel.logoUrl.isNullOrBlank()) {
+        val logo = logoOf(channel)
+        if (logo != null) {
             AsyncImage(
-                model = channel.logoUrl, contentDescription = null, contentScale = ContentScale.Fit,
+                model = logo, contentDescription = null, contentScale = ContentScale.Fit,
                 modifier = Modifier.height(96.dp).width(200.dp),
             )
         } else if (channel.number > 0) {
@@ -631,9 +647,10 @@ private fun ChannelCard(channel: Channel, status: String, detail: String? = null
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        if (!channel.logoUrl.isNullOrBlank()) {
+        val logo = logoOf(channel)
+        if (logo != null) {
             AsyncImage(
-                model = channel.logoUrl, contentDescription = null, contentScale = ContentScale.Fit,
+                model = logo, contentDescription = null, contentScale = ContentScale.Fit,
                 modifier = Modifier.height(140.dp).width(320.dp),
             )
             Spacer(Modifier.height(16.dp))

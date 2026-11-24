@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -133,6 +134,11 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             showClock = (values[6] as com.ielali.simpletv.data.AppSettings).showClock,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, TvUiState())
+
+    /** Logos the TV found for channels without one (ADR-027), by channel id. */
+    val foundLogos: StateFlow<Map<String, String>> = simpleTv.logos.found
+        .map { m -> m.mapNotNull { (id, f) -> f.url?.takeIf { !f.off }?.let { id to it } }.toMap() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     /** The film/series channel and item playing now, so progress is saved against the right one. */
     private var queueItem: Pair<Channel, String>? = null

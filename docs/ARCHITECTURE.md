@@ -169,6 +169,11 @@ stored in `files/guide/overrides.json`. Routes: `GET /api/guide/now`, `GET /api/
 `PUT /api/guide/sources`, `POST /api/guide/refresh`, `GET /api/guide/channels?q=`,
 `GET /api/guide/match/{id}`, `PUT /api/guide/match`.
 
+`LogoService` (ADR-027) finds logos for live channels without one: the matched XMLTV channel's icon
+(`GuideService.iconFor`), else a weekly index of iptv-org's public channel database (`ChannelLogos`).
+Results live in `files/logos/found.json` and reach the page as `foundLogo`;
+`PUT /api/channels/{id}/found-logo` turns one off or looks again.
+
 `YouTubeSuggestions` (ADR-021) signs the TV in with the device flow through `YouTubeAccount` and caches
 subscriptions and live-now. Routes: `GET /api/youtube/account`, `PUT /api/youtube/client`,
 `POST /api/youtube/connect|disconnect`, `GET /api/youtube/suggestions`.

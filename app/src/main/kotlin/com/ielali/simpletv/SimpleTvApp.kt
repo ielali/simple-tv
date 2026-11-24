@@ -67,6 +67,10 @@ class SimpleTvApp : Application() {
     lateinit var guide: GuideService
         private set
 
+    /** Logos found for channels the provider gave none (ADR-027). */
+    lateinit var logos: com.ielali.simpletv.data.LogoService
+        private set
+
     /** Film and series channels: what plays next and where each stopped. */
     lateinit var queue: QueuePlayback
         private set
@@ -99,6 +103,8 @@ class SimpleTvApp : Application() {
         meta.start()
         guide = GuideService(this, appScope, providers, channels, catalogs, settings, HttpFetcher(readTimeoutMs = 15_000))
         guide.start()
+        logos = com.ielali.simpletv.data.LogoService(this, appScope, channels, guide)
+        logos.start()
         val http = HttpFetcher(readTimeoutMs = 20_000)
         ytSuggestions = YouTubeSuggestions(this, appScope, secrets, com.ielali.simpletv.youtube.YouTubeAccount(http, http))
         catalog.startScheduler()

@@ -42,6 +42,18 @@ class ApiViewsTest {
     }
 
     @Test
+    fun `a found logo shows only for channels without their own, and not when turned off`() {
+        val withOwn = lineup.map { if (it.id == "b") it.copy(logoUrl = "https://own/logo.png") else it }
+        val view = ApiViews.lineup(withOwn, emptyMap(), mapOf("a" to "https://found/a.png", "b" to "https://found/b.png", "c" to "https://found/c.png"), setOf("c"))
+        val by = view.channels.associateBy { it.id }
+        assertEquals("https://found/a.png", by.getValue("a").foundLogo)
+        assertNull("the channel's own logo wins", by.getValue("b").foundLogo)
+        assertEquals("https://own/logo.png", by.getValue("b").logoUrl)
+        assertNull("turned off", by.getValue("c").foundLogo)
+        assertTrue(by.getValue("c").logoOff)
+    }
+
+    @Test
     fun `provider view never carries the password or the address`() {
         val p = Provider("p1", "Sunrise", ProviderKind.XTREAM, "http://panel.example:8080", "alice", "s3cret", userAgent = "VLC")
         val view = ApiViews.provider(p, lineup, CatalogStatus(), refreshing = false)

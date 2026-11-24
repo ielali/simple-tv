@@ -48,6 +48,8 @@ app/src/main/kotlin/com/ielali/simpletv/
   data/TextClean.kt       Pure: decodes HTML entities in provider names, drops junk guide titles
   data/Years.kt           Pure: a title's production year and film channels' year range
   data/CatalogSort.kt     Pure: sort orders for film/series lists and film channels (ADR-025)
+  data/ChannelLogos.kt    Pure: iptv-org logo index and lookup by guide id or name (ADR-027)
+  data/LogoService.kt     Finds logos for channels without one: guide icons, then iptv-org (ADR-027)
   tv/TvController.kt      App-scoped TV state: current channel, digits, banner, YouTube-app hand-off.
                           Android-free; driven by the screen and, over YouTube, by the guard
   tv/ExternalPlayer.kt    Opens the YouTube app / brings Simple TV forward from app context

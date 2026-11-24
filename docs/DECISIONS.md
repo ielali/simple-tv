@@ -551,11 +551,38 @@ unchanged from the first hand-off.
 Decision:
 - Everything a person reads says Telly: the TV app's name, its home-guard entry in Android's
   accessibility settings, the TV's own messages (English and Arabic, where the brand stays in Latin
-  letters), and the config page (title, sidebar, first run, settings). The page's logo tile shows
-  "T" and its favicon is the gold tile mark.
+  letters), and the config page (title, sidebar, first run, settings). The page's logo tile is the
+  mark itself and its favicon is the gold tile mark. (Update: no letter icons anywhere. Channels without a logo show
+  an icon for their kind, live, YouTube, films or series, instead of their initials.)
 - The launcher icon is the mark as a vector drawable on gold, kept inside the adaptive icon's safe
   zone; the TV banner is the hand-off's 320x180 banner rendered to PNG (xhdpi and xxxhdpi) with the
   wordmark in Inter, until a final wordmark font is outlined.
 - The package and code names stay `com.ielali.simpletv` (and the build's `simple-tv.apk`): a new
   package id would install a second app and lose the lineup and settings on the TV.
 - The daily catalog update keeps its 04:00 default (ADR-024), not the hand-off's 21:00.
+
+## ADR-027 Logos found for channels without one
+
+Context: Many IPTV channels come without a logo, so the lineup, Home and the TV's channel card show
+only a kind icon. A general web image search would be unreliable (wrong pictures, no licence, a
+search API key, and scraping is ruled out), but two good sources already exist.
+
+Decision:
+- For a live channel without its own logo the TV looks, in order, at: the `<icon src>` the XMLTV
+  guide gives the guide channel it is matched to (ADR-020); then iptv-org's public-domain channel
+  database (https://github.com/iptv-org/api, `logos.json` and `channels.json`, CC0), by the
+  channel's guide id and then by its tidied name. A name shared by several channels is settled by the
+  TV's country (GB is UK there); if that doesn't settle it, nothing is chosen: no logo beats a wrong
+  one. Adult and closed channels are left out, and PNG/JPEG logos are preferred because the TV
+  can't draw SVG.
+- The two iptv-org files are downloaded at most weekly, read as a stream, and kept as a small index
+  (only channels that have a logo). Lineup and guide changes trigger a new look after 5 seconds.
+- Found logos are kept apart from the channels (`files/logos/found.json`): the API returns them as
+  `foundLogo`, never inside `logoUrl`, so saving the lineup never writes them in, and a logo the
+  provider later sends wins. A found logo is kept while the sources can't be reached.
+- The edit panel says when a logo was found automatically, with "Remove it"; a removed one stays
+  off for that channel until "Find a logo again" (`PUT /api/channels/{id}/found-logo {off}`).
+
+Consequences: Logos show up some minutes after the TV starts or the lineup changes, not at once.
+Channels with uncommon or provider-specific names may stay without one. The pictures are loaded
+from the guide's or iptv-org's hosts, as provider logos already are.

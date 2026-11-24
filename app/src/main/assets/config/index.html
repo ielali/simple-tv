@@ -32,7 +32,9 @@ button,input,select{font:inherit;color:inherit}
 .tablet .nlabel,.tablet .brandtext,.tablet .sidefoot .txt{display:none}
 .phone .side{display:none}
 .brand{display:flex;align-items:center;gap:10px;padding:4px 8px 20px;font-weight:700;font-size:16px}
-.logo-mark{width:36px;height:36px;border-radius:10px;background:var(--navy);color:var(--gold);display:grid;place-items:center;font-weight:800;font-size:16px;flex:none}
+.logo-mark{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;flex:none;overflow:hidden}
+.logo-mark svg{width:100%;height:100%;display:block}
+.logo .ini{display:grid;place-items:center;color:var(--muted)}
 .nav{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 12px;border-radius:999px;color:var(--muted);font-weight:600;text-decoration:none;background:none;border:0;width:100%;text-align:start}
 .tablet .nav{width:48px;justify-content:center;padding:0}
 .nav.on{background:var(--primary);color:var(--onp)}
@@ -134,7 +136,7 @@ button,input,select{font:inherit;color:inherit}
 .lcard.dropafter{box-shadow:inset -4px 0 0 var(--primary)}
 .lclogo{position:relative;aspect-ratio:16/9;background:var(--tint);display:grid;place-items:center;border-bottom:1px solid var(--line)}
 .lclogo img{position:absolute;left:14%;top:16%;width:72%;height:68%;object-fit:contain}
-.lclogo .ini{font-weight:800;font-size:22px;letter-spacing:.02em;color:var(--muted)}
+.lclogo .ini{display:grid;place-items:center;color:var(--muted)}
 .lcnum{position:absolute;top:6px;left:6px;min-width:28px;height:24px;padding:0 6px;border-radius:7px;background:var(--gold);color:#0B1220;font-weight:800;font-size:13px;display:grid;place-items:center}
 .lcnum.playing{box-shadow:0 0 0 3px var(--primary)}
 .lcard .grip{position:absolute;top:4px;right:4px;width:30px;height:30px;border-radius:8px;background:var(--card);border:1px solid var(--line)}
@@ -154,7 +156,7 @@ button,input,select{font:inherit;color:inherit}
 .htlogo img{position:absolute;left:12%;top:14%;width:76%;height:72%;object-fit:contain}
 .hasimg .ini{visibility:hidden}
 .logo.hasimg{color:transparent}
-.htlogo .ini{font-weight:800;font-size:18px;color:var(--muted)}
+.htlogo .ini{display:grid;place-items:center;color:var(--muted)}
 .htnum{position:absolute;top:5px;left:5px;min-width:24px;height:20px;padding:0 5px;border-radius:6px;background:var(--gold);color:#0B1220;font-weight:800;font-size:12px;display:grid;place-items:center}
 .htname{font-size:13px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .htile:hover .htlogo{border-color:var(--primary)}
@@ -358,7 +360,14 @@ const initials = (name) => {
   if (/[\u0600-\u06FF]/.test(first[0])) return (first[0] === '\u0627' && first[1] === '\u0644' && first.length > 2) ? first[2] : first[0];
   return (words.length > 1 ? first[0] + Array.from(words[1])[0] : first.slice(0, 2).join('')).toUpperCase();
 };
-const logoBox = (name, url) => `<span class="logo">${esc(initials(name))}${url ? `<img src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.parentNode.classList.add('hasimg')" onerror="this.remove()">` : ''}</span>`;
+/** The Telly mark on its gold tile (the favicon), for the logo in the page's corner. */
+const TELLY_MARK = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#FFC857"/><g transform="translate(5 5) scale(.84)"><g stroke="#1B2A41" stroke-width="4.4" stroke-linecap="round"><line x1="24" y1="16" x2="11" y2="5.5"/><line x1="41" y1="16" x2="53" y2="3.5"/></g><circle cx="10.5" cy="5" r="3.8" fill="#1B2A41"/><circle cx="53.5" cy="3" r="3.8" fill="#1B2A41"/><rect x="4" y="14" width="56" height="42" rx="17" fill="#1B2A41"/><circle cx="22.5" cy="30" r="4.2" fill="#FFC857"/><circle cx="41.5" cy="30" r="4.2" fill="#FFC857"/><path d="M20.5 37.5H43.5Q43.5 50.5 32 50.5Q20.5 50.5 20.5 37.5Z" fill="#FFC857"/></g></svg>';
+/** A picture for a channel without a logo: what kind of channel it is, never letters. */
+const TYPE_ICON = { STREAM: 'tv', LIVE: 'tv', live: 'tv', YOUTUBE: 'yt', FILMS: 'film', FILM: 'film', film: 'film', SERIES: 'stack', series: 'stack' };
+const typeIco = (type, size = 20) => ico(TYPE_ICON[type] || 'tv', size);
+/** The channel's own logo, else one the TV found for it (TV guide or iptv-org). */
+const chLogo = (c) => (c && (c.logoUrl || c.foundLogo)) || '';
+const logoBox = (name, url, type) => `<span class="logo"><span class="ini">${typeIco(type, 20)}</span>${url ? `<img src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.parentNode.classList.add('hasimg')" onerror="this.remove()">` : ''}</span>`;
 
 /* ---------- Dates and times, in plain words ---------- */
 const DAY = 86400000;
@@ -615,7 +624,7 @@ function renderShell(title, subtitle) {
   $('#app').className = 'app ' + currentSize;
   $('#app').innerHTML = `
   <aside class="side" aria-label="Main">
-    <div class="brand"><div class="logo-mark">T</div><span class="brandtext">Telly</span></div>
+    <div class="brand"><div class="logo-mark">${TELLY_MARK}</div><span class="brandtext">Telly</span></div>
     ${NAV.map((n) => `<a class="nav ${n.k === act ? 'on' : ''}" href="#/${n.k}" aria-label="${esc(n.label)}" ${n.k === act ? 'aria-current="page"' : ''}>${ico(n.icon)}<span class="nlabel">${esc(n.label)}</span></a>`).join('')}
     <div class="sidefoot" id="sidefoot">
       <span class="pill ${state.online ? 'ok' : 'warn'}"><span class="dot"></span></span>
@@ -777,7 +786,7 @@ function tvCard() {
   const how = n.paused ? 'paused' : n.startedFromApp ? 'started from this app ' + ago(n.since, n.now) : (n.since ? 'on since ' + clock(n.since) : '');
   const queue = !!ch.playlist;
   return `<section class="tvcard" id="tvNow">
-    <div class="col" style="align-items:center;flex:none"><div class="tvnum">${ch.number > 0 ? esc(ch.number) : ico('play', 56, 2)}</div>${ch.logoUrl ? `<img class="tvlogo" src="${esc(ch.logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.parentNode.classList.add('hasimg')" onerror="this.remove()">` : ''}</div>
+    <div class="col" style="align-items:center;flex:none"><div class="tvnum">${ch.number > 0 ? esc(ch.number) : ico('play', 56, 2)}</div>${chLogo(ch) ? `<img class="tvlogo" src="${esc(chLogo(ch))}" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.parentNode.classList.add('hasimg')" onerror="this.remove()">` : ''}</div>
     <div class="grow col g8">
       <div class="cap">ON THE TV NOW</div>
       <div style="font-size:24px;line-height:30px;font-weight:700" dir="auto" class="ell">${esc(ch.name)}</div>
@@ -889,7 +898,7 @@ screens.home = {
         <section class="card col g16">
           <div class="f g12"><h2 class="sec grow">Your lineup</h2><span class="pill info">${plural(lineup.length, 'channel')}</span></div>
           ${lineup.length ? `<div class="htiles" aria-label="Channels">
-            ${lineup.slice(0, chipsN).map((c) => `<button type="button" class="htile ${c.id === playingId ? 'playing' : ''}" data-hplay="${esc(c.id)}" title="Play ${esc(c.name)} on the TV" ${off ? 'disabled' : ''}><span class="htlogo"><span class="ini" aria-hidden="true">${esc(initials(c.name))}</span>${c.logoUrl ? `<img src="${esc(c.logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.parentNode.classList.add('hasimg')" onerror="this.remove()">` : ''}<span class="htnum">${esc(c.number)}</span></span><span class="htname" dir="auto">${esc(c.name)}</span></button>`).join('')}
+            ${lineup.slice(0, chipsN).map((c) => `<button type="button" class="htile ${c.id === playingId ? 'playing' : ''}" data-hplay="${esc(c.id)}" title="Play ${esc(c.name)} on the TV" ${off ? 'disabled' : ''}><span class="htlogo"><span class="ini" aria-hidden="true">${typeIco(c.type, 24)}</span>${chLogo(c) ? `<img src="${esc(chLogo(c))}" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.parentNode.classList.add('hasimg')" onerror="this.remove()">` : ''}<span class="htnum">${esc(c.number)}</span></span><span class="htname" dir="auto">${esc(c.name)}</span></button>`).join('')}
             ${lineup.length > chipsN ? `<a class="htile" href="#/lineup" title="Open lineup"><span class="htlogo"><span class="ini">+${fmtN(lineup.length - chipsN)}</span></span><span class="htname">more</span></a>` : ''}
           </div>
           ${off ? '' : '<p class="cap" style="margin-top:-6px">Tap a channel to play it on the TV.</p>'}` : `<div class="empty"><p class="muted">Nothing on the TV yet. Add your first channel and it appears on the TV straight away.</p></div>`}
@@ -983,7 +992,7 @@ screens.lineup = (() => {
     return `<div class="lrow ${isOpen ? 'sel' : ''} ${flagged ? 'bad' : ''}" data-row="${esc(r.id)}">
       <div class="grip" title="Drag to move" aria-hidden="true">${ico('grip')}</div>
       <div class="num ${playing ? 'playing' : ''}" data-id="${esc(r.id)}" ${bad ? 'style="box-shadow:0 0 0 2px var(--errink)"' : ''}>${esc(r.number)}</div>
-      ${logoBox(r.name, r.logoUrl)}
+      ${logoBox(r.name, chLogo(r), r.type)}
       <div class="grow">
         <div class="nm" dir="auto">${esc(r.name)}${changed ? ' <span class="pill info" style="vertical-align:middle">Changed</span>' : ''}</div>
         <div class="rowsub"><span class="badge ${TYPE_BADGE[r.type]}">${TYPE_LABEL[r.type]}</span><span dir="auto">${esc(channelSub(r))}${playing ? ' · playing on the TV now' : ''}</span></div>
@@ -1033,6 +1042,24 @@ screens.lineup = (() => {
     };
     pick.querySelector('input').oninput = (e) => { clearTimeout(t); t = setTimeout(() => search(e.target.value), 200); };
   }
+  /** A logo the TV found by itself (ADR-027): say where it came from and let the caregiver remove it. */
+  function logoLine(r) {
+    if (r.logoUrl || r.id.startsWith('new')) return '';
+    if (r.foundLogo) return `<div class="f fw g8" style="align-items:center"><span style="font-weight:600">Logo:</span><span class="logo" style="display:grid"><img src="${esc(r.foundLogo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()"></span><span class="cap">found automatically from the TV guide or a public list of channels</span><button class="btn ghost" type="button" data-logooff="${esc(r.id)}">Remove it</button></div>`;
+    if (r.logoOff) return `<div class="f fw g8" style="align-items:center"><span style="font-weight:600">Logo:</span><span class="cap">none, you removed the one found</span><button class="btn ghost" type="button" data-logoon="${esc(r.id)}">Find a logo again</button></div>`;
+    return '';
+  }
+  async function setLogoOff(id, off) {
+    try {
+      const view = await saving(() => PUT(`/api/channels/${encodeURIComponent(id)}/found-logo`, { off }), off ? 'Logo removed.' : 'Looking for a logo. It shows when one is found.');
+      // Only the found-logo fields change: unsaved edits to the lineup stay as they are.
+      const fresh = new Map(view.channels.map((c) => [c.id, c]));
+      for (const list of [rows, saved, state.lineup ? state.lineup.channels : []]) {
+        list.forEach((x) => { const c = fresh.get(x.id); if (c) { x.foundLogo = c.foundLogo; x.logoOff = c.logoOff; } });
+      }
+      paint();
+    } catch (e) { /* toast */ }
+  }
   function editPanel(r) {
     const idx = rows.indexOf(r);
     const clash = rows.find((x) => x !== r && x.number === r.number);
@@ -1045,6 +1072,7 @@ screens.lineup = (() => {
       <div class="hint ${clash || invalid(r) ? 'err' : ''}" id="numHint">${clash ? `Number ${esc(r.number)} is already ${esc(clash.name)}. Pick another number.` : invalid(r) ? 'Use a number from 1 to 9999.' : 'Its place when changing channel up and down.'}</div>
       ${r.type === 'YOUTUBE' && r.source ? `<div class="hint">YouTube: <span dir="ltr">${esc(r.source)}</span></div>` : ''}
       ${r.type === 'STREAM' ? `<div data-gmatch="${esc(r.id)}" class="col g4"><div class="skel" style="width:50%"></div></div>` : ''}
+      ${logoLine(r)}
       <div class="f fw g8">
         <button class="btn" data-move="-1" ${idx === 0 ? 'disabled' : ''}>${ico('up', 18)}Move up</button>
         <button class="btn" data-move="1" ${idx === rows.length - 1 ? 'disabled' : ''}>${ico('down', 18)}Move down</button>
@@ -1060,7 +1088,7 @@ screens.lineup = (() => {
     const isOpen = open === r.id;
     const changed = (() => { const sv = saved.find((x) => x.id === r.id); return sv && (sv.number !== r.number || sv.name !== r.name); })();
     return `<div class="lcard ${isOpen ? 'sel' : ''} ${flagged ? 'bad' : ''}" data-row="${esc(r.id)}">
-      <div class="lclogo"><span class="ini" aria-hidden="true">${esc(initials(r.name))}</span>${r.logoUrl ? `<img src="${esc(r.logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.parentNode.classList.add('hasimg')" onerror="this.remove()">` : ''}</div>
+      <div class="lclogo"><span class="ini" aria-hidden="true">${typeIco(r.type, 30)}</span>${chLogo(r) ? `<img src="${esc(chLogo(r))}" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.parentNode.classList.add('hasimg')" onerror="this.remove()">` : ''}</div>
       <div class="lcnum ${playing ? 'playing' : ''}" ${bad ? 'style="box-shadow:0 0 0 2px var(--errink)"' : ''}>${esc(r.number)}</div>
       <div class="grip" title="Drag to move" aria-hidden="true">${ico('grip')}</div>
       <div class="lcbody">
@@ -1127,6 +1155,8 @@ screens.lineup = (() => {
     });
     $$('[data-move]', el).forEach((b) => b.onclick = () => { move(open, parseInt(b.dataset.move, 10)); });
     $$('[data-remove]', el).forEach((b) => b.onclick = () => remove(b.dataset.remove));
+    $$('[data-logooff]', el).forEach((b) => b.onclick = () => setLogoOff(b.dataset.logooff, true));
+    $$('[data-logoon]', el).forEach((b) => b.onclick = () => setLogoOff(b.dataset.logoon, false));
     const rn = $('#renumber', el); if (rn) rn.onclick = () => { rows.forEach((r, i) => { r.number = i + 1; }); paint(); };
     const sn = $('#sortNum', el); if (sn) sn.onclick = () => { rows.sort((a, b) => (a.number || 1e9) - (b.number || 1e9)); paint(); };
     const d = $('#discard', el); if (d) d.onclick = () => { discard(); paint(); };
@@ -1397,7 +1427,7 @@ screens.add = (() => {
     const sub = searching ? `${plural(cat.total, 'match', 'matches')} across every category` : `${fmtN(cat.total)} ${cat.total === 1 ? one : many} in this category`;
     let list = '';
     if (cat.type === 'live') {
-      list = cat.items.map((it) => `<label class="chk"><input type="checkbox" data-item="${esc(it.id)}" ${cat.selected.has(it.id) ? 'checked' : ''} ${it.inLineup ? 'disabled' : ''}>${logoBox(it.name, it.logo)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span><span class="cap" dir="auto">${esc(it.group || 'No category')}</span></span>${it.inLineup ? `<span class="pill ok"><span class="dot"></span>In your lineup as ${esc(it.lineupNumber)}</span>` : ''}<button class="ibtn bd" type="button" data-try="${esc(it.id)}" aria-label="Play ${esc(it.name)} on the TV" title="Play on TV">${ico('play', 18)}</button></label>`).join('');
+      list = cat.items.map((it) => `<label class="chk"><input type="checkbox" data-item="${esc(it.id)}" ${cat.selected.has(it.id) ? 'checked' : ''} ${it.inLineup ? 'disabled' : ''}>${logoBox(it.name, it.logo, cat.type)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span><span class="cap" dir="auto">${esc(it.group || 'No category')}</span></span>${it.inLineup ? `<span class="pill ok"><span class="dot"></span>In your lineup as ${esc(it.lineupNumber)}</span>` : ''}<button class="ibtn bd" type="button" data-try="${esc(it.id)}" aria-label="Play ${esc(it.name)} on the TV" title="Play on TV">${ico('play', 18)}</button></label>`).join('');
     } else {
       list = `<div class="postergrid">${cat.items.map((it) => {
         const inner = `${posterHtml(it)}<div class="cap">${esc([it.year, it.rating, minutesText(it.minutes), scoreText(it.score)].filter(Boolean).join(' · '))}</div>`;
@@ -1958,8 +1988,8 @@ screens.film = (() => {
     const sp = f.spec;
     if (!f.results.length) { box.innerHTML = `<p class="cap">${f.q.trim() ? 'Nothing matches. Try fewer letters.' : f.loaded === false ? 'The list isn’t on the TV yet. Refresh the subscription first.' : ''}</p>`; return; }
     box.innerHTML = f.results.map((it) => sp.mode === 'SERIES'
-      ? `<button class="chk" style="border:0;background:none;width:100%;text-align:start" data-pick-series="${esc(it.id)}" data-name="${esc(it.name)}">${logoBox(it.name, it.logo)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span><span class="cap">${esc([it.year, it.group].filter(Boolean).join(' · '))}</span></span>${ico('right', 18)}</button>`
-      : `<label class="chk"><input type="checkbox" data-title="${esc(it.id)}" ${sp.titles.includes(it.id) ? 'checked' : ''}>${logoBox(it.name, it.logo)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span><span class="cap">${esc([it.year, it.group].filter(Boolean).join(' · '))}</span></span></label>`).join('')
+      ? `<button class="chk" style="border:0;background:none;width:100%;text-align:start" data-pick-series="${esc(it.id)}" data-name="${esc(it.name)}">${logoBox(it.name, it.logo, it.type || sp.mode)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span><span class="cap">${esc([it.year, it.group].filter(Boolean).join(' · '))}</span></span>${ico('right', 18)}</button>`
+      : `<label class="chk"><input type="checkbox" data-title="${esc(it.id)}" ${sp.titles.includes(it.id) ? 'checked' : ''}>${logoBox(it.name, it.logo, it.type || sp.mode)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span><span class="cap">${esc([it.year, it.group].filter(Boolean).join(' · '))}</span></span></label>`).join('')
       + moreLine('moreResults', f.resultsLoading, f.results.length, f.resultsTotal || 0, sp.mode === 'SERIES' ? 'series' : 'films');
     $$('[data-title]', box).forEach((c) => c.onchange = () => { const id = c.dataset.title; const t = f.spec.titles; if (c.checked) { if (!t.includes(id)) t.push(id); } else t.splice(t.indexOf(id), 1); loadQueue(); });
     $$('[data-pick-series]', box).forEach((b) => b.onclick = () => { f.spec.seriesId = b.dataset.pickSeries; f.seriesName = b.dataset.name; if (!f.name.trim()) f.name = b.dataset.name.slice(0, 60); f.seriesInfo = null; paint(); loadSide(); });
@@ -2453,7 +2483,7 @@ screens.first = (() => {
     const st = (n) => n === step ? 'on' : n < step ? 'done' : '';
     $('#app').className = 'app ' + currentSize;
     $('#app').innerHTML = `<div class="solo grow"><div class="center col g24" style="padding-inline:${currentSize === 'desktop' ? '40px' : '8px'}">
-      <div class="f g12"><div class="logo-mark">T</div><div class="sec grow">Set up Telly</div><a class="btn ghost" href="#/home">Skip</a></div>
+      <div class="f g12"><div class="logo-mark">${TELLY_MARK}</div><div class="sec grow">Set up Telly</div><a class="btn ghost" href="#/home">Skip</a></div>
       <div class="f fw g16" aria-label="Steps">${['Connect', 'Pick channels', 'Watch'].map((l, i) => `<div class="step ${st(i + 1)}" ${i + 1 === step ? 'aria-current="step"' : ''}><span class="b">${i + 1 < step ? ico('check', 14, 2.4) : i + 1}</span>${l}</div>`).join('')}</div>
       ${inner}</div></div>`;
     document.title = 'Set up · Telly';
@@ -2568,7 +2598,7 @@ async function showLogin() {
     if (isLocked && !msg) msg = { k: 'warn', t: `Too many tries. You can try again in ${Math.max(1, Math.ceil((lockedUntil - Date.now()) / 60000))} minutes.` };
     $('#app').className = 'app ' + currentSize;
     $('#app').innerHTML = `<div class="solo grow"><div class="center col g24" style="max-width:420px">
-      <div class="logo-mark">T</div>
+      <div class="logo-mark">${TELLY_MARK}</div>
       <div><h1 class="h1">Enter your PIN</h1><p class="muted">This keeps the TV settings to you. Your lineup is safe until you unlock.</p></div>
       <label class="col g8"><span class="sr">PIN</span>
         <div class="pin ${msg && msg.k === 'err' ? 'bad' : ''} ${isLocked ? 'locked' : ''}" aria-hidden="true">${Array.from({ length: 6 }, (_, i) => `<span class="${i === pin.length && !isLocked ? 'cur' : ''}">${i < pin.length ? '•' : ''}</span>`).join('')}</div>

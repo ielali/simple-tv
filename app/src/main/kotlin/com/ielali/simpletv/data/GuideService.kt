@@ -164,6 +164,7 @@ class GuideService(
             val code = conn.responseCode
             if (code !in 200..299) return failed(s, old, FetchErrors.forHttp(code))
             val channelsSeen = ArrayList<GuideChannel>()
+            val icons = HashMap<String, String>()
             val keepIds = HashSet<String>()
             val progs = HashMap<String, MutableList<Programme>>()
             openStream(conn).use { input ->
@@ -177,10 +178,13 @@ class GuideService(
                         if (id.lowercase() in ids || id in pinned || n.any { GuideMatch.normalise(it) in names }) keepIds += id
                     },
                     onProgramme = { id, p -> progs.getOrPut(s.id + "|" + id) { ArrayList() } += p },
+                    onIcon = { id, url -> icons[id] = url },
                 )
             }
             if (channelsSeen.isEmpty()) return failed(s, old, "That guide had no channels in it.")
-            SourceData(s.id, s.label, now, true, null, channelsSeen, progs.mapValues { (_, v) -> v.sortedBy { it.start } })
+            // Logos only for the channels the lineup uses, so the saved guide stays small.
+            val withIcons = channelsSeen.map { c -> if (c.id in keepIds) c.copy(icon = icons[c.id]) else c }
+            SourceData(s.id, s.label, now, true, null, withIcons, progs.mapValues { (_, v) -> v.sortedBy { it.start } })
         } catch (e: Exception) {
             Log.w(TAG, "Guide ${s.id} failed: ${FetchErrors.redact(e.toString())}")
             failed(s, old, if (e is java.io.IOException) FetchErrors.forNetwork(e) else "The guide could not be read.")
@@ -220,6 +224,13 @@ class GuideService(
         val k = GuideMatch.match(ch, idx) ?: return Match()
         val gc = channelNamed(k)
         return Match(k, gc?.names?.firstOrNull() ?: gc?.id, gc?.let { data[it.source]?.label }, if (ch.epgId != null && idx.byId[ch.epgId.lowercase()] == k) "id" else "name")
+    }
+
+    /** The logo the TV guide gives the guide channel matched to [ch], if any (ADR-027). */
+    fun iconFor(ch: Channel): String? {
+        if (ch.type != SourceType.STREAM) return null
+        val k = match(ch).key ?: return null
+        return channelNamed(k)?.icon
     }
 
     /** Now and next for a lineup channel from what the TV already has (never waits on the network). */

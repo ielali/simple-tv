@@ -25,7 +25,7 @@ data class Programme(
 
 /** A channel of a guide source, for matching and for the page's "pick the guide channel" search. */
 @Serializable
-data class GuideChannel(val key: String, val id: String, val names: List<String>, val source: String)
+data class GuideChannel(val key: String, val id: String, val names: List<String>, val source: String, val icon: String? = null)
 
 /** Now and next for one lineup channel. */
 @Serializable
@@ -69,12 +69,13 @@ object XmltvReader {
         keep: (String) -> Boolean,
         onChannel: (id: String, names: List<String>) -> Unit,
         onProgramme: (channelId: String, programme: Programme) -> Unit,
+        onIcon: (channelId: String, url: String) -> Unit = { _, _ -> },
     ) {
         var event = parser.eventType
         while (event != XmlPullParser.END_DOCUMENT) {
             if (event == XmlPullParser.START_TAG) {
                 when (parser.name) {
-                    "channel" -> readChannel(parser)?.let { (id, names) -> onChannel(id, names) }
+                    "channel" -> readChannel(parser)?.let { (id, names, icon) -> onChannel(id, names); icon?.let { onIcon(id, it) } }
                     "programme" -> {
                         val channel = parser.getAttributeValue(null, "channel")
                         val start = XmltvTime.parse(parser.getAttributeValue(null, "start"))
@@ -88,15 +89,19 @@ object XmltvReader {
         }
     }
 
-    private fun readChannel(p: XmlPullParser): Pair<String, List<String>>? {
+    private fun readChannel(p: XmlPullParser): Triple<String, List<String>, String?>? {
         val id = p.getAttributeValue(null, "id") ?: return null.also { skip(p) }
         val names = ArrayList<String>()
+        var icon: String? = null
         val depth = p.depth
         while (!(p.next() == XmlPullParser.END_TAG && p.depth == depth)) {
             if (p.eventType == XmlPullParser.START_TAG && p.name == "display-name") names += p.nextText().trim()
+            if (p.eventType == XmlPullParser.START_TAG && p.name == "icon" && icon == null) {
+                icon = p.getAttributeValue(null, "src")?.trim()?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+            }
             if (p.eventType == XmlPullParser.END_DOCUMENT) break
         }
-        return id to names.filter { it.isNotEmpty() }
+        return Triple(id, names.filter { it.isNotEmpty() }, icon)
     }
 
     private fun readProgramme(p: XmlPullParser, start: Long, stopAttr: Long?): Programme? {
