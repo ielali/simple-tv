@@ -14,6 +14,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    Add a TMDB key, make a PG film channel and check how long the first rating check takes, how
    many films the provider's details call covers, and that the banner shows the rating.
    On a series channel press Right, Left (early and late in an episode) and OK on the Kogan remote.
+   TV guide: check the free guide presets download (their links were not reachable from the build
+   sandbox), how long a guide takes to read on the Kogan, and which lineup channels match. YouTube:
+   sign in with a household OAuth client and check that live subscriptions show as "Live now".
 1. **First device run.** Build `assembleDebug`, sideload on an Android TV box, confirm: app opens
    fullscreen, empty state shows the config URL, config page loads from a phone, adding an HLS
    channel plays. Record device, Android version and remote model in DEPLOYMENT.md.
@@ -48,6 +51,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
     logo/name large (radio behaviour) instead of "No signal".
 
 ## Later
+
+- TV guide: a fuller "what's on later" list per channel on the page, and the YouTube live video's
+  title as the "now" line for YouTube channels.
 
 - Arabic descriptions from TMDB (`language=ar`) when the TV language is Arabic.
 - Show the poster and rating in the TV banner, not just the rating text.
@@ -93,6 +99,11 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- TV guide: now and next in the banner and on the page, from the provider's guide with free XMLTV
+  guides as a fallback, channel matching with manual fixes (ADR-020).
+- YouTube suggestions from the household's subscriptions, live ones first, signed in on the TV with
+  the device flow (ADR-021).
 
 - Long lists grow as you scroll (catalog items and categories, lineup, film and series search,
   "What will play"); "Find a category" lookup in Add channel, the film editor and first run; IMDb

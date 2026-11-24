@@ -228,6 +228,14 @@ details[open] summary svg{transform:rotate(90deg)}
 .detailtop{display:flex;gap:16px;align-items:flex-start}
 .selrow{display:flex;flex-wrap:wrap;gap:8px}
 .selrow .chip{min-height:40px}
+.gbar{height:6px;border-radius:999px;background:var(--tint);overflow:hidden;max-width:420px}
+.gbar>i{display:block;height:100%;background:var(--primary);border-radius:999px}
+.tvcard .gbar{background:rgba(242,244,248,.2)}.tvcard .gbar>i{background:var(--gold)}
+.guideline{font-size:13px;line-height:18px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.guideline b{color:var(--ink);font-weight:600}
+.ytav{width:40px;height:40px;border-radius:999px;background:var(--tint) center/cover no-repeat;flex:none;border:1px solid var(--line)}
+.sugrow{flex-wrap:wrap}.sugrow .grow{min-width:170px}
+.codebox{font-size:32px;line-height:40px;font-weight:800;letter-spacing:.08em;font-variant-numeric:tabular-nums}
 .empty{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
 </style>
 </head>
@@ -398,7 +406,16 @@ async function loadCore() {
   snapshot(); renderShellBits();
   return state;
 }
+/** What's on now and next on every live channel (the TV's guide), refreshed with "On the TV now". */
+let guideAt = 0;
+async function loadGuideNow(force) {
+  if (!force && Date.now() - guideAt < 60000 && state.guideNow) return state.guideNow;
+  try { const r = await GET('/api/guide/now'); state.guideNow = r.channels || {}; guideAt = Date.now(); } catch (e) { /* offline */ }
+  return state.guideNow;
+}
+const progPct = (p, at = Date.now()) => Math.max(0, Math.min(100, Math.round(((at - p.start) / Math.max(1, p.stop - p.start)) * 100)));
 async function refreshNow() {
+  loadGuideNow().then(() => { if (route.name === 'lineup' && screens.lineup.paint && !screens.lineup.dirty()) screens.lineup.paintGuide(); if (route.name === 'home') patchNowPlaying(); });
   try { state.now = await GET('/api/nowplaying'); renderShellBits(); if (route.name === 'home' || route.name === 'lineup') patchNowPlaying(); } catch (e) { /* offline is shown elsewhere */ }
 }
 
@@ -673,6 +690,16 @@ function patchNowPlaying() {
   const el = $('#tvNow'); if (el) { el.outerHTML = tvCard(); bindTvCard(); }
   $$('.num[data-id]').forEach((n) => n.classList.toggle('playing', !!(state.now && state.now.channel && state.now.channel.id === n.dataset.id)));
 }
+/** "Now 7:30–8:30 pm · Title", a progress bar, and "Next 8:30 pm · Title". */
+function guideBlock(g) {
+  if (!g || !g.now) return '';
+  const n = g.now; const x = g.next;
+  return `<div class="col g4" style="margin-top:2px">
+    <div dir="auto"><span style="font-weight:700">Now</span> <span class="cap">${esc(clock(n.start))}–${esc(clock(n.stop))}</span> · ${esc(n.title)}${n.episode ? ` <span class="cap">${esc(n.episode)}</span>` : ''}</div>
+    <div class="gbar" role="progressbar" aria-valuenow="${progPct(n)}" aria-valuemin="0" aria-valuemax="100" aria-label="How far through"><i style="width:${progPct(n)}%"></i></div>
+    ${x ? `<div class="cap" dir="auto">Next ${esc(clock(x.start))} · ${esc(x.title)}</div>` : ''}
+  </div>`;
+}
 function bindTvCard() { $$('#tvNow [data-ctl]').forEach((b) => b.onclick = () => { b.disabled = true; controlTv(b.dataset.ctl); }); }
 function tvCard() {
   const n = state.now;
@@ -689,6 +716,7 @@ function tvCard() {
       ${n.title ? `<div dir="auto">${esc(n.title)}</div>` : ''}
       <div class="cap">${esc([n.preview ? 'Preview, not in your lineup' : kind, how].filter(Boolean).join(' · '))}</div>
       ${trackNote(n) ? `<div class="cap" style="color:#FFC857">${esc(trackNote(n))}</div>` : ''}
+      ${guideBlock(state.guideNow && state.guideNow[ch.id])}
       <div class="f fw g8" style="margin-top:6px">${queue ? `<button class="btn" data-ctl="restart" title="Back to the start">${ico('refresh', 18)}Start of this one</button><button class="btn pri" data-ctl="${n.paused ? 'resume' : 'pause'}">${n.paused ? ico('play', 18) + 'Carry on' : '❚❚ Pause'}</button><button class="btn" data-ctl="next">Next${ico('right', 18)}</button>` : '<a class="btn pri" href="#/lineup">Open lineup</a>'}</div>
       ${queue && !n.preview ? `<div class="cap">On the remote: Right for the next one, Left for the start, OK to pause.</div>` : ''}
     </div>
@@ -824,6 +852,7 @@ screens.lineup = (() => {
       state.lineup = lineup; load(lineup);
     }
     refreshNow();
+    loadGuideNow(true).then(paintGuide);
     paint();
   }
   function rowHtml(r, bad) {
@@ -839,11 +868,50 @@ screens.lineup = (() => {
         <div class="nm" dir="auto">${esc(r.name)}${changed ? ' <span class="pill info" style="vertical-align:middle">Changed</span>' : ''}</div>
         <div class="rowsub"><span class="badge ${TYPE_BADGE[r.type]}">${TYPE_LABEL[r.type]}</span><span dir="auto">${esc(channelSub(r))}${playing ? ' · playing on the TV now' : ''}</span></div>
         ${flagged ? `<div class="flag">${ico('alert', 14)}${esc(FLAG_TEXT[flagged] || '')}</div>` : ''}
+        ${r.type === 'STREAM' ? `<div class="guideline" data-guide="${esc(r.id)}">${guideLine(r.id)}</div>` : ''}
       </div>
       <button class="ibtn bd" data-play="${esc(r.id)}" aria-label="Play ${esc(r.name)} on the TV" title="Play on TV" ${changed || r.id.startsWith('new') ? '' : ''}>${ico('play', 18)}</button>
       <button class="ibtn" data-edit="${esc(r.id)}" aria-label="Edit ${esc(r.name)}" aria-expanded="${isOpen}" title="Edit">${ico(isOpen ? 'close' : 'pencil', 18)}</button>
     </div>
     ${isOpen ? editPanel(r) : ''}`;
+  }
+  function guideLine(id) {
+    const g = state.guideNow && state.guideNow[id];
+    if (!g || !g.now) return '';
+    return `<b dir="auto">Now: ${esc(g.now.title)}</b> · until ${esc(clock(g.now.stop))}${g.next ? ` · then <span dir="auto">${esc(g.next.title)}</span>` : ''}`;
+  }
+  function paintGuide() { $$('[data-guide]').forEach((el) => { el.innerHTML = guideLine(el.dataset.guide); }); }
+  /** The edit panel's "TV guide" line: which guide channel it follows, and a search to change it. */
+  async function loadMatch(id) {
+    const box = $(`[data-gmatch="${CSS.escape(id)}"]`); if (!box) return;
+    try { const m = await GET(`/api/guide/match/${encodeURIComponent(id)}`); matches[id] = m; paintMatch(id); } catch (e) { box.innerHTML = ''; }
+  }
+  const matches = {};
+  const HOW = { provider: 'from your provider', id: 'matched by its guide ID', name: 'matched by name', override: 'chosen by you', off: 'turned off', none: '' };
+  function paintMatch(id) {
+    const box = $(`[data-gmatch="${CSS.escape(id)}"]`); const m = matches[id]; if (!box || !m) return;
+    const mt = m.match; const nn = m.nowNext;
+    const what = mt.how === 'off' ? 'No guide for this channel' : mt.how === 'none' ? 'No guide found for this channel' : mt.how === 'provider' ? `From ${esc(mt.source || 'your provider')}` : `${esc(mt.name || 'A guide channel')} <span class="cap">(${esc(mt.source || '')})</span>`;
+    box.innerHTML = `<div class="f fw g8" style="align-items:center"><span style="font-weight:600">TV guide:</span><span dir="auto">${what}</span>${HOW[mt.how] ? `<span class="cap">· ${HOW[mt.how]}</span>` : ''}<button class="btn ghost" type="button" data-gchange>${mt.how === 'none' ? 'Find it' : 'Change'}</button></div>
+      ${nn && nn.now ? `<div class="cap" dir="auto">Now: ${esc(nn.now.title)} · until ${esc(clock(nn.now.stop))}</div>` : ''}
+      <div data-gpick class="hide col g8">${findBox('gFind-' + id, '', 'Search the guide, like ABC or Al Jazeera')}<div data-gresults class="col g4"></div>
+        <div class="f fw g8"><button class="btn" type="button" data-gauto>Automatic</button><button class="btn" type="button" data-goff>No guide</button></div></div>`;
+    const pick = box.querySelector('[data-gpick]');
+    box.querySelector('[data-gchange]').onclick = () => { pick.classList.toggle('hide'); const i = pick.querySelector('input'); i.focus(); search(''); };
+    const set = async (key) => {
+      try { const r = await saving(() => PUT('/api/guide/match', { channelId: id, key }), 'Saved. The TV uses it now.'); matches[id] = r; paintMatch(id); loadGuideNow(true).then(paintGuide); } catch (e) { /* toast */ }
+    };
+    box.querySelector('[data-gauto]').onclick = () => set(null);
+    box.querySelector('[data-goff]').onclick = () => set('');
+    let t = null;
+    const search = async (q) => {
+      const res = await GET('/api/guide/channels?q=' + encodeURIComponent(q)).catch(() => []);
+      const list = box.querySelector('[data-gresults]');
+      list.innerHTML = res.length ? res.map((c) => `<button class="catitem" type="button" data-gkey="${esc(c.key)}"><span dir="auto">${esc(c.name)}</span><span class="c">${esc(c.source)}</span></button>`).join('')
+        : `<p class="cap">${q ? 'Nothing matches.' : 'No guides downloaded yet. Choose one in TV settings.'}</p>`;
+      $$('[data-gkey]', list).forEach((b) => b.onclick = () => set(b.dataset.gkey));
+    };
+    pick.querySelector('input').oninput = (e) => { clearTimeout(t); t = setTimeout(() => search(e.target.value), 200); };
   }
   function editPanel(r) {
     const idx = rows.indexOf(r);
@@ -856,6 +924,7 @@ screens.lineup = (() => {
       </div>
       <div class="hint ${clash || invalid(r) ? 'err' : ''}" id="numHint">${clash ? `Number ${esc(r.number)} is already ${esc(clash.name)}. Pick another number.` : invalid(r) ? 'Use a number from 1 to 9999.' : 'The number your viewer types on the remote.'}</div>
       ${r.type === 'YOUTUBE' && r.source ? `<div class="hint">YouTube: <span dir="ltr">${esc(r.source)}</span></div>` : ''}
+      ${r.type === 'STREAM' ? `<div data-gmatch="${esc(r.id)}" class="col g4"><div class="skel" style="width:50%"></div></div>` : ''}
       <div class="f fw g8">
         <button class="btn" data-move="-1" ${idx === 0 ? 'disabled' : ''}>${ico('up', 18)}Move up</button>
         <button class="btn" data-move="1" ${idx === rows.length - 1 ? 'disabled' : ''}>${ico('down', 18)}Move down</button>
@@ -897,6 +966,7 @@ screens.lineup = (() => {
     $$('[data-filter]', el).forEach((b) => b.onclick = () => { filter = b.dataset.filter; shownCount = PAGE; paint(); });
     infinite('lineup', 'moreRows', () => { const y = window.scrollY; shownCount += PAGE; paint(); window.scrollTo(0, y); });
     $$('[data-edit]', el).forEach((b) => b.onclick = () => { open = open === b.dataset.edit ? null : b.dataset.edit; paint(); const i = $(`[data-panel="${CSS.escape(b.dataset.edit)}"] input[data-f="name"]`); if (i) i.focus(); });
+    if (open && $(`[data-gmatch="${CSS.escape(open)}"]`)) { if (matches[open]) paintMatch(open); else loadMatch(open); }
     $$('[data-play]', el).forEach((b) => b.onclick = () => { const r = byId(b.dataset.play); playOnTv({ channelId: r.id }, r.name); });
     $$('[data-panel] input', el).forEach((inp) => {
       inp.addEventListener('input', () => {
@@ -957,7 +1027,7 @@ screens.lineup = (() => {
       state.lineup = view; load(view); open = null; snapshot(); paint();
     } catch (e) { /* toast shown */ }
   }
-  return { render, paint, dirty, changeCount, discard: () => { discard(); rows = null; } };
+  return { render, paint, paintGuide, dirty, changeCount, discard: () => { discard(); rows = null; } };
 })();
 
 /* ---------- Add channel ---------- */
@@ -990,7 +1060,7 @@ screens.add = (() => {
       </div>
       <div id="addBody" class="col g24"></div>`;
     $$('[data-mode]', el).forEach((b) => b.onclick = () => go('#/add/' + b.dataset.mode));
-    if (m === 'youtube') paintYt(); else if (m === 'link') paintLink(); else await startCatalog(seq);
+    if (m === 'youtube') { sugStale = true; paintYt(); } else if (m === 'link') paintLink(); else await startCatalog(seq);
   }
 
   /* --- From my TV subscription --- */
@@ -1142,6 +1212,49 @@ screens.add = (() => {
   }
 
   /* --- From YouTube --- */
+  let sug = null; let sugFind = ''; let sugT = null; let sugStale = true;
+  async function loadSuggestions() {
+    try { sug = await GET('/api/youtube/suggestions'); } catch (e) { sug = { error: e.message }; }
+    paintSuggestions();
+    clearTimeout(sugT);
+    if (sug && sug.checking && route.name === 'add' && mode() === 'youtube') sugT = setTimeout(loadSuggestions, 5000);
+  }
+  function paintSuggestions() {
+    const box = $('#ytSug'); if (!box) return;
+    if (!sug) { box.innerHTML = loadingCard(3); return; }
+    if (!sug.connected) {
+      box.innerHTML = `<section class="card f fw g16"><div class="icobox t">${ico('yt', 22)}</div><div class="grow" style="min-width:200px"><h2 class="sec">Suggestions from your YouTube subscriptions</h2><p class="muted">Sign the TV in to your YouTube account to see the channels you follow, and which are live now.</p></div><a class="btn" href="#/settings">Set it up in TV settings</a></section>`;
+      return;
+    }
+    const items = (sug.items || []).filter((s) => !sugFind.trim() || matchesAll(s.title, sugFind));
+    const liveN = (sug.items || []).filter((s) => s.live).length;
+    const start = nextNumber();
+    box.innerHTML = `<section class="card col g8">
+      <div class="f fw g12"><div class="grow" style="min-width:200px"><h2 class="sec">From your YouTube subscriptions</h2><div class="cap">${esc(sug.accountName ? 'Signed in as ' + sug.accountName + ' · ' : '')}${plural((sug.items || []).length, 'channel')}${liveN ? ` · ${fmtN(liveN)} live now` : ''}${sug.liveCheckedAt ? ' · checked ' + esc(whenPast(sug.liveCheckedAt)) : ''}${sug.checking ? ' · checking what’s live…' : ''}</div></div></div>
+      ${sug.error ? `<p class="hint err">${esc(sug.error)}</p>` : ''}
+      ${(sug.items || []).length > 8 ? findBox('ytSugFind', sugFind, 'Find a channel') : ''}
+      <div class="list" id="ytSugList">${items.map((s) => `<div class="li sugrow">
+        <span class="ytav" ${s.thumbnail ? `style="background-image:url('${esc(s.thumbnail).replace(/'/g, '%27')}')"` : ''}></span>
+        <div class="grow"><div style="font-weight:600" dir="auto" class="ell">${esc(s.title)}</div>
+          <div class="cap" dir="auto">${s.live ? `<span class="pill err" style="padding:1px 8px"><span class="dot"></span>Live now</span> ${esc(s.liveTitle || '')}` : 'Not live right now'}</div></div>
+        ${s.lineupNumber ? `<span class="pill ok"><span class="dot"></span>In lineup as ${esc(s.lineupNumber)}</span>` : `<button class="btn" type="button" data-sugadd="${esc(s.channelId)}">Add as ${start}</button>`}
+        ${s.live ? `<button class="ibtn bd" type="button" data-sugplay="${esc(s.channelId)}" aria-label="Play ${esc(s.title)} on the TV" title="Play on TV">${ico('play', 18)}</button>` : ''}
+      </div>`).join('') || `<p class="cap" style="padding:8px 4px">${sugFind.trim() ? 'No channel matches.' : 'No subscriptions on this account yet.'}</p>`}</div>
+      <p class="cap">A channel added from here always plays that channel's live stream when there is one.</p>
+    </section>`;
+    const f = $('#ytSugFind'); if (f) f.oninput = () => { sugFind = f.value; const pos = f.selectionStart; paintSuggestions(); const again = $('#ytSugFind'); again.focus(); again.setSelectionRange(pos, pos); };
+    $$('[data-sugadd]', box).forEach((b) => b.onclick = async () => {
+      const s = sug.items.find((x) => x.channelId === b.dataset.sugadd);
+      b.disabled = true;
+      try {
+        const r = await saving(() => POST('/api/channels/youtube', { source: s.channelId, name: s.title.slice(0, 60) }), null);
+        state.lineup = r.lineup; snapshot(); s.lineupNumber = r.channel.number;
+        toast(`${r.channel.name} is channel ${r.channel.number} now.`, { label: 'Open lineup', run: () => go('#/lineup') });
+        paintSuggestions();
+      } catch (e) { b.disabled = false; }
+    });
+    $$('[data-sugplay]', box).forEach((b) => b.onclick = () => { const s = sug.items.find((x) => x.channelId === b.dataset.sugplay); playOnTv({ youtube: s.channelId, name: s.title }, s.title); });
+  }
   function paintYt() {
     const body = $('#addBody'); const p = yt.preview; const hasKey = state.status && state.status.hasYoutubeKey;
     if (!yt.number) yt.number = String(nextNumber());
@@ -1166,7 +1279,10 @@ screens.add = (() => {
         <div class="hint ${clash ? 'err' : ''}">${clash ? `Number ${num} is already ${esc(clash.name)}. Pick another number.` : num === nextNumber() ? `${num} is the next free number.` : ''}</div>
         <div class="f fw g8"><button class="btn pri" id="ytAdd" ${ready ? '' : 'disabled'}>Add as channel ${esc(num > 0 ? num : '')}</button><button class="btn" id="ytPlay">${ico('play', 18)}Play on TV</button></div>` : ''}
       </section>
-    </div>`;
+    </div>
+    <div id="ytSug"></div>`;
+    if (sug) paintSuggestions();
+    if (!sug || sugStale) { sugStale = false; loadSuggestions(); }
     const inp = $('#ytIn');
     inp.oninput = () => { yt.input = inp.value; clearTimeout(ytT); ytT = setTimeout(lookup, 500); };
     inp.onpaste = () => { clearTimeout(ytT); ytT = setTimeout(lookup, 50); };
@@ -1708,6 +1824,7 @@ screens.settings = (() => {
     if (!state.settings || !state.status) { el.innerHTML = loadingCard(4); await loadCore(); if (stale(seq)) return; }
     else GET('/api/settings').then((s) => { state.settings = s; }).catch(() => {});
     paint();
+    loadGuideCard(); loadYtAccount();
     const [guard, keys, qr] = await Promise.all([GET('/api/guard').catch(() => null), GET('/api/keys').catch(() => []), state.qr ? state.qr : GET('/api/qr').catch(() => null), loadRatings(true)]);
     if (stale(seq)) return;
     state.guard = guard; state.keys = keys; state.qr = qr; paint();
@@ -1720,6 +1837,63 @@ screens.settings = (() => {
     const q = state.qr; if (!q) return '';
     let d = ''; q.rows.forEach((row, y) => { for (let x = 0; x < row.length; x++) if (row[x] === '1') d += `M${x} ${y}h1v1h-1z`; });
     return `<svg viewBox="-1 -1 ${q.size + 2} ${q.size + 2}" shape-rendering="crispEdges" role="img" aria-label="QR code for this page"><path d="${d}" fill="currentColor"/></svg>`;
+  }
+  /* --- TV guide --- */
+  let guideV = null;
+  async function loadGuideCard() { try { guideV = await GET('/api/guide'); } catch (e) { /* offline */ } paintGuideCard(); }
+  function guideCard() { return '<section class="card col g12" id="guideCard"><h2 class="sec">TV guide</h2><div class="skel"></div></section>'; }
+  function paintGuideCard() {
+    const el = $('#guideCard'); if (!el || !guideV) return;
+    const g = guideV;
+    const srcLine = (s) => s.fetchedAt ? (s.ok ? `${fmtN(s.channels)} channels · updated ${esc(whenPast(s.fetchedAt))}` : esc(s.error || 'It didn’t work last time.')) : (s.chosen ? 'Not downloaded yet' : '');
+    const provider = g.sources.filter((s) => s.kind === 'provider');
+    const presets = g.sources.filter((s) => s.kind === 'preset');
+    const links = g.sources.filter((s) => s.kind === 'link');
+    el.innerHTML = `<h2 class="sec">TV guide</h2>
+      <p class="muted">Shows what's on now and next in the channel banner and on this page. Your provider's own guide comes first; the free guides below fill the gaps.</p>
+      ${provider.length ? `<div class="list">${provider.map((s) => `<div class="li"><div class="grow"><div style="font-weight:600">${esc(s.label)}</div><div class="cap">${srcLine(s)}</div></div><span class="pill ${s.ok ? 'ok' : 'err'}"><span class="dot"></span>${s.ok ? 'In use' : 'Not working'}</span></div>`).join('')}</div>` : ''}
+      <div class="cap" style="font-weight:700;letter-spacing:.04em">FREE GUIDES</div>
+      <div class="col g4">${presets.map((s) => `<label class="chk"><input type="checkbox" data-gsrc="${esc(s.id)}" ${s.chosen ? 'checked' : ''}><span class="grow"><span class="nm" style="font-size:14px">${esc(s.label)}</span><span class="cap ${s.chosen && !s.ok ? 'hint err' : ''}">${srcLine(s)}</span></span></label>`).join('')}</div>
+      ${links.map((s) => `<div class="li"><div class="grow"><div style="font-weight:600" class="ell" dir="ltr">${esc(s.url || s.label)}</div><div class="cap ${!s.ok ? 'hint err' : ''}">${srcLine(s)}</div></div><button class="btn ghost" type="button" data-glink-rm="${esc(s.url || '')}">Remove</button></div>`).join('')}
+      <div class="f fw g8"><label class="inp grow" style="min-width:200px"><span class="sr">Guide link</span><input id="gLink" type="url" placeholder="Add a guide link (XMLTV)" dir="ltr" autocomplete="off" spellcheck="false"></label><button class="btn" id="gLinkAdd" type="button">Add</button></div>
+      <div class="f fw g8"><button class="btn" id="gRefresh" type="button" ${g.refreshing ? 'disabled' : ''}>${g.refreshing ? '<span class="spin"></span>Updating…' : ico('refresh', 18) + 'Update the guide now'}</button></div>
+      <p class="hint">Free guides are run by volunteers and can stop working. The TV fetches them at most twice a day.${g.usingDefault ? ` Chosen for you from the TV's region (${esc(countryName(g.region))}).` : ''}</p>`;
+    const chosenIds = () => [...presets.filter((s) => s.chosen).map((s) => s.id), ...links.map((s) => s.url).filter(Boolean)];
+    const save = async (list, done) => { try { guideV = await saving(() => PUT('/api/guide/sources', { sources: list }), done); paintGuideCard(); setTimeout(loadGuideCard, 8000); } catch (e) { /* toast */ } };
+    $$('[data-gsrc]', el).forEach((c) => c.onchange = () => { const ids = chosenIds().filter((x) => x !== c.dataset.gsrc); if (c.checked) ids.unshift(c.dataset.gsrc); save(ids, 'Saved. The TV is getting the guide now.'); });
+    $$('[data-glink-rm]', el).forEach((b) => b.onclick = () => save(chosenIds().filter((x) => x !== b.dataset.glinkRm), 'Removed.'));
+    $('#gLinkAdd', el).onclick = () => { const v = $('#gLink').value.trim(); if (!/^https?:\/\/\S+$/i.test(v)) { toast('A guide link starts with http:// or https://.', null, 5000); return; } save(chosenIds().concat([v]), 'Added. The TV is getting the guide now.'); };
+    $('#gRefresh', el).onclick = async () => { try { guideV = await POST('/api/guide/refresh'); paintGuideCard(); setTimeout(loadGuideCard, 10000); } catch (e) { if (e.status !== 401) toast(e.message, null, 6000); } };
+  }
+
+  /* --- YouTube account (suggestions) --- */
+  let ytAcc = null; let ytT = null;
+  async function loadYtAccount() {
+    try { ytAcc = await GET('/api/youtube/account'); } catch (e) { /* offline */ }
+    paintYtAccount();
+    clearTimeout(ytT);
+    if (ytAcc && ytAcc.pending && route.name === 'settings') ytT = setTimeout(loadYtAccount, 3000);
+  }
+  function paintYtAccount() {
+    const el = $('#ytAccount'); if (!el || !ytAcc) return;
+    const a = ytAcc;
+    el.innerHTML = a.connected ? `<div class="f fw g8"><span class="pill ok">${ico('check', 14, 2.4)}Connected${a.accountName ? ' as ' + esc(a.accountName) : ''}</span><a class="btn ghost" href="#/add/youtube">See suggestions</a><button class="btn ghost" id="ytDisc" type="button">Disconnect</button></div>${a.error ? `<p class="hint err">${esc(a.error)}</p>` : ''}`
+      : a.pending ? `<div class="card col g8" style="padding:16px"><div>On your phone or computer, go to</div><div style="font-weight:700" dir="ltr">${esc(a.pending.verificationUrl.replace(/^https?:\/\//, ''))}</div><div>and enter this code:</div><div class="codebox" dir="ltr">${esc(a.pending.userCode)}</div><div class="f g8 cap"><span class="spin" style="width:14px;height:14px"></span>Waiting for you to allow it… The code works for ${Math.max(1, Math.round((a.pending.expiresAt - a.now) / 60000))} minutes.</div></div>`
+      : `<ol class="muted" style="margin:0;padding-inline-start:20px;line-height:22px"><li>In the same Google Cloud project as your YouTube key, set the OAuth consent screen to “In production”.</li><li>Create an OAuth client of the type “TVs and Limited Input devices”.</li><li>Paste its client ID and secret here, then press Connect.</li></ol>
+        <label class="field"><span>Client ID</span><span class="inp"><input id="ytCid" value="${esc(a.clientId || '')}" dir="ltr" autocomplete="off" spellcheck="false"></span></label>
+        <label class="field"><span>Client secret</span><span class="inp"><input id="ytSec" type="password" placeholder="${a.hasClient ? 'Saved on the TV' : ''}" dir="ltr" autocomplete="off"></span></label>
+        ${a.error ? `<p class="hint err">${esc(a.error)}</p>` : ''}
+        <div class="f fw g8"><button class="btn pri" id="ytConn" type="button">Connect</button></div>
+        <p class="hint">Google shows a warning that the app isn't verified, because it's your own private app. Choose “Continue”. The TV only reads your subscriptions; it can't change anything on YouTube.</p>`;
+    const d = $('#ytDisc', el); if (d) d.onclick = async () => { if (!(await dialog({ title: 'Disconnect YouTube?', text: 'The TV forgets your subscriptions and signs out. Channels already in your lineup stay.', ok: 'Disconnect', danger: true }))) return; try { ytAcc = await saving(() => POST('/api/youtube/disconnect'), 'Disconnected.'); paintYtAccount(); } catch (e) { /* toast */ } };
+    const c = $('#ytConn', el);
+    if (c) c.onclick = async () => {
+      const id = $('#ytCid').value.trim(); const sec = $('#ytSec').value;
+      if (!id) { toast('Paste the client ID first.', null, 5000); return; }
+      c.disabled = true; c.innerHTML = '<span class="spin"></span>Connecting…';
+      try { await PUT('/api/youtube/client', { clientId: id, clientSecret: sec || null }); ytAcc = await POST('/api/youtube/connect'); paintYtAccount(); clearTimeout(ytT); ytT = setTimeout(loadYtAccount, 3000); }
+      catch (e) { c.disabled = false; c.textContent = 'Connect'; if (e.status !== 401) toast(e.message, null, 6000); }
+    };
   }
   function ratingsCard() {
     const r = state.ratings; const s = S(); const st = state.status; const has = !!(st.hasTmdbKey || (r && r.hasTmdbKey));
@@ -1795,13 +1969,15 @@ screens.settings = (() => {
           <p class="muted">The TV refreshes your subscriptions' channel lists once a day.</p>
           <label class="field"><span>Update at</span><span class="inp" style="max-width:200px"><input id="rTime" type="time" value="${esc(s.catalogRefreshTime || '21:00')}" step="300"></span></label>
           <p class="hint">Pick a time when nobody is watching. You can also refresh any subscription now.${st.nextRefresh ? ' Next update ' + esc(whenNext(st.nextRefresh)) + '.' : ''}</p></section>
+        ${guideCard()}
         <section class="card col g12"><h2 class="sec">How YouTube plays</h2>
           ${[['EMBEDDED', 'Inside Simple TV', 'Simplest. Shows ads, and doesn’t use any account.'], ['YOUTUBE_APP', 'In the YouTube app', 'Uses the account signed in on the TV. With Premium there are no ads. Up and down still change channel.']].map(([k, t, d]) => `<button class="opt ${s.youtubePlayback === k ? 'on' : ''}" data-yt="${k}" role="radio" aria-checked="${s.youtubePlayback === k}"><span class="radio"></span><div><div style="font-weight:600">${t}</div><div class="muted">${d}</div></div></button>`).join('')}
           <details ${st.hasYoutubeKey ? '' : ''}><summary>${ico('right', 18)}YouTube key (optional)</summary><div class="col g8">
             <p class="muted">With your own free YouTube Data API key, links that start with @ work and the page can tell whether a channel is live. It stays on the TV and is never shown again.</p>
             ${st.hasYoutubeKey ? `<div class="f fw g8"><span class="pill ok">${ico('check', 14, 2.4)}Saved</span><button class="btn ghost" id="keyRemove">Remove key</button></div>` : ''}
             <div class="f fw g8"><label class="inp grow" style="min-width:200px"><span class="sr">YouTube key</span><input id="ytKey" type="password" autocomplete="off" spellcheck="false" dir="ltr" placeholder="${st.hasYoutubeKey ? 'Paste a new key to replace it' : 'Paste your key'}"></label><button class="btn" id="keySave">Save key</button></div>
-          </div></details></section>
+          </div></details>
+          <details ${ytAcc && (ytAcc.connected || ytAcc.pending) ? 'open' : ''}><summary>${ico('right', 18)}Suggestions from your YouTube account</summary><div class="col g8" id="ytAccount"><div class="skel"></div></div></details></section>
         ${ratingsCard()}
         <section class="card col g12">
           <div class="f g12"><h2 class="sec grow" id="pinH">Lock this page with a PIN</h2><button class="sw ${st.pinSet ? 'on' : ''}" id="pinSw" role="switch" aria-checked="${st.pinSet}" aria-labelledby="pinH"></button></div>
@@ -1824,6 +2000,7 @@ screens.settings = (() => {
       </div>
     </div>`;
     bind(el);
+    paintGuideCard(); paintYtAccount();
   }
   function bind(el) {
     $$('[data-lang]', el).forEach((b) => b.onclick = () => setSetting({ language: b.dataset.lang }, 'Saved. The TV uses it now.'));

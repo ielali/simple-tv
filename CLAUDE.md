@@ -75,6 +75,10 @@ app/src/main/kotlin/com/ielali/simpletv/
   data/PlaylistQueue.kt   Film/series queue rules (pure); data/QueuePlayback.kt plays and resumes
   data/SecretsStore.kt    Page PIN, YouTube key and TMDB key, never returned by the API
   data/FilmMeta.kt        Film details model and RatingRules (pure); TmdbApi/TmdbClient parse TMDB
+  data/Guide.kt           TV guide (pure): XMLTV reader and times, Xtream short guide, matching, now/next
+  data/GuideService.kt    Fetches, trims and caches guides; now/next per lineup channel; manual matches
+  data/YouTubeSuggestions.kt Device-flow sign-in state, subscriptions and live-now cache (ADR-021)
+  youtube/YouTubeAccount.kt Pure client for Google's device flow and the YouTube calls suggestions use
   data/MetadataService.kt Caches details per subscription, checks film channels' ratings in the background
   youtube/YouTubeLookup.kt YouTube link preview (oEmbed, optional Data API key)
   config/NetworkAddress.kt LAN IP discovery

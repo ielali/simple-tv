@@ -329,3 +329,52 @@ Decision:
 Consequences: A viewer can no longer wander through the D-pad's Left and Right on these channels,
 which did nothing before. Nothing is shown that needs a cursor.
 
+## ADR-020 TV guide: the provider's guide first, free XMLTV guides as a fallback
+
+Context: Viewers and caregivers want to know what is on now and next on live channels. Research
+(Nov 2026): Xtream panels offer a per-channel guide (`get_short_epg`, titles base64-encoded) and a
+full `xmltv.php` that can list tens of thousands of channels; M3U playlists may name an XMLTV guide in
+their header; free XMLTV guides exist for Australia (epgshare01, epg.pw, xmltv.net) and some Arabic
+channels (epgshare01), all volunteer-run with no explicit permission for apps to fetch them.
+
+Decision:
+- Xtream channels: `get_short_epg` per lineup channel when tuned and in a gentle sweep every 10
+  minutes (cached until the current programme ends or 30 minutes). Epoch timestamps only; base64
+  decoded defensively. The huge `xmltv.php` is not used.
+- XMLTV (a playlist's own guide link, the free guides chosen in TV settings, or a link the caregiver
+  adds): downloaded at most twice a day, streamed through XmlPullParser (gzip detected by its magic
+  bytes) and trimmed to the lineup's channels for the next 36 hours. Default free guide follows the
+  TV's region (epgshare01 Australia for AU); the caregiver can change it.
+- Matching: a manual choice first, then the provider's guide id (`epg_channel_id` / `tvg-id`), then
+  tidied names (case, HD/4K, country prefixes, brackets, city names, aliases like Seven/7).
+  The lineup's edit panel shows the match and lets the caregiver search the guide or turn it off.
+- The TV banner shows Now (time span, title, progress bar) and Next; the page shows the same on the
+  "On the TV now" card and a "Now:" line on each live channel.
+
+Consequences: Guides have gaps and wrong ids; free guides can disappear or block, and none grants
+redistribution rights, so they are a household-level fallback fetched sparingly. The preset guide
+links could not be checked from the build sandbox and need confirming on the TV (backlog item 0).
+
+## ADR-021 YouTube suggestions from subscriptions only
+
+Context: The caregiver asked for YouTube suggestions based on watch history and the home page.
+Google returns empty watch-history and watch-later lists to apps since 2016, offers no API for home
+recommendations, retired "related videos" search in 2023, and scraping would break YouTube's terms
+and this project's rule 6.
+
+Decision:
+- Suggestions come from the household's subscriptions, live ones first. The TV signs in with
+  Google's device flow ("go to google.com/device and enter the code") using the household's own
+  OAuth client of the type "TVs and Limited Input devices", scope `youtube.readonly`. The consent
+  screen is set to "In production" so the sign-in does not expire weekly; Google shows an
+  "unverified app" warning once.
+- The refresh token, client secret and client id stay in SecretsStore; only the client id (shown
+  on Google's own sign-in page) is returned. Credentials travel in POST bodies, never addresses.
+- Subscriptions are refreshed daily; "live now" at most every 30 minutes for up to 100 channels,
+  via each channel's uploads playlist and a batched `videos.list` (1 quota unit each), never
+  `search.list`. Cached YouTube data is dropped after 30 days and on disconnect (token revoked).
+- No watch-history import (declined by the caregiver).
+
+Consequences: Suggestions only cover channels the household already follows. Whether every live
+stream shows in its channel's uploads playlist is unconfirmed; check on real channels.
+

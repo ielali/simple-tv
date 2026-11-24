@@ -145,3 +145,17 @@ Pure logic (tuner, navigator, parser, YouTube parsing, guard policy, settings me
 `GuardKeysSdkTest` checks mirrored key codes against the SDK, and `tools/test/tv-admin.test.sh` runs
 the admin script against a fake adb. Android layers are verified
 on device. CI runs unit tests, assembles the debug APK and runs lint.
+
+## TV guide and YouTube suggestions
+
+`GuideService` (ADR-020) keeps now/next for live channels: Xtream `get_short_epg` per channel, and
+XMLTV guides (a playlist's own, free presets, caregiver links) streamed through `XmltvReader` and
+trimmed to the lineup. `GuideMatch` pairs lineup channels with guide channels; manual choices are
+stored in `files/guide/overrides.json`. Routes: `GET /api/guide/now`, `GET /api/guide`,
+`PUT /api/guide/sources`, `POST /api/guide/refresh`, `GET /api/guide/channels?q=`,
+`GET /api/guide/match/{id}`, `PUT /api/guide/match`.
+
+`YouTubeSuggestions` (ADR-021) signs the TV in with the device flow through `YouTubeAccount` and caches
+subscriptions and live-now. Routes: `GET /api/youtube/account`, `PUT /api/youtube/client`,
+`POST /api/youtube/connect|disconnect`, `GET /api/youtube/suggestions`.
+
