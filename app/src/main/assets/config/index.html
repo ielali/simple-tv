@@ -1899,8 +1899,10 @@ screens.settings = (() => {
     const a = ytAcc;
     const head = $('#ytAccHead'); if (head) head.textContent = ytState(a);
     const pill = $('#ytAccPill'); if (pill) pill.className = 'pill ' + (a.connected ? 'ok' : a.pending ? 'warn' : 'info');
-    const clientLine = a.clientId ? `<div class="cap">Client ID: <span dir="ltr" style="overflow-wrap:anywhere">${esc(a.clientId)}</span> · secret saved on the TV</div>` : '';
-    const form = `<ol class="muted" style="margin:0;padding-inline-start:20px;line-height:22px"><li>In the same Google Cloud project as your YouTube key, set the OAuth consent screen to “In production”.</li><li>Create an OAuth client of the type “TVs and Limited Input devices”.</li><li>Paste its client ID and secret here, then press ${a.connected ? 'Save' : 'Connect'}.</li></ol>
+    // The number before the dash is the Google Cloud project number: it tells which project's sign-in screen Google shows.
+    const projectNo = (a.clientId || '').match(/^(\d+)-/);
+    const clientLine = a.clientId ? `<div class="cap">Client ID: <span dir="ltr" style="overflow-wrap:anywhere">${esc(a.clientId)}</span> · secret saved on the TV${projectNo ? ` · Google Cloud project number <span dir="ltr">${esc(projectNo[1])}</span>` : ''}</div>` : '';
+    const form = `<ol class="muted" style="margin:0;padding-inline-start:20px;line-height:22px"><li>In the same Google Cloud project as your YouTube key, set the OAuth consent screen to “In production”.</li><li>Create an OAuth client of the type “TVs and Limited Input devices”.</li><li>Google's sign-in screen shows the app name and status of the project the client belongs to, shared by every client in that project. If it names another app, the client was made in that app's project.</li><li>Paste its client ID and secret here, then press ${a.connected ? 'Save' : 'Connect'}.</li></ol>
         <label class="field"><span>Client ID</span><span class="inp"><input id="ytCid" value="${esc(a.clientId || '')}" dir="ltr" autocomplete="off" spellcheck="false"></span></label>
         <label class="field"><span>Client secret</span><span class="inp"><input id="ytSec" type="password" placeholder="${a.hasClient ? 'Saved on the TV. Leave empty to keep it' : ''}" dir="ltr" autocomplete="off"></span>${a.hasClient ? '<span class="hint">Leave it empty to keep the saved secret. A different client ID needs its own secret.</span>' : ''}</label>
         ${a.connected ? '<p class="hint">Saving a different client ID signs the TV out of YouTube; connect again afterwards.</p>' : ''}

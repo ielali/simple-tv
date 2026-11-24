@@ -74,13 +74,21 @@ class YouTubeAccount(private val fetcher: TextFetcher, private val poster: FormP
             r.ok && o?.get("access_token").str() != null -> Poll.Signed(o!!["access_token"].str()!!, o["refresh_token"].str(), o["expires_in"].str()?.toIntOrNull() ?: 3600)
             o?.get("error").str() == "authorization_pending" -> Poll.Pending
             o?.get("error").str() == "slow_down" -> Poll.SlowDown
-            o?.get("error").str() == "access_denied" -> Poll.Stop("Sign-in was cancelled on the phone. Try again when you're ready.")
+            o?.get("error").str() == "access_denied" -> Poll.Stop(DENIED)
             o?.get("error").str() == "expired_token" -> Poll.Stop("The code ran out of time. Press Connect for a new one.")
             else -> Poll.Stop(googleError(o, r.code))
         }
     } catch (e: IOException) {
         Poll.Pending // a network blip: keep waiting
     }
+
+    /**
+     * Google says access_denied both when someone presses Cancel and when the client's Google Cloud
+     * project is still "Testing" ("... has not completed the Google verification process").
+     */
+    private val DENIED = "Google refused the sign-in. If it said the app has not completed verification, " +
+        "open the Google Cloud project this client ID belongs to and publish its app (Audience, In production). " +
+        "If you pressed Cancel, press Connect to try again."
 
     /** A fresh access token from the stored refresh token; [Outcome.Problem.signedOut] when Google revoked it. */
     fun refresh(clientId: String, secret: String, refreshToken: String): Outcome<Pair<String, Int>> = call {
@@ -188,7 +196,7 @@ class YouTubeAccount(private val fetcher: TextFetcher, private val poster: FormP
     private fun googleError(o: JsonObject?, code: Int): String = when (o?.get("error").str()) {
         "invalid_client", "unauthorized_client" -> "Google didn't accept the client ID or secret. Use a client of the type \"TVs and Limited Input devices\"."
         "invalid_scope" -> "This kind of Google client can't read YouTube. Use a client of the type \"TVs and Limited Input devices\"."
-        "access_denied" -> "Sign-in was cancelled on the phone. Try again when you're ready."
+        "access_denied" -> DENIED
         else -> if (code == 429) "Google is busy. Try again in a minute." else GENERIC
     }
 
