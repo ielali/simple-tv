@@ -123,26 +123,43 @@ button,input,select{font:inherit;color:inherit}
 .lrow.dropbefore{box-shadow:inset 0 3px 0 var(--primary)}
 .lrow.dropafter{box-shadow:inset 0 -3px 0 var(--primary)}
 .card.cardsview,.phone .card.cardsview,.tablet .card.cardsview{padding:0;background:none;border:0;box-shadow:none}
-.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(172px,1fr));gap:12px}
-.phone .lgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.phone .lgrid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .lcard{position:relative;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;background:var(--card);overflow:hidden;min-width:0}
 .lcard.sel{outline:2px solid var(--primary);outline-offset:-1px}
 .lcard.bad{background:var(--warnbg)}
 .lcard.dragging{opacity:.4}
 .lcard.dropbefore{box-shadow:inset 4px 0 0 var(--primary)}
 .lcard.dropafter{box-shadow:inset -4px 0 0 var(--primary)}
-.lclogo{position:relative;aspect-ratio:16/10;background:var(--tint);display:grid;place-items:center;border-bottom:1px solid var(--line)}
+.lclogo{position:relative;aspect-ratio:16/9;background:var(--tint);display:grid;place-items:center;border-bottom:1px solid var(--line)}
 .lclogo img{position:absolute;left:14%;top:16%;width:72%;height:68%;object-fit:contain}
-.lclogo .ini{font-weight:800;font-size:30px;letter-spacing:.02em;color:var(--muted)}
-.lcnum{position:absolute;top:8px;left:8px;min-width:36px;height:30px;padding:0 8px;border-radius:8px;background:var(--gold);color:#0B1220;font-weight:800;font-size:16px;display:grid;place-items:center}
+.lclogo .ini{font-weight:800;font-size:22px;letter-spacing:.02em;color:var(--muted)}
+.lcnum{position:absolute;top:6px;left:6px;min-width:28px;height:24px;padding:0 6px;border-radius:7px;background:var(--gold);color:#0B1220;font-weight:800;font-size:13px;display:grid;place-items:center}
 .lcnum.playing{box-shadow:0 0 0 3px var(--primary)}
-.lcard .grip{position:absolute;top:6px;right:6px;width:34px;height:34px;border-radius:8px;background:var(--card);border:1px solid var(--line)}
-.lcbody{padding:10px 12px 2px;display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
-.lcbody .nm{font-weight:700;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.lcard .grip{position:absolute;top:4px;right:4px;width:30px;height:30px;border-radius:8px;background:var(--card);border:1px solid var(--line)}
+.lcbody{padding:8px 10px 0;display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;font-size:13px}
+.lcbody .nm{font-weight:700;font-size:14px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 .lcbody .rowsub{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.lcbody .guideline{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.lcact{display:flex;justify-content:flex-end;gap:4px;padding:2px 8px 8px}
+.lcbody .guideline{font-size:12px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.lcact{display:flex;justify-content:flex-end;gap:2px;padding:2px 6px 6px}
+.lcact .ibtn{width:34px;height:34px;min-width:34px}
+.lcbody .badge,.lcbody .pill{font-size:11px}
 .lcpanel{grid-column:1/-1;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.htiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}
+.phone .htiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.htile{display:flex;flex-direction:column;gap:6px;padding:0;border:0;background:none;text-align:start;cursor:pointer;color:inherit;font:inherit;min-width:0;text-decoration:none}
+.htlogo{position:relative;aspect-ratio:16/10;border-radius:12px;border:1px solid var(--line);background:var(--tint);display:grid;place-items:center;overflow:hidden}
+.htile.playing .htlogo{outline:3px solid var(--primary);outline-offset:-2px}
+.htlogo img{position:absolute;left:12%;top:14%;width:76%;height:72%;object-fit:contain}
+.hasimg .ini{visibility:hidden}
+.logo.hasimg{color:transparent}
+.htlogo .ini{font-weight:800;font-size:18px;color:var(--muted)}
+.htnum{position:absolute;top:5px;left:5px;min-width:24px;height:20px;padding:0 5px;border-radius:6px;background:var(--gold);color:#0B1220;font-weight:800;font-size:12px;display:grid;place-items:center}
+.htname{font-size:13px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.htile:hover .htlogo{border-color:var(--primary)}
+.htile:focus-visible{outline:2px solid var(--primary);outline-offset:3px;border-radius:12px}
+.htile:disabled{opacity:.5;cursor:default}
+.tvlogo{width:96px;height:60px;object-fit:contain;border-radius:10px;background:#fff;padding:6px;margin-top:6px}
 body.rowdrag{user-select:none;-webkit-user-select:none;cursor:grabbing}
 body.rowdrag .grip{cursor:grabbing}
 .nm{font-weight:700;font-size:16px;line-height:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -334,7 +351,7 @@ const initials = (name) => {
   if (/[\u0600-\u06FF]/.test(first[0])) return (first[0] === '\u0627' && first[1] === '\u0644' && first.length > 2) ? first[2] : first[0];
   return (words.length > 1 ? first[0] + Array.from(words[1])[0] : first.slice(0, 2).join('')).toUpperCase();
 };
-const logoBox = (name, url) => `<span class="logo">${esc(initials(name))}${url ? `<img src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span>`;
+const logoBox = (name, url) => `<span class="logo">${esc(initials(name))}${url ? `<img src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.parentNode.classList.add('hasimg')" onerror="this.remove()">` : ''}</span>`;
 
 /* ---------- Dates and times, in plain words ---------- */
 const DAY = 86400000;
@@ -753,7 +770,7 @@ function tvCard() {
   const how = n.paused ? 'paused' : n.startedFromApp ? 'started from this app ' + ago(n.since, n.now) : (n.since ? 'on since ' + clock(n.since) : '');
   const queue = !!ch.playlist;
   return `<section class="tvcard" id="tvNow">
-    <div class="tvnum">${ch.number > 0 ? esc(ch.number) : ico('play', 56, 2)}</div>
+    <div class="col" style="align-items:center;flex:none"><div class="tvnum">${ch.number > 0 ? esc(ch.number) : ico('play', 56, 2)}</div>${ch.logoUrl ? `<img class="tvlogo" src="${esc(ch.logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.parentNode.classList.add('hasimg')" onerror="this.remove()">` : ''}</div>
     <div class="grow col g8">
       <div class="cap">ON THE TV NOW</div>
       <div style="font-size:24px;line-height:30px;font-weight:700" dir="auto" class="ell">${esc(ch.name)}</div>
@@ -788,7 +805,7 @@ screens.home = {
     const urgent = subs.map((p) => ({ p, ex: expiry(p.status && p.status.expiresAt) }))
       .filter((x) => x.ex && (x.ex.ended || x.ex.soon)).sort((a, b) => a.ex.t - b.ex.t)[0];
     const host = state.status.configUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
-    const chipsN = currentSize === 'phone' ? 4 : 6;
+    const chipsN = currentSize === 'phone' ? 8 : 11;
     const playingId = state.now && state.now.channel && state.now.channel.id;
     el.innerHTML = `
       ${off ? `<section class="card f g16" style="align-items:flex-start;border-color:var(--warnink)">
@@ -815,10 +832,11 @@ screens.home = {
       <div class="cols">
         <section class="card col g16">
           <div class="f g12"><h2 class="sec grow">Your lineup</h2><span class="pill info">${plural(lineup.length, 'channel')}</span></div>
-          ${lineup.length ? `<div class="chips" aria-label="First channels">
-            ${lineup.slice(0, chipsN).map((c) => `<div class="lchip"><span class="n ${c.id === playingId ? 'playing' : ''}">${esc(c.number)}</span><span dir="auto">${esc(c.name)}</span></div>`).join('')}
-            ${lineup.length > chipsN ? `<span class="pill info" style="align-self:center">+ ${fmtN(lineup.length - chipsN)} more</span>` : ''}
-          </div>` : `<div class="empty"><p class="muted">Nothing on the TV yet. Add your first channel and it appears on the TV straight away.</p></div>`}
+          ${lineup.length ? `<div class="htiles" aria-label="Channels">
+            ${lineup.slice(0, chipsN).map((c) => `<button type="button" class="htile ${c.id === playingId ? 'playing' : ''}" data-hplay="${esc(c.id)}" title="Play ${esc(c.name)} on the TV" ${off ? 'disabled' : ''}><span class="htlogo"><span class="ini" aria-hidden="true">${esc(initials(c.name))}</span>${c.logoUrl ? `<img src="${esc(c.logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.parentNode.classList.add('hasimg')" onerror="this.remove()">` : ''}<span class="htnum">${esc(c.number)}</span></span><span class="htname" dir="auto">${esc(c.name)}</span></button>`).join('')}
+            ${lineup.length > chipsN ? `<a class="htile" href="#/lineup" title="Open lineup"><span class="htlogo"><span class="ini">+${fmtN(lineup.length - chipsN)}</span></span><span class="htname">more</span></a>` : ''}
+          </div>
+          ${off ? '' : '<p class="cap" style="margin-top:-6px">Tap a channel to play it on the TV.</p>'}` : `<div class="empty"><p class="muted">Nothing on the TV yet. Add your first channel and it appears on the TV straight away.</p></div>`}
           <div class="f g8 fw">
             ${flagged ? `<span class="pill warn">${plural(flagged, 'channel needs', 'channels need')} a look</span>` : ''}
             <a class="btn ghost" href="#/lineup">Open lineup</a>
@@ -836,6 +854,7 @@ screens.home = {
       </div>`;
     bindTvCard();
     const r = $('#retry', el); if (r) r.onclick = () => { state.status = null; render(); };
+    $$('[data-hplay]', el).forEach((b) => b.onclick = () => { const c = lineup.find((x) => x.id === b.dataset.hplay); if (c) playOnTv({ channelId: c.id }, c.name); });
     const ra = $('#refreshAll', el);
     if (ra) ra.onclick = async () => {
       try { state.providers = await POST('/api/providers/refresh-all'); toast('Refreshing the channel lists. This can take a minute.'); pollProviders(); this.paint(el); }
@@ -984,7 +1003,7 @@ screens.lineup = (() => {
     const isOpen = open === r.id;
     const changed = (() => { const sv = saved.find((x) => x.id === r.id); return sv && (sv.number !== r.number || sv.name !== r.name); })();
     return `<div class="lcard ${isOpen ? 'sel' : ''} ${flagged ? 'bad' : ''}" data-row="${esc(r.id)}">
-      <div class="lclogo"><span class="ini" aria-hidden="true">${esc(initials(r.name))}</span>${r.logoUrl ? `<img src="${esc(r.logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>
+      <div class="lclogo"><span class="ini" aria-hidden="true">${esc(initials(r.name))}</span>${r.logoUrl ? `<img src="${esc(r.logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onload="this.parentNode.classList.add('hasimg')" onerror="this.remove()">` : ''}</div>
       <div class="lcnum ${playing ? 'playing' : ''}" ${bad ? 'style="box-shadow:0 0 0 2px var(--errink)"' : ''}>${esc(r.number)}</div>
       <div class="grip" title="Drag to move" aria-hidden="true">${ico('grip')}</div>
       <div class="lcbody">
