@@ -103,4 +103,18 @@ class GuideTest {
         assertTrue(GuidePresets.defaultFor("FR").isEmpty())
         assertTrue(GuidePresets.ALL.all { it.url.startsWith("https://") })
     }
+
+    @Test
+    fun `xtream stream id comes from the source id, else from the end of the stream address`() {
+        assertEquals("1234", XtreamGuide.streamId("1234", "http://h/live/u/p/1234.ts"))
+        assertEquals("5678", XtreamGuide.streamId("u0a1b2c3d4e5f6a7b", "http://h:8080/live/u/p/5678.m3u8"))
+        assertEquals("91", XtreamGuide.streamId(null, "http://h/u/p/91"))
+        assertEquals("42", XtreamGuide.streamId(null, "http://h/live/u/p/42.ts?token=abc"))
+        assertEquals(null, XtreamGuide.streamId("uabc", "http://h/stream/news.m3u8"))
+    }
+
+    @Test
+    fun `the provider's whole guide address`() {
+        assertEquals("http://h.example:8080/xmltv.php?username=me&password=p%26w", XtreamApi.xmltvUrl("http://h.example:8080", "me", "p&w"))
+    }
 }

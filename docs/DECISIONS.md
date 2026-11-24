@@ -355,6 +355,11 @@ Consequences: Guides have gaps and wrong ids; free guides can disappear or block
 redistribution rights, so they are a household-level fallback fetched sparingly. The preset guide
 links could not be checked from the build sandbox and need confirming on the TV (backlog item 0).
 
+Update (ADR-022 release): Xtream providers' whole guide (`xmltv.php`) is now a guide source of its
+own, read like the other XMLTV guides and matched by the streams' `epg_channel_id`, for channels
+whose short guide is empty. Channels loaded through the provider's playlist get their stream id
+from the end of their address for the short guide.
+
 ## ADR-021 YouTube suggestions from subscriptions only
 
 Context: The caregiver asked for YouTube suggestions based on watch history and the home page.
@@ -400,6 +405,10 @@ Decision:
   the channel list, previous channel, or nothing (blocked). Buttons with a fixed job (digits,
   arrows, OK, BACK, volume, power, Home, Menu, media keys) cannot take one (`ButtonRoles`).
 - A clock shows beside the banner and in the list header, in the TV's 12- or 24-hour style.
+
+Update: OK while watching a live channel also opens the list, as on most TVs (it used to show the
+banner; OK still ends typed digits, and pauses film and series channels). The list no longer
+depends on which code the Live TV button sends.
 
 Consequences: Rule 1 now allows this one list besides the video and the banner. Which code the
 Kogan remote's Live TV button sends is unconfirmed; the key log shows it. While a YouTube-app

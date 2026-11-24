@@ -11,7 +11,7 @@ This file is the contract for any AI agent working in this repository. Read it f
 
 1. **The viewer never sees a menu.** Every screen the viewer can reach with digits, channel up/down,
    OK, BACK or INFO must be the video or a big banner over it. The one exception is the channel list
-   on the Live TV button (ADR-022): channels by number, big text, no settings, closes by itself.
+   on OK or the Live TV button (ADR-022): channels by number, big text, no settings, closes by itself.
    Settings live behind MENU and are a single read-only overlay showing the config URL.
 2. **The remote is the only input.** No touch, no cursor, no on-screen keyboard for the viewer.
    Volume, mute and power keys must pass through to the system untouched (`TvViewModel.handles`).

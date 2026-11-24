@@ -126,7 +126,7 @@ class TvController(
         GuardKeys.CHANNEL_UP, GuardKeys.DPAD_UP, GuardKeys.PAGE_UP -> { channelUp(); true }
         GuardKeys.CHANNEL_DOWN, GuardKeys.DPAD_DOWN, GuardKeys.PAGE_DOWN -> { channelDown(); true }
         GuardKeys.DPAD_CENTER, GuardKeys.ENTER, GuardKeys.NUMPAD_ENTER -> {
-            if (!tuner.onConfirm()) showBanner()
+            if (!tuner.onConfirm()) openList() // OK while watching opens the channel list, as on most TVs
             true
         }
         GuardKeys.INFO, GuardKeys.GUIDE, GuardKeys.HOME, GuardKeys.TV -> { showBanner(); true }

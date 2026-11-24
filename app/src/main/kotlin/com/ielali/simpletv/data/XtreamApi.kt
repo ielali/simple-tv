@@ -37,6 +37,10 @@ object XtreamApi {
     fun accountUrl(server: String, username: String, password: String): String =
         "${XtreamCodes.baseUrl(server)}/player_api.php?username=${enc(username.trim())}&password=${enc(password)}"
 
+    /** The provider's whole TV guide as XMLTV; it names channels by their epg_channel_id. */
+    fun xmltvUrl(server: String, username: String, password: String): String =
+        "${XtreamCodes.baseUrl(server)}/xmltv.php?username=${enc(username.trim())}&password=${enc(password)}"
+
     fun liveStreamsUrl(server: String, username: String, password: String): String =
         accountUrl(server, username, password) + "&action=get_live_streams"
 

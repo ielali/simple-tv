@@ -93,8 +93,15 @@ class GuideService(
     suspend fun sources(): List<Source> {
         val out = ArrayList<Source>()
         for (p in providers.current().providers) {
+            val ua = "User-Agent" to ProviderLoader.agentsFor(p).first()
+            // Xtream providers publish their whole guide; it names channels by the ids their streams carry.
+            val user = p.username; val pass = p.password
+            if (p.kind == ProviderKind.XTREAM && !user.isNullOrBlank() && !pass.isNullOrEmpty()) {
+                out += Source("xt:${p.id}", "${p.name}'s guide", XtreamApi.xmltvUrl(p.url, user, pass), mapOf(ua), provider = true)
+                continue
+            }
             val url = catalogs.catalog(p.id)?.guideUrl ?: continue
-            out += Source("m3u:${p.id}", "${p.name}'s guide", url, p.authHeaders() + ("User-Agent" to ProviderLoader.agentsFor(p).first()), provider = true)
+            out += Source("m3u:${p.id}", "${p.name}'s guide", url, p.authHeaders() + ua, provider = true)
         }
         for (id in chosenIds()) {
             val preset = GuidePresets.find(id)
@@ -192,7 +199,7 @@ class GuideService(
     }
 
     private fun rebuildIndex() {
-        val all = data.values.sortedBy { if (it.id.startsWith("m3u:")) 0 else 1 }.flatMap { it.channels }
+        val all = data.values.sortedBy { if (it.id.startsWith("m3u:") || it.id.startsWith("xt:")) 0 else 1 }.flatMap { it.channels }
         index = GuideMatch.Index(all)
     }
 
@@ -206,7 +213,7 @@ class GuideService(
             return Match(k, gc?.names?.firstOrNull() ?: gc?.id, gc?.let { data[it.source]?.label }, "override")
         }
         val provider = ch.providerId?.let(providers::find)
-        if (provider?.kind == ProviderKind.XTREAM && ch.sourceId != null && short[ch.id]?.second?.isNotEmpty() != false) {
+        if (provider?.kind == ProviderKind.XTREAM && XtreamGuide.streamId(ch.sourceId, ch.url) != null && short[ch.id]?.second?.isNotEmpty() != false) {
             return Match(null, null, "${provider.name}'s guide", "provider")
         }
         val idx = index ?: return Match()
@@ -230,7 +237,7 @@ class GuideService(
     suspend fun touch(ch: Channel) {
         if (ch.type != SourceType.STREAM || overrides[ch.id] != null) return
         val provider = ch.providerId?.let(providers::find) ?: return
-        val streamId = ch.sourceId ?: return
+        val streamId = XtreamGuide.streamId(ch.sourceId, ch.url) ?: return
         if (provider.kind != ProviderKind.XTREAM) return
         val cached = short[ch.id]
         val at = clock()

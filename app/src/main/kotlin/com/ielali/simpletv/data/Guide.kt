@@ -192,6 +192,16 @@ object XtreamGuide {
 
     private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true }
 
+    /**
+     * The provider's stream id for a channel. Channels loaded through the provider's playlist (when its
+     * API failed) carry a made-up id, but their address ends in the stream id: .../live/user/pass/1234.ts
+     */
+    fun streamId(sourceId: String?, url: String): String? {
+        if (sourceId != null && sourceId.isNotEmpty() && sourceId.all(Char::isDigit)) return sourceId
+        val path = url.substringBefore('?').substringBefore('#')
+        return Regex("""/(\d+)(?:\.[A-Za-z0-9]{1,5})?$""").find(path)?.groupValues?.get(1)
+    }
+
     fun parse(body: String): List<Programme> {
         val root = runCatching { json.parseToJsonElement(body) as? kotlinx.serialization.json.JsonObject }.getOrNull() ?: return emptyList()
         val list = root["epg_listings"] as? kotlinx.serialization.json.JsonArray ?: return emptyList()

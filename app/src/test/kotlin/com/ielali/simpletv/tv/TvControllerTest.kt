@@ -280,4 +280,18 @@ class TvControllerTest {
         assertEquals(null, r.controller.roleOf(GuardKeys.GUIDE))
         assertEquals(com.ielali.simpletv.guard.ButtonRoles.Role.PREVIOUS_CHANNEL, r.controller.roleOf(GuardKeys.BOOKMARK))
     }
+
+    @Test
+    fun `ok while watching opens the channel list, and ends typed digits as before`() = runTest {
+        val r = rig(last = 1)
+        r.controller.onAppVisible(true)
+        r.controller.onRemoteKey(GuardKeys.DPAD_CENTER)
+        assertEquals(0, r.controller.listIndex.value)
+        r.controller.onRemoteKey(GuardKeys.BACK)
+        r.controller.onRemoteKey(GuardKeys.DIGIT_0 + 4)
+        r.controller.onRemoteKey(GuardKeys.DPAD_CENTER)
+        runCurrent()
+        assertFalse(r.controller.isListOpen())
+        assertEquals(4, r.controller.current.value?.number)
+    }
 }
