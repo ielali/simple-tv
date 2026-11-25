@@ -177,6 +177,10 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 ## Done
 
+- Film and series names sit below their posters, and details open in an animated panel under the
+  poster's row instead of a dialog (ADR-030). Checked in headless Chrome against a stand-in for the
+  TV's API, at desktop, tablet and phone sizes; not tried on a real phone.
+
 - The page's preview goes full screen from a button on the picture, and each channel previewed
   keeps a mark under its name in the lineup and in the subscription's list: stream worked, stream
   failed, or not a kind a browser can preview (ADR-029, second update). The TV keeps the marks.
