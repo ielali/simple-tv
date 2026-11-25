@@ -81,6 +81,11 @@ app/src/main/kotlin/com/ielali/simpletv/
   config/ConfigServer.kt  Ktor CIO server on :8080: web UI, PIN sign-in, status, settings, guard
   config/ContentRoutes.kt Lineup, subscriptions, catalog, film channels, YouTube, Play on TV routes
   config/ApiViews.kt      What the page may see: no stream addresses, no passwords (pure, tested)
+  config/PreviewRoutes.kt The page's preview player (ADR-029): token, relay route, the bundled hls.js
+  config/PreviewRelay.kt  Fetches a previewed stream on the TV and passes it on (Android-free, tested)
+  data/HlsRewrite.kt      Pure: swaps every address in an HLS playlist for a made-up name
+  data/PreviewSessions.kt Pure: the one running preview, its token, names and time limits
+  data/PreviewRules.kt    Pure: the TV always wins; when a preview would compete with its stream
   config/PinAuth.kt       PIN rules: 4-6 digits, 5 tries then 5-minute lock, in-memory sessions
   data/Catalog*.kt        Cached catalogs, refresh service and schedule, queries, lineup flags
   data/PlaylistQueue.kt   Film/series queue rules (pure); data/QueuePlayback.kt plays and resumes
@@ -106,6 +111,8 @@ app/src/main/kotlin/com/ielali/simpletv/
   data/SettingsMerge.kt   Partial PUT /api/settings; also sanitizes blocked keys
 app/src/main/assets/config/index.html   Caregiver web UI (vanilla JS, one file, no build step);
                                         built from docs/design/handoff/Main.dc.html
+app/src/main/assets/config/hls.min.js   hls.js 1.7.4 for the page's preview player (ADR-029), as
+                                        published; its licence is beside it
 tools/tv-admin.sh                       adb admin: status, install, guard-on/off, stock, debloat, restore
 tools/tv-playback.py                    adb measurements: past freezes on the TV, stream shapes,
                                         provider timings, a model of the player's buffering (ADR-028);

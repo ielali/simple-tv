@@ -755,3 +755,73 @@ stays unless the evening check shows such freezes.
 
 Not adopted: OkHttp or Cronet instead of the platform HTTP stack (no measured gain yet), MPEG-TS
 instead of HLS (faster first picture, but a stream with nothing behind it). See backlog item 15.
+
+## ADR-029 A preview player in the page's channel list: the TV relays, and the TV always wins
+
+Context: The caregiver wants to see a channel from the page, without walking to the TV or taking it
+over with Play on TV. Three things stand in the way. A stream's address holds the subscription's
+username and password, and the page must never see one (ADR-015). Only Safari plays HLS by itself;
+other browsers need a player library. And the household's main subscription reports one stream at a
+time (`max_connections = 1`; the two M3U ones report nothing), so a second stream while the TV is
+watching may stop the TV's picture.
+
+Decision:
+- The TV relays. `POST /api/preview` gives the page a random 128-bit token, never an address.
+  `/preview/<token>/<name>` asks the TV for what is behind a made-up name: a playlist comes back
+  with every address in it swapped for more made-up names (`HlsRewrite`; a tag that still holds an
+  address is dropped), anything else is passed on byte for byte as it arrives. Redirects are
+  followed on the TV, the channel's own User-Agent is used, and a failure never carries the
+  provider's answer. The token is in the path because a video element cannot send the page's
+  sign-in; only a signed-in page gets one, and it dies with the preview.
+- One preview at a time (`PreviewSessions`). It ends when the page closes it, after 3 minutes, when
+  the browser has asked for nothing for 30 s, when another preview starts, or when the TV needs it.
+- The TV always wins (`PreviewRules`). No preview of the channel the TV's own player holds, nor of
+  another channel of the same subscription when that allows fewer than two streams. With no limit
+  known, the same server is taken as the same account; two subscriptions are two accounts; a channel
+  added by its link goes by its server. What the TV "holds" is the channel on screen and the one in
+  its channel list's preview window, while Telly is on the screen: in standby a live channel has let
+  go (ADR-028). A running preview ends the moment the TV tunes into such a conflict
+  (`ConfigServer` watches `TvController`), and the window says why.
+- The player is hls.js 1.7.4 (Apache-2.0, licence beside it in the assets), bundled and served by
+  the TV, loaded on the first preview. The full build: the light one leaves out HEVC and AC-3 in
+  MPEG-TS, which providers use. A browser without Media Source Extensions (older iPhones) uses its
+  own player. Its settings are the ones the TV's player ended up with (ADR-028): three segments
+  behind live and no offset of our own, half a minute loaded and no more, 10 s kept behind. The
+  relay uses the same 8 s timeouts. Sound plays when the browser allows it, else the preview is
+  silent and a sound button says so.
+- Nobody watching means no stream: closing the window, leaving the lineup, hiding the page and the
+  3 minutes all let go of it.
+- YouTube channels use YouTube's own embedded player in the caregiver's browser (rule 6), with no
+  relay. Film and series channels are not previewed: their files are often MKV, which browsers do not
+  play, and Play on TV is there.
+- On the page: an eye button on each live and YouTube channel in the lineup, list and cards. The
+  window sits beside the list on a wide screen, like the TV's own channel list, in the bottom corner
+  on a narrower one and above the tab bar on a phone; the list keeps room so no channel stays behind
+  it.
+
+Checked on 25 November 2026, on the development Mac, not on the TV:
+- 33 new unit tests, among them the routes end to end on a real server engine with a provider on a
+  local socket: the redirect, the rewritten playlist, a segment byte for byte, the refusals, the
+  end reasons, and that nothing the page receives holds the address.
+- The page's own preview code in headless Chrome 158, against the relay and a fake live provider
+  rolling a real segment of the provider's (H.264 High 1080p25, AAC). It asked for seg2202, seg2203
+  and seg2204 of a playlist 2200 to 2204, the same three the TV's player asks for (ADR-028). The
+  picture was there within a second of asking. It held 20 to 30 s loaded, reread the playlist
+  every 10 s and fetched one new segment each time. When the TV "tuned", the window said so
+  within a second (the page asks every 5 s) and the provider was asked for nothing more. A preview
+  was refused while the TV was on, and played again after. With sound on autoplay refused, it
+  played silently.
+- Screenshots of the real page at 1440, 1280, 1180, 900 and 390 px wide.
+
+Consequences and what is not known:
+- Not run on the TV yet (backlog 0b): the relay on Android with the real provider, an iPhone, and
+  Safari's own player.
+- How the provider counts streams is unknown. A preview that ended a moment before the TV tunes may
+  still count for a few seconds; the TV's player would show the tuning card and try again.
+- A previewed stream crosses the TV's Wi-Fi twice, in from the provider and out to the phone. On a
+  weak network that could disturb what the TV is playing from another subscription.
+- The app grows by about 0.6 MB (the library, before compression).
+
+Not adopted: the browser fetching from the provider itself (it would need the address, and most
+providers send no CORS headers), the light build of the library, a preview with no time limit, and
+letting the caregiver override the TV.

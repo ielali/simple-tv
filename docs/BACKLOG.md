@@ -38,6 +38,19 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
      that evening alone; keep `--min-seconds` at 20 as for the other runs. If channels freeze right
      after they start, raise `START_AFTER_MS` in `PlaybackEngine` from 1 s towards 2.5 s and measure
      again (`tools/tv-playback.py model --settings now,start2.5` gives a first idea).
+0b. **Check the page's preview player on the TV (ADR-029).** Not run on a TV yet. From a phone and
+   from a laptop, on the lineup, with `adb logcat -s SimpleTvPlayback` running:
+   - TV in standby or on a YouTube channel: press the eye on a live channel. Note how long the
+     picture takes, whether it has sound, and that it stops by itself after 3 minutes. Try an iPhone
+     (Safari uses its own player there) and a laptop browser.
+   - While it plays, switch the TV on to a live channel of the same subscription. The window should
+     say the TV is using the subscription. Note in ADR-029 whether the TV shows the tuning card
+     longer than its usual 3 s or logs `ERROR_CODE_IO_BAD_HTTP_STATUS`: that is the provider still
+     counting the preview.
+   - TV on a live channel of the one-stream subscription: the eye should refuse, in words, and the
+     TV's log should show no error.
+   - TV on a live channel, preview a YouTube channel and a channel of another subscription: watch
+     the TV's log for freezes while the preview plays (the stream crosses the TV's Wi-Fi twice).
 1. **First device run.** Build `assembleDebug`, sideload on an Android TV box, confirm: app opens
    fullscreen, empty state shows the config URL, config page loads from a phone, adding an HLS
    channel plays. Record device, Android version and remote model in DEPLOYMENT.md.
@@ -149,6 +162,11 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- A preview player in the page's channel list (ADR-029): the eye on a live or YouTube channel plays
+  it in a window on the page. Live channels come through the TV under a random token, so the page
+  never sees an address; the TV always wins when it needs the subscription; the player is set as the
+  TV's own (ADR-028). Checked in a desktop browser against a fake provider. Device check: item 0b.
 
 - The corner clock has no box behind it and is smaller; the page chooses Off, Small or Large
   (ADR-024). It was too large on the Kogan and covered part of the picture. Not yet seen on a TV.

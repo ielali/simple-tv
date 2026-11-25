@@ -35,6 +35,18 @@ class YouTubeEmbedTest {
     }
 
     @Test
+    fun `the page's preview uses YouTube's player with its controls and the page's own origin`() {
+        assertEquals("https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0&playsinline=1", YouTubeEmbed.previewUrl(Target.Video("dQw4w9WgXcQ")))
+        assertEquals(
+            "https://www.youtube.com/embed/live_stream?channel=UCupvZG-5ko_eiXAupbDfxWw&autoplay=1&rel=0&playsinline=1",
+            YouTubeEmbed.previewUrl(Target.ChannelLive("UCupvZG-5ko_eiXAupbDfxWw")),
+        )
+        val list = YouTubeEmbed.previewUrl(Target.Playlist("PL123"))
+        assertEquals("https://www.youtube.com/embed/videoseries?list=PL123&autoplay=1&rel=0&playsinline=1", list)
+        assertTrue(listOf("controls=0", "origin=").none { list.contains(it) })
+    }
+
+    @Test
     fun `watch url targets the youtube app`() {
         assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ", YouTubeEmbed.watchUrl(Target.Video("dQw4w9WgXcQ")))
         assertEquals(

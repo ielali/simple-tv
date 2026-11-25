@@ -288,6 +288,33 @@ details[open] summary svg{transform:rotate(90deg)}
 .ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .spin{width:18px;height:18px;border-radius:999px;border:2px solid currentColor;border-inline-end-color:transparent;animation:rot .8s linear infinite;flex:none}
 @keyframes rot{to{transform:rotate(360deg)}}
+/* Preview player (ADR-029): a window over the channel list. Beside the list on a wide screen, above the
+   tab bar on a phone; the list keeps room so no channel stays hidden behind it. */
+.pv{position:fixed;inset-inline-end:24px;bottom:24px;width:320px;max-width:calc(100vw - 32px);background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 32px rgba(10,10,20,.28);overflow:hidden;z-index:40}
+.pvscreen{position:relative;aspect-ratio:16/9;background:#000}
+.pvscreen video,.pvscreen iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:#000}
+.pvnote{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;color:#F2F4F8;background:rgba(11,18,32,.86);font-weight:600}
+.pvnote .btn{background:var(--gold);color:#0B1220;border-color:transparent}
+.pvbar{display:flex;align-items:center;gap:10px;padding:8px 8px 8px 12px}
+.pvnum{min-width:40px;height:40px;padding:0 6px;border-radius:10px;background:var(--navy);color:var(--gold);display:grid;place-items:center;font-size:20px;font-weight:800;flex:none;font-variant-numeric:tabular-nums}
+.ibtn.pvon{background:var(--primary);color:var(--onp);border-color:transparent}
+body.pvopen .content{padding-bottom:320px}
+@media (min-width:1240px){
+  .pv{top:112px;bottom:auto;inset-inline-end:40px}
+  body.pvopen .content{padding-bottom:48px;padding-inline-end:384px}
+}
+@media (min-width:1360px){
+  .pv{width:400px}
+  body.pvopen .content{padding-inline-end:464px}
+}
+@media (max-width:819px){
+  .pv{inset-inline:8px;width:auto;max-width:none;bottom:calc(72px + env(safe-area-inset-bottom))}
+  /* Three buttons on a phone's row: smaller and closer, so the channel's name keeps its room. */
+  .lrow{gap:8px}
+  .lrow .grip{width:24px}
+  .lrow .ibtn{width:38px;height:38px}
+  .lrow .ibtn+.ibtn{margin-inline-start:-6px}
+}
 .qitem{display:flex;align-items:center;gap:12px;padding:10px 4px;min-height:56px}
 .qitem .i{width:28px;text-align:center;flex:none}
 .rbadge{display:inline-flex;align-items:center;min-height:22px;padding:0 7px;border:1.5px solid currentColor;border-radius:6px;font-weight:800;font-size:12px;line-height:1;white-space:nowrap}
@@ -356,6 +383,9 @@ const IC = {
   close: 'M6 6l12 12M18 6L6 18',
   right: 'M9 6l6 6-6 6',
   pencil: 'M4 20h4L19 9l-4-4L4 16z',
+  eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+  sound: 'M4 9v6h4l5 4V5L8 9zM16.5 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11',
+  mute: 'M4 9v6h4l5 4V5L8 9zM16 9.5l5 5M21 9.5l-5 5',
 };
 const ico = (name, size = 20, sw = 1.8) =>
   `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${IC[name]}"/></svg>`;
@@ -664,11 +694,203 @@ function errorCard(e, retry = 'location.reload()') {
   return `<section class="card f g16" style="align-items:flex-start"><div class="icobox warn">${ico('alert', 22)}</div><div class="grow col g12"><div><h2 class="sec">${e && e.status === 0 ? "Your TV isn't answering" : 'Something went wrong'}</h2><p class="muted">${esc(e && e.message)}</p></div><div><button class="btn pri" onclick="${retry}">Try again</button></div></div></section>`;
 }
 
+/* ---------- Preview player (ADR-029) ---------- */
+/*
+ * A channel from the list plays here, in a window over the page. A live channel comes through the TV
+ * under a random name, so this page never learns a stream's address; a YouTube channel uses YouTube's
+ * own player. The player is set the way the TV's own ended up (ADR-028): start three segments behind
+ * live with no offset of our own, keep half a minute loaded, and let go of the stream as soon as nobody
+ * is watching. The TV always wins: it refuses a preview that competes with what it is playing, and
+ * ends one when it needs the subscription; the window then says why.
+ */
+const preview = (() => {
+  let cur = null; // the preview on screen: { id, name, number, token, hls, video, tick, endsAt, over }
+  let lib = null;
+  const PLAYER = {
+    liveSyncDurationCount: 3, // where the TV starts: three segments behind live
+    lowLatencyMode: false, // no shorter start of our own
+    maxBufferLength: 30, // loading never pauses below half a minute ahead…
+    maxMaxBufferLength: 30, // …and stops there: this is a short look, often on a phone
+    backBufferLength: 10, // what has played is dropped
+  };
+  const WHY = {
+    tv_needs_it: 'The TV is playing from this subscription now, so the preview stopped.',
+    timed_out: 'The preview has ended. It stops after a few minutes so the stream stays free for the TV.',
+    hidden: 'The preview stopped while this page was out of sight.',
+    nosignal: 'This channel isn’t playing right now.',
+    offline: "Couldn't reach the TV.",
+    ended: 'The preview stopped.',
+  };
+  /** The player library for browsers that cannot play live TV by themselves; served by the TV, loaded on first use. */
+  function library() {
+    if (window.Hls) return Promise.resolve(window.Hls);
+    if (!lib) {
+      lib = new Promise((ok, bad) => {
+        const s = document.createElement('script');
+        s.src = '/hls.min.js';
+        s.onload = () => ok(window.Hls);
+        s.onerror = () => { lib = null; s.remove(); bad(new Error('player')); };
+        document.head.appendChild(s);
+      });
+    }
+    return lib;
+  }
+  const isOn = (id) => !!cur && cur.id === id;
+  function markRows() { $$('[data-preview]').forEach((b) => b.classList.toggle('pvon', isOn(b.dataset.preview))); }
+  function note(text, busy, again) {
+    const el = $('#pvNote'); if (!el) return;
+    el.classList.toggle('hide', !text);
+    el.innerHTML = text ? `${busy ? '<span class="spin" style="width:28px;height:28px"></span>' : ''}<span>${esc(text)}</span>${again ? '<button class="btn" type="button" id="pvAgain">Play again</button>' : ''}` : '';
+    const b = $('#pvAgain', el); if (b) b.onclick = () => { const p = cur; if (p) start(p); };
+  }
+  function sub(text) { const el = $('#pvSub'); if (el) el.textContent = text; }
+  function soundButton() {
+    const b = $('#pvSound'); const v = cur && cur.video; if (!b || !v) return;
+    b.innerHTML = ico(v.muted ? 'mute' : 'sound', 20);
+    b.setAttribute('aria-label', v.muted ? 'Turn the sound on' : 'Turn the sound off');
+    b.title = v.muted ? 'Sound is off' : 'Sound is on';
+    b.classList.toggle('pvon', v.muted);
+  }
+  /** The window itself, outside the list so redrawing the list never restarts the picture. */
+  function open(p, youtube) {
+    let el = $('#pv');
+    if (!el) { el = document.createElement('section'); el.id = 'pv'; el.className = 'pv'; el.setAttribute('aria-label', 'Preview'); document.body.appendChild(el); }
+    el.innerHTML = `<div class="pvscreen">${youtube ? `<iframe src="${esc(youtube)}" title="${esc(p.name)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>` : '<video playsinline></video>'}<div class="pvnote hide" id="pvNote" role="status"></div></div>
+      <div class="pvbar"><div class="pvnum">${p.number > 0 ? esc(p.number) : ico('play', 18, 2)}</div>
+        <div class="grow"><div class="nm" dir="auto">${esc(p.name)}</div><div class="cap" id="pvSub">${youtube ? 'YouTube · playing here, not on the TV' : 'Preview · playing here, not on the TV'}</div></div>
+        ${youtube ? '' : '<button class="ibtn" type="button" id="pvSound"></button>'}
+        <button class="ibtn" type="button" id="pvClose" aria-label="Close the preview" title="Close">${ico('close', 20)}</button></div>`;
+    $('#pvClose', el).onclick = stop;
+    const sb = $('#pvSound', el); if (sb) sb.onclick = () => { const v = cur && cur.video; if (v) { v.muted = !v.muted; soundButton(); } };
+    document.body.classList.add('pvopen');
+  }
+  /** Lets go of the player and its stream; the window stays to say why. */
+  function release(p) {
+    if (p.tick) { clearInterval(p.tick); p.tick = null; }
+    if (p.hls) { try { p.hls.destroy(); } catch (e) { /* already gone */ } p.hls = null; }
+    if (p.video) { try { p.video.pause(); p.video.removeAttribute('src'); p.video.load(); } catch (e) { /* already gone */ } }
+  }
+  function tellTv(p) {
+    if (!p.token || p.told) return;
+    p.told = true;
+    // keepalive: also sent when the page is closing.
+    fetch('/api/preview/' + p.token, { method: 'DELETE', keepalive: true, headers: state.token ? { Authorization: 'Bearer ' + state.token } : {} }).catch(() => {});
+  }
+  function over(p, why) {
+    if (cur !== p || p.over) return;
+    p.over = true;
+    release(p);
+    if (why === 'hidden' || why === 'nosignal') tellTv(p);
+    note(WHY[why] || WHY.ended, false, why !== 'tv_needs_it');
+    sub('Preview ended');
+  }
+  /** The picture stopped: ask the TV whether it ended the preview, and say what it says. */
+  async function stopped(p) {
+    if (cur !== p || p.over || p.asking) return;
+    p.asking = true;
+    let st = null;
+    try { st = await GET('/api/preview/' + p.token); } catch (e) { if (e.status === 401) { stop(); return; } }
+    p.asking = false;
+    over(p, !st ? 'offline' : st.active ? 'nosignal' : st.ended);
+  }
+  function everySecond(p) {
+    if (cur !== p || p.over) return;
+    const left = Math.max(0, Math.ceil((p.endsAt - Date.now()) / 1000));
+    sub(`Preview · stops in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`);
+    p.beat = (p.beat || 0) + 1;
+    // Every few seconds, and when the time is up: has the TV ended it?
+    if (left === 0 || p.beat % 5 === 0) {
+      GET('/api/preview/' + p.token).then((st) => { if (!st.active) over(p, st.ended); }).catch((e) => { if (e.status === 401) stop(); });
+    }
+  }
+  async function playLive(p, url) {
+    const v = p.video = $('#pv video');
+    if (!v) return;
+    v.addEventListener('playing', () => { if (cur === p && !p.over) note(null); });
+    v.addEventListener('waiting', () => { if (cur === p && !p.over) note('Loading…', true); });
+    let Hls = null;
+    try { Hls = await library(); } catch (e) { /* Safari plays live TV by itself */ }
+    if (cur !== p || p.over) return;
+    // With sound when the browser allows it; otherwise silent, and the sound button says so.
+    const go = () => {
+      if (cur !== p || p.over) return;
+      const playing = v.play();
+      if (playing && playing.catch) {
+        playing.catch((e) => {
+          if (cur !== p || p.over || !e || e.name !== 'NotAllowedError') return;
+          v.muted = true; v.play().catch(() => {}); soundButton();
+        });
+      }
+    };
+    v.muted = false;
+    if (Hls && Hls.isSupported()) {
+      const hls = p.hls = new Hls(PLAYER);
+      hls.on(Hls.Events.MANIFEST_PARSED, go);
+      hls.on(Hls.Events.ERROR, (_, d) => {
+        if (cur !== p || !d.fatal) return;
+        // One try at carrying on after a decoding slip; the player retries what it could not load by itself.
+        if (d.type === Hls.ErrorTypes.MEDIA_ERROR && !p.recovered) { p.recovered = true; hls.recoverMediaError(); return; }
+        stopped(p);
+      });
+      hls.loadSource(url);
+      hls.attachMedia(v);
+    } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
+      v.addEventListener('error', () => stopped(p));
+      v.src = url;
+      go();
+    } else {
+      p.over = true;
+      tellTv(p);
+      note('This browser can’t play live TV here. Try Safari or Chrome.', false);
+      sub('No preview');
+      return;
+    }
+    soundButton();
+    p.tick = setInterval(() => everySecond(p), 1000);
+  }
+  async function start(ch) {
+    stop();
+    const p = cur = { id: ch.id, name: ch.name, number: ch.number };
+    open(p, null);
+    note('Asking the TV…', true);
+    markRows();
+    let s;
+    try { s = await POST('/api/preview', { channelId: ch.id }); } catch (e) {
+      if (cur !== p) return;
+      if (e.status === 401) { stop(); return; }
+      p.over = true;
+      note(e.status === 0 ? "Couldn't reach the TV." : e.message, false, e.status !== 404);
+      sub(e.body && e.body.code === 'tv' ? 'The TV comes first' : 'No preview');
+      return;
+    }
+    if (s.kind === 'hls') p.token = s.url.split('/')[2];
+    // Closed while the TV was answering: tell it, unless another preview has taken its place there.
+    if (cur !== p) { if (!cur) tellTv(p); return; }
+    if (s.kind === 'youtube') { open(p, s.embed); return; }
+    p.endsAt = Date.now() + (s.seconds || 180) * 1000;
+    note('Loading…', true);
+    playLive(p, s.url);
+  }
+  function stop() {
+    const p = cur; cur = null;
+    if (p) { release(p); if (!p.over) tellTv(p); }
+    const el = $('#pv'); if (el) el.remove();
+    document.body.classList.remove('pvopen');
+    markRows();
+  }
+  // Out of sight means nobody is watching: let go of the stream.
+  document.addEventListener('visibilitychange', () => { if (document.hidden && cur && cur.token && !cur.over) over(cur, 'hidden'); });
+  window.addEventListener('pagehide', () => { if (cur) tellTv(cur); });
+  return { isOn, stop, toggle(ch) { if (isOn(ch.id)) stop(); else start(ch); } };
+})();
+
 /* ---------- Render loop ---------- */
 const screens = {};
 let renderSeq = 0;
 async function render() {
   parseRoute();
+  // The preview belongs to the channel list: leaving the list closes it and lets go of its stream.
+  if (route.name !== 'lineup') preview.stop();
   const seq = ++renderSeq;
   route.hashShown = location.hash || '#/home';
   if (route.name === 'first') { await screens.first.render(seq); return; }
@@ -990,6 +1212,11 @@ screens.lineup = (() => {
     loadGuideNow(true).then(paintGuide);
     paint();
   }
+  /** "Preview here": live and YouTube channels play in a window on this page (ADR-029); films play on the TV only. */
+  function previewButton(r) {
+    if (r.type !== 'STREAM' && r.type !== 'YOUTUBE') return '';
+    return `<button class="ibtn ${preview.isOn(r.id) ? 'pvon' : ''}" data-preview="${esc(r.id)}" aria-label="Preview ${esc(r.name)} on this page" title="Preview here">${ico('eye', 18)}</button>`;
+  }
   function rowHtml(r, bad) {
     const playing = state.now && state.now.channel && state.now.channel.id === r.id;
     const flagged = r.flag;
@@ -1005,6 +1232,7 @@ screens.lineup = (() => {
         ${flagged ? `<div class="flag">${ico('alert', 14)}${esc(FLAG_TEXT[flagged] || '')}</div>` : ''}
         ${r.type === 'STREAM' ? `<div class="guideline" data-guide="${esc(r.id)}">${guideLine(r.id)}</div>` : ''}
       </div>
+      ${previewButton(r)}
       <button class="ibtn bd" data-play="${esc(r.id)}" aria-label="Play ${esc(r.name)} on the TV" title="Play on TV" ${changed || r.id.startsWith('new') ? '' : ''}>${ico('play', 18)}</button>
       <button class="ibtn" data-edit="${esc(r.id)}" aria-label="Edit ${esc(r.name)}" aria-expanded="${isOpen}" title="Edit">${ico(isOpen ? 'close' : 'pencil', 18)}</button>
     </div>
@@ -1145,6 +1373,7 @@ screens.lineup = (() => {
         ${r.type === 'STREAM' ? `<div class="guideline" data-guide="${esc(r.id)}">${guideLine(r.id)}</div>` : ''}
       </div>
       <div class="lcact">
+        ${previewButton(r)}
         <button class="ibtn bd" data-play="${esc(r.id)}" aria-label="Play ${esc(r.name)} on the TV" title="Play on TV">${ico('play', 18)}</button>
         <button class="ibtn" data-edit="${esc(r.id)}" aria-label="Edit ${esc(r.name)}" aria-expanded="${isOpen}" title="Edit">${ico(isOpen ? 'close' : 'pencil', 18)}</button>
       </div>
@@ -1191,6 +1420,7 @@ screens.lineup = (() => {
     $$('[data-edit]', el).forEach((b) => b.onclick = () => { open = open === b.dataset.edit ? null : b.dataset.edit; paint(); const i = $(`[data-panel="${CSS.escape(b.dataset.edit)}"] input[data-f="name"]`); if (i) i.focus(); });
     if (open && $(`[data-gmatch="${CSS.escape(open)}"]`)) { if (matches[open]) paintMatch(open); else loadMatch(open); }
     $$('[data-play]', el).forEach((b) => b.onclick = () => { const r = byId(b.dataset.play); playOnTv({ channelId: r.id }, r.name); });
+    $$('[data-preview]', el).forEach((b) => b.onclick = () => preview.toggle(byId(b.dataset.preview)));
     $$('[data-panel] input[data-f]', el).forEach((inp) => {
       inp.addEventListener('input', () => {
         const r = byId(inp.closest('[data-panel]').dataset.panel);

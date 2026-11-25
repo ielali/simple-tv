@@ -6,8 +6,10 @@ import com.ielali.simpletv.SimpleTvApp
 import com.ielali.simpletv.data.FetchErrors
 import com.ielali.simpletv.data.HttpFetcher
 import com.ielali.simpletv.data.M3uParser
+import com.ielali.simpletv.data.PreviewSessions
 import com.ielali.simpletv.data.ProviderLoader
 import com.ielali.simpletv.data.SettingsMerge
+import com.ielali.simpletv.data.playsOnSimpleTv
 import com.ielali.simpletv.guard.GuardBridge
 import com.ielali.simpletv.guard.ButtonRoles
 import com.ielali.simpletv.guard.GuardKeys
@@ -41,6 +43,8 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -69,6 +73,20 @@ class ConfigServer(
 
     private val auth = PinAuth()
     private val content = ContentRoutes(app)
+
+    /** The preview player in the page's channel list (ADR-029). */
+    private val preview = PreviewRoutes(
+        channels = { app.channels.current().channels },
+        // What Telly's own player holds: the channel on screen and, with the list open, the one in its window.
+        onTv = {
+            if (app.tv.appVisible.value) listOfNotNull(app.tv.current.value, app.tv.listChannel()).filter { it.playsOnSimpleTv }
+            else emptyList()
+        },
+        streamLimit = { app.catalogs.status(it).maxConnections },
+        asset = { appContext.assets.open(it) },
+        userAgent = ProviderLoader.DEFAULT_USER_AGENT,
+    )
+    private var tvWatch: Job? = null
 
     @Serializable
     data class ErrorBody(val error: String, val code: String? = null)
@@ -362,10 +380,15 @@ class ConfigServer(
                     call.respond(ImportResult(parsed.size, updated.channels.size))
                 }
                 with(content) { install() }
+                with(preview) { install() }
             }
         }.also {
             runCatching { it.start(wait = false) }
                 .onFailure { e -> Log.e(TAG, "Config server failed to start on port $port", e) }
+        }
+        // The TV always wins: a preview ends the moment the TV's player needs its subscription.
+        tvWatch = app.appScope.launch {
+            combine(app.tv.current, app.tv.appVisible, app.tv.listIndex) { _, _, _ -> }.collect { preview.tvChanged() }
         }
         Log.i(TAG, "Config server listening on ${NetworkAddress.configUrl(appContext, port)}")
     }
@@ -415,6 +438,9 @@ class ConfigServer(
     }
 
     fun stop() {
+        tvWatch?.cancel()
+        tvWatch = null
+        preview.sessions.end(PreviewSessions.Ended.CLOSED)
         engine?.stop(500, 1000)
         engine = null
     }

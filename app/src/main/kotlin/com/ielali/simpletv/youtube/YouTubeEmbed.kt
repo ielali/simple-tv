@@ -87,6 +87,19 @@ object YouTubeEmbed {
         }
     }
 
+    /**
+     * YouTube's own player for the config page's preview (ADR-029), in the caregiver's browser: with
+     * its controls, and without the TV's stand-in origin (the browser sends the page's real one).
+     */
+    fun previewUrl(target: Target): String {
+        val params = "autoplay=1&rel=0&playsinline=1"
+        return when (target) {
+            is Target.Video -> "https://www.youtube.com/embed/${target.id}?$params"
+            is Target.ChannelLive -> "https://www.youtube.com/embed/live_stream?channel=${target.channelId}&$params"
+            is Target.Playlist -> "https://www.youtube.com/embed/videoseries?list=${target.listId}&$params"
+        }
+    }
+
     /** The link Simple TV stores for a playlist channel: where to start and whether to shuffle. */
     fun playlistSource(listId: String, startVideo: String?, shuffle: Boolean): String =
         (if (startVideo != null) "https://www.youtube.com/watch?v=$startVideo&list=$listId" else "https://www.youtube.com/playlist?list=$listId") +
