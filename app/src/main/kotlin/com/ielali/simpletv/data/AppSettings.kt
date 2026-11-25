@@ -19,6 +19,10 @@ enum class YouTubePlayback {
     YOUTUBE_APP,
 }
 
+/** How big the corner clock is on the TV: 32sp or 48sp. */
+@Serializable
+enum class ClockSize { SMALL, LARGE }
+
 @Serializable
 data class AppSettings(
     val youtubePlayback: YouTubePlayback = YouTubePlayback.EMBEDDED,
@@ -34,6 +38,8 @@ data class AppSettings(
     val previousButtons: List<Int> = emptyList(),
     /** A clock in the top corner while watching (ADR-024). */
     val showClock: Boolean = true,
+    /** The corner clock's size, chosen on the page. */
+    val clockSize: ClockSize = ClockSize.SMALL,
     /** Language of Simple TV's screens: "" follows the device, else a key of TvLanguage.SUPPORTED. */
     val language: String = TvLanguage.SYSTEM,
     /** When the TV refreshes every subscription's catalog each day, "HH:mm" in the TV's time zone. */

@@ -60,6 +60,7 @@ data class TvUiState(
     /** Until when the home guard is paused (0 = not paused). */
     val guardPausedUntil: Long = 0L,
     val showClock: Boolean = true,
+    val clockSize: com.ielali.simpletv.data.ClockSize = com.ielali.simpletv.data.ClockSize.SMALL,
 )
 
 enum class TvHint { CONTROLS, SKIPPED }
@@ -132,6 +133,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             queueEmpty = values[17] as QueueEmpty?,
             guardPausedUntil = (values[6] as com.ielali.simpletv.data.AppSettings).let { if (it.guardEnabled) it.guardPausedUntil else 0L },
             showClock = (values[6] as com.ielali.simpletv.data.AppSettings).showClock,
+            clockSize = (values[6] as com.ielali.simpletv.data.AppSettings).clockSize,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, TvUiState())
 

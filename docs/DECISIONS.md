@@ -521,10 +521,13 @@ page scrolls (faster closer to the edge) and more channels are shown as it reach
 Lineup also has a card view (List / Cards, remembered per device): each channel's logo large, or
 its initials, with number, name, type and what's on; cards can be dragged and edited too.
 
-Update (25 November 2026): The corner clock is 32sp in a box that only just holds it, about a third
-of the area it had at 48sp. It stays over the picture all the time, and at 48sp it was too large on
-the Kogan. It keeps the corner opposite the banner: top left when the TV language is Arabic, top
-right in English, so the two never overlap. The clock in the channel list's header stays 48sp.
+Update (25 November 2026): The corner clock has no box behind it. It stays over the picture all the
+time, and at 48sp in a dark box it was too large on the Kogan and covered part of the picture. The
+time is now drawn straight on the picture, with a dark edge around each digit and a soft shadow so
+it reads over a bright scene; it hides only what its digits cover. The page chooses Off, Small
+(32sp, the default) or Large (48sp) (`AppSettings.clockSize`). The clock keeps the corner opposite
+the banner: top left when the TV language is Arabic, top right in English, so the two never
+overlap. The clock in the channel list's header is unchanged (48sp, on the list's own background).
 
 Not adopted: Back as "previous channel" (it stays close/cancel; previous channel goes on a spare
 button the caregiver chooses), keeping channel up/down to live channels only (film channels stay

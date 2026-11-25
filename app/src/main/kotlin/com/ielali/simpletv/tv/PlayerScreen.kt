@@ -31,6 +31,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -70,6 +74,7 @@ import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
 import com.ielali.simpletv.R
 import com.ielali.simpletv.data.Channel
+import com.ielali.simpletv.data.ClockSize
 import com.ielali.simpletv.data.NowNext
 import com.ielali.simpletv.data.SourceType
 import com.ielali.simpletv.data.playsOnSimpleTv
@@ -80,6 +85,7 @@ import com.ielali.simpletv.youtube.YouTubeEmbed
 private val BannerBg = Color(0xCC0B1220)
 private val Accent = Color(0xFFFFC857)
 private val Fg = Color(0xFFF2F4F8)
+private val ClockEdge = Color(0xFF0B1220)
 
 @UnstableApi
 @Composable
@@ -167,8 +173,8 @@ private fun PlayerBody(state: TvUiState, vm: TvViewModel) {
             )
         }
         // The time in the corner while watching (it can be turned off on the page); over YouTube's player
-        // only with the banner, in the room the player leaves for it. It stays over the picture, so it is
-        // small: 32sp, the least text on the TV may be, in a box that only just holds it.
+        // only with the banner, in the room the player leaves for it. It stays over the picture, so it has
+        // no box behind it and hides only what its own digits cover; the page chooses its size.
         val clockOn = state.channels.isNotEmpty() && !listOpen && !state.settingsVisible && state.pendingDigits.isEmpty() &&
             (bannerOn || (state.showClock && !ytEmbed && !cardShown))
         AnimatedVisibility(
@@ -176,11 +182,8 @@ private fun PlayerBody(state: TvUiState, vm: TvViewModel) {
             enter = fadeIn(), exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopEnd),
         ) {
-            Box(
-                Modifier.padding(horizontal = 48.dp, vertical = 32.dp).background(BannerBg, RoundedCornerShape(10.dp))
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-            ) {
-                Clock(fontSize = 32)
+            Box(Modifier.padding(horizontal = 48.dp, vertical = 32.dp)) {
+                Clock(fontSize = if (state.clockSize == ClockSize.LARGE) 48 else 32, onPicture = true)
             }
         }
 
@@ -492,9 +495,13 @@ private fun ListRow(channel: Channel, highlighted: Boolean, watching: Boolean) {
     }
 }
 
-/** The time in the TV's own 12- or 24-hour style, turning over on the minute. */
+/**
+ * The time in the TV's own 12- or 24-hour style, turning over on the minute. [onPicture] is for the
+ * clock that sits straight on the picture with no box behind it: a dark edge around each digit and a
+ * soft shadow keep it readable over a bright scene.
+ */
 @Composable
-private fun Clock(fontSize: Int) {
+private fun Clock(fontSize: Int, onPicture: Boolean = false) {
     val ctx = LocalContext.current
     val fmt = remember { android.text.format.DateFormat.getTimeFormat(ctx) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -504,7 +511,23 @@ private fun Clock(fontSize: Int) {
             now = System.currentTimeMillis()
         }
     }
-    Text(fmt.format(java.util.Date(now)), color = Fg, fontSize = fontSize.sp, fontWeight = FontWeight.Bold)
+    val time = fmt.format(java.util.Date(now))
+    if (!onPicture) {
+        Text(time, color = Fg, fontSize = fontSize.sp, fontWeight = FontWeight.Bold)
+        return
+    }
+    // The edge is a stroke centred on each digit's outline; the digits drawn on top cover its inner half.
+    val edge = with(LocalDensity.current) { fontSize.sp.toPx() } * 0.14f
+    Box {
+        Text(
+            time, color = ClockEdge, fontSize = fontSize.sp, fontWeight = FontWeight.Bold,
+            style = LocalTextStyle.current.copy(
+                drawStyle = Stroke(width = edge, join = StrokeJoin.Round),
+                shadow = Shadow(color = Color.Black.copy(alpha = 0.6f), blurRadius = edge),
+            ),
+        )
+        Text(time, color = Fg, fontSize = fontSize.sp, fontWeight = FontWeight.Bold)
+    }
 }
 
 @Composable

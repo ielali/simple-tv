@@ -45,6 +45,22 @@ class SettingsMergeTest {
     }
 
     @Test
+    fun `the clock is small until the page asks for large, and other changes leave it alone`() {
+        assertEquals(ClockSize.SMALL, AppSettings().clockSize)
+        val large = SettingsMerge.merge(AppSettings(), patch("""{"showClock": true, "clockSize": "LARGE"}"""))
+        assertEquals(ClockSize.LARGE, large.clockSize)
+        val hidden = SettingsMerge.merge(large, patch("""{"showClock": false}"""))
+        assertEquals(false, hidden.showClock)
+        assertEquals(ClockSize.LARGE, hidden.clockSize)
+    }
+
+    @Test
+    fun `settings saved before the clock had a size still load`() {
+        val old = Json { ignoreUnknownKeys = true }.decodeFromString(AppSettings.serializer(), """{"showClock": false, "language": "ar"}""")
+        assertEquals(AppSettings(showClock = false, language = "ar"), old)
+    }
+
+    @Test
     fun `negative pause is clamped`() {
         assertEquals(0L, SettingsMerge.merge(AppSettings(), patch("""{"guardPausedUntil": -5}""")).guardPausedUntil)
     }

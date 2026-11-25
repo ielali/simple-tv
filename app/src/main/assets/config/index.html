@@ -2360,6 +2360,7 @@ screens.settings = (() => {
     const el = $('#content'); if (!el || route.name !== 'settings') return;
     const s = S(); const st = state.status; const theme = store.get('stv.theme', 'system');
     const lang = s.language || '';
+    const clockNow = s.showClock === false ? 'off' : (s.clockSize === 'LARGE' ? 'LARGE' : 'SMALL');
     const host = st.configUrl;
     const adv = store.get('stv.settingsAdvanced', false);
     el.innerHTML = `<div class="g2">
@@ -2369,7 +2370,8 @@ screens.settings = (() => {
           <div class="seg full" role="radiogroup">${[['', 'Same as the TV'], ['en', 'English'], ['ar', 'العربية']].map(([k, l]) => `<button data-lang="${k}" class="${lang === k ? 'on' : ''}" role="radio" aria-checked="${lang === k}" ${k === 'ar' ? 'lang="ar" dir="rtl"' : ''}>${l}</button>`).join('')}</div>
           <p class="hint">Changes the words on the TV screen, like the channel banner. This page stays in English.</p></section>
         <section class="card col g12"><h2 class="sec">On the TV</h2>
-          <div class="f g12"><div class="grow"><div style="font-weight:600" id="clockH">Clock in the corner</div><div class="cap">The time stays in the top corner while watching.</div></div><button class="sw ${s.showClock !== false ? 'on' : ''}" id="clockSw" role="switch" aria-checked="${s.showClock !== false}" aria-labelledby="clockH"></button></div>
+          <div class="col g8"><div><div style="font-weight:600" id="clockH">Clock in the corner</div><div class="cap">The time over the top corner of the picture while watching. It has no box behind it, so it covers very little.</div></div>
+            <div class="seg full" role="radiogroup" aria-labelledby="clockH">${[['off', 'Off'], ['SMALL', 'Small'], ['LARGE', 'Large']].map(([k, l]) => `<button data-clock="${k}" class="${clockNow === k ? 'on' : ''}" role="radio" aria-checked="${clockNow === k}">${l}</button>`).join('')}</div></div>
           <p class="cap">${s.hideAdult !== false ? 'Adult films are left out of film channels.' : 'Adult films are not filtered.'} <a href="#/settings" id="toRatings">Change in Advanced</a></p></section>
         <section class="card col g12"><h2 class="sec">How YouTube plays</h2>
           ${[['EMBEDDED', 'Inside Telly', 'Simplest. Shows ads, and doesn’t use any account.'], ['YOUTUBE_APP', 'In the YouTube app', 'Uses the account signed in on the TV. With Premium there are no ads. Up and down still change channel.']].map(([k, t, d]) => `<button class="opt ${s.youtubePlayback === k ? 'on' : ''}" data-yt="${k}" role="radio" aria-checked="${s.youtubePlayback === k}"><span class="radio"></span><div><div style="font-weight:600">${t}</div><div class="muted">${d}</div></div></button>`).join('')}
@@ -2425,7 +2427,9 @@ screens.settings = (() => {
     bind(el);
     const advEl = $('details.advanced', el); if (advEl) advEl.ontoggle = () => store.set('stv.settingsAdvanced', advEl.open);
     const tr = $('#toRatings', el); if (tr) tr.onclick = (e) => { e.preventDefault(); if (advEl) { advEl.open = true; store.set('stv.settingsAdvanced', true); } const rc = $('#tmdbKey') || advEl; if (rc) rc.scrollIntoView({ block: 'center' }); };
-    const cs = $('#clockSw', el); if (cs) cs.onclick = () => setSetting({ showClock: !(s.showClock !== false) }, s.showClock !== false ? 'The clock is hidden.' : 'The clock shows in the corner.');
+    $$('[data-clock]', el).forEach((b) => b.onclick = () => (b.dataset.clock === 'off'
+      ? setSetting({ showClock: false }, 'The clock is hidden.')
+      : setSetting({ showClock: true, clockSize: b.dataset.clock }, b.dataset.clock === 'LARGE' ? 'The clock shows large in the corner.' : 'The clock shows small in the corner.')));
     const er = $('#eraseAll', el); if (er) er.onclick = async () => {
       if (!(await dialog({ title: 'Erase everything on this TV?', text: 'All channels, subscriptions, keys, the YouTube sign-in and the PIN are deleted from the TV. This can’t be undone.', ok: 'Erase everything', danger: true }))) return;
       if (!(await dialog({ title: 'Are you sure?', text: 'Telly will start again as new, with no channels.', ok: 'Yes, erase it', danger: true }))) return;
