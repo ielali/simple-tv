@@ -127,6 +127,10 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
     Needs Robolectric as a test dependency (its own commit) and a small synthetic MPEG-TS segment in
     test resources (not a recording of a real channel); adds about half a minute to the unit tests.
 
+- **Check the page by name (ADR-032).** Open `http://telly.local:8080` from an iPhone, an Android phone
+  and a Windows laptop; with the TV in standby for an hour; after the router restarts; and watch one
+  refused trailer there.
+
 ## Later
 
 - TV guide: a fuller "what's on later" list per channel on the page, and the YouTube live video's
@@ -176,6 +180,11 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- The config page also opens as `http://telly.local:8080`, answered by the TV over mDNS (ADR-032).
+
+- A trailer YouTube refuses to play on the page offers Watch on YouTube and Trailer on the TV instead
+  of YouTube's "This video is unavailable" (ADR-031).
 
 - Film and series names sit below their posters, and details open in an animated panel under the
   poster's row instead of a dialog (ADR-030). Checked in headless Chrome against a stand-in for the

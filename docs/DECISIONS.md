@@ -942,3 +942,45 @@ Decision:
 Not adopted: a gradient behind the title (it hides the poster's own name and says it twice), a side
 drawer (half the width on a tablet, a dialog again on a phone) and a page of its own (the
 caregiver loses their place in the list).
+
+## ADR-031 A trailer YouTube refuses on the page is offered on YouTube or on the TV
+
+Context: "Watch the trailer here" sometimes showed YouTube's "This video is unavailable". Of 13 cached
+trailers, 4 were refused in a page opened by an IP address, and all 13 played in the same page opened
+as localhost. The refused ones also played from a page named `telly.local` (name mapped in the browser
+for the test). Their owners do not allow embedding on a bare address, which is how caregivers open
+the config page.
+The player host (youtube.com or youtube-nocookie.com) and the `origin` parameter made no difference.
+
+Decision: the page listens to the embedded player's messages (`enablejsapi=1`, no script from Google)
+and on an error replaces the player with a sentence and two buttons, Watch on YouTube and Trailer on
+the TV. The referrer policy is written on the frame, since the player gives error 153 without one.
+Safari will not start a player inside another page with sound, whatever was pressed in the page. When
+the player is still idle 2 s after it is ready, it is started without sound and the page shows Turn the sound on.
+
+Not adopted: claiming another site as the page's origin, and a page on a public site that embeds the
+trailer (the household's choices would leave the house). Opening the page by a name is ADR-032.
+
+## ADR-032 The TV answers to telly.local
+
+Context: YouTube refuses some trailers on a page opened by a bare IP address, and plays them on one
+opened by a name (ADR-031). The address also changes when the router hands out a new one.
+
+Decision: a small mDNS responder (`MdnsMessage`, `MdnsResponder`) answers questions about one name,
+`telly.local`, with the TV's IPv4 address. It asks first and takes `telly-2.local` and so on when
+another device has the name, up to `telly-5.local`; then it does without for ten minutes. Two TVs that
+took one at the same moment settle it by address, and a device that keeps claiming it (more than five
+times in a minute) gets it. When the address changes or the name is given up, a goodbye makes devices
+drop the old one. A change is noticed within about 2 s and announced after 1.5 s of asking. The TV screen and QR code
+keep the IP address, since not every device finds such names. The page mentions the name where it
+helps, when a trailer is refused, and asks the TV for it then.
+
+Consequences: the app holds a Wi-Fi multicast lock (the box is on mains power). It shares port 5353
+with Android's own mDNS. A browser treats the name as another site, so the PIN is entered once there.
+
+Not adopted: Android's `NsdManager` (it advertises services, under a host name it makes up) and JmDNS
+(a library of service discovery for one address record).
+
+Port 80, to drop `:8080` from the address, is not possible: Android refuses ports below 1024 to an
+app without root (on the Kogan `ip_unprivileged_port_start` is 1024 and a bind as Telly's user got
+"Permission denied"), and browsers do not look up a port from a name for http.

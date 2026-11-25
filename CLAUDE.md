@@ -100,6 +100,8 @@ app/src/main/kotlin/com/ielali/simpletv/
   data/MetadataService.kt Caches details per subscription, checks film channels' ratings in the background
   youtube/YouTubeLookup.kt YouTube link preview (oEmbed, optional Data API key)
   config/NetworkAddress.kt LAN IP discovery
+  config/MdnsMessage.kt   Pure: reads and writes the mDNS packets for telly.local, picks the name (ADR-032)
+  config/MdnsResponder.kt Answers for telly.local on the home network (Android-free)
   config/QrCode.kt        ZXing wrapper: URL -> module matrix (pure JVM)
   tv/QrCodeView.kt        Compose canvas renderer for the QR matrix
   boot/BootReceiver.kt    Start on boot (re-enables the guard first; its exemption allows the start)

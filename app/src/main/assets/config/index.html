@@ -288,8 +288,11 @@ details.limits>summary::-webkit-details-marker{display:none}
 .fptrailer{position:relative;display:none;background:#000;aspect-ratio:16/9;max-height:78vh;width:100%}
 .fptrailer iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .fpbox.playing .fptrailer{display:block}
+.fptrailer.refused{aspect-ratio:auto}
+.fpsorry{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;min-height:240px;padding:24px;text-align:center;color:#fff}
+.fpsorry p{margin:0;max-width:46ch}
 .fpbox.playing .fpbody,.fpbox.playing .fpart,.fpbox.playing .fpglow,.fpbox.playing .fptools{display:none}
-.fpbar{display:none;padding:8px 12px}
+.fpbar{display:none;flex-wrap:wrap;gap:8px;padding:8px 12px}
 .fpbox.playing .fpbar{display:flex}
 .fpin>*{animation:fpup .45s cubic-bezier(.22,1,.36,1) both}
 .fpin>:nth-child(2){animation-delay:.05s}.fpin>:nth-child(3){animation-delay:.1s}.fpin>:nth-child(4){animation-delay:.15s}.fpin>:nth-child(n+5){animation-delay:.2s}
@@ -2387,15 +2390,62 @@ const filmPanel = (() => {
       step((e.key === 'ArrowRight') === (getComputedStyle(c.el).direction !== 'rtl') ? 1 : -1);
     }
   });
+  function emptyTrailer(box) { const t = $('.fptrailer', box); t.innerHTML = ''; t.classList.remove('refused'); $('[data-sound]', box).classList.add('hide'); }
+  /**
+   * Follows YouTube's player over its own message API (no script of Google's). [refused]: it reported an
+   * error; some owners refuse pages opened by a bare address such as 192.168.0.79 (ADR-031). [quiet]:
+   * the browser let it start only without sound, as Safari does for a player inside another page.
+   */
+  function follow(frame, refused, quiet) {
+    const origin = 'https://www.youtube-nocookie.com';
+    const tell = (m) => frame.contentWindow.postMessage(JSON.stringify({ id: 1, channel: 'widget', ...m }), origin);
+    const command = (func) => tell({ event: 'command', func, args: [] });
+    let loaded = false, at = -1, played = false, blockedT = 0;
+    const done = () => { removeEventListener('message', hear); clearInterval(asking); clearTimeout(blockedT); };
+    const hear = (e) => {
+      if (!frame.isConnected) { done(); return; }
+      if (e.source !== frame.contentWindow || e.origin !== origin) return;
+      clearInterval(asking);
+      let m; try { m = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch (x) { return; }
+      if (!m) return;
+      if (m.event === 'onError') { done(); refused(Number(m.info)); return; }
+      if (m.event === 'infoDelivery' && m.info && typeof m.info.playerState === 'number') {
+        at = m.info.playerState;
+        if (at === 1) { played = true; clearTimeout(blockedT); }
+      }
+      // Never started and not loading (unstarted, paused or cued): the browser refused sound. Without it, it may start.
+      if (m.event === 'onReady' && !played) blockedT = setTimeout(() => {
+        if (!frame.isConnected || played || ![-1, 2, 5].includes(at)) return;
+        command('mute'); command('playVideo');
+        quiet(() => { command('unMute'); command('playVideo'); });
+      }, 2000);
+    };
+    // The player answers only once it has loaded, so it is asked until it does.
+    const asking = setInterval(() => { if (!frame.isConnected) done(); else if (loaded) tell({ event: 'listening' }); }, 250);
+    frame.addEventListener('load', () => { loaded = true; });
+    addEventListener('message', hear);
+  }
+  /**
+   * Opened by a bare address: most refused trailers play when the page is opened by the TV's name
+   * (ADR-032). Asked for now: the TV may have taken or given up a name since the page opened.
+   */
+  async function offerName(box) {
+    if (!/^[\d.]+$/.test(location.hostname)) return;
+    const sorry = $('.fpsorry', box);
+    try { state.status = await GET('/api/status'); } catch (e) { return; }
+    const named = state.status.nameUrl;
+    if (!named || !sorry.isConnected || !cur || cur.box !== box) return;
+    reveal(resize(box, () => $('p', sorry).insertAdjacentHTML('afterend', `<p>It may play here if you open this page as <a href="${esc(named)}" style="color:inherit;font-weight:700">${esc(named.replace('http://', ''))}</a> instead. You will enter the PIN again there. If that doesn't open, your device can't find the TV by name: come back to this address.</p>`)));
+  }
   function stopTrailer(box) {
-    resize(box, () => { box.classList.remove('playing'); $('.fptrailer', box).innerHTML = ''; });
+    resize(box, () => { box.classList.remove('playing'); emptyTrailer(box); });
     const w = $('[data-watch]', box); if (w) w.focus({ preventScroll: true });
   }
   function build() {
     const el = document.createElement('section');
     el.className = 'fp'; el.id = 'filmPanel';
     el.innerHTML = `<div class="fpbox"><div class="fpglow"></div><div class="fpart"></div><div class="fpbody"></div>
-      <div class="fptrailer"></div><div class="fpbar"><button type="button" class="btn" data-back>Back to the details</button></div>
+      <div class="fptrailer"></div><div class="fpbar"><button type="button" class="btn" data-back>Back to the details</button><button type="button" class="btn pri hide" data-sound>${ico('sound', 18)}Turn the sound on</button></div>
       <div class="fptools"><button type="button" class="flip" aria-label="Previous title">${ico('right', 20)}</button><button type="button" class="fwd" aria-label="Next title">${ico('right', 20)}</button><button type="button" class="fpx" aria-label="Close">${ico('close', 20)}</button></div></div>`;
     $('.flip', el).onclick = () => step(-1); $('.fwd', el).onclick = () => step(1); $('.fpx', el).onclick = () => close();
     const box = $('.fpbox', el); $('[data-back]', el).onclick = () => stopTrailer(box);
@@ -2424,7 +2474,7 @@ const filmPanel = (() => {
     $$('.flip,.fwd', el).forEach((b) => { b.style.display = o.host ? 'none' : ''; });
     refresh();
     (o.host ? $('.fpx', el) : o.opener).focus({ preventScroll: true });
-    box.classList.remove('playing'); $('.fptrailer', box).innerHTML = '';
+    box.classList.remove('playing'); emptyTrailer(box);
     const [name, year] = nameYear({ name: o.name });
     $('.fpglow', el).style.backgroundImage = o.art ? `url("${String(o.art).replace(/["\\\n]/g, encodeURIComponent)}")` : '';
     const art = $('.fpart', el); art.classList.remove('ok'); art.innerHTML = '';
@@ -2466,15 +2516,36 @@ const filmPanel = (() => {
       </div>
       ${d.fromTmdb ? `<p class="cap">Details from TMDB${d.matchedByTitle ? ', matched by title and year' : ''}. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>` : ''}`;
     const m = $('[data-main]', rest); if (m) m.onclick = () => { close(false); o.action.run(d); };
+    const watch = 'https://www.youtube.com/watch?v=' + encodeURIComponent(d.trailer || '');
+    const onTv = () => playOnTv({ youtube: watch, name: d.title + ' (trailer)' }, 'The trailer');
     const w = $('[data-watch]', rest);
     if (w) w.onclick = () => {
       const h = resize(box, () => {
         box.classList.add('playing');
-        $('.fptrailer', box).innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(d.trailer)}?autoplay=1&rel=0" title="Trailer" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+        $('.fptrailer', box).innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(d.trailer)}?autoplay=1&rel=0&playsinline=1&enablejsapi=1" title="Trailer" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+      });
+      follow($('.fptrailer iframe', box), (code) => {
+        if (!cur || cur.box !== box) return; // the panel is closing
+        // 101 and 150: not on this page (YouTube says 150 for a missing video too); 153: no referrer; 100: removed.
+        const why = code === 100 ? 'YouTube says this trailer is no longer there.' : [101, 150, 153].includes(code)
+          ? "YouTube won't play this trailer on this page. You can still watch it on YouTube or on the TV."
+          : "The trailer couldn't be played here. Try it on YouTube or on the TV.";
+        const again = resize(box, () => {
+          $('[data-sound]', box).classList.add('hide');
+          const t = $('.fptrailer', box); t.classList.add('refused');
+          t.innerHTML = `<div class="fpsorry" role="alert"><p>${esc(why)}</p>
+            <div class="f fw g8" style="justify-content:center"><a class="btn pri" href="${esc(watch)}" target="_blank" rel="noopener noreferrer">Watch on YouTube ${ico('right', 16)}</a><button type="button" class="btn" data-tv2>${ico('tv', 18)}Trailer on the TV</button></div></div>`;
+          $('[data-tv2]', t).onclick = onTv;
+        });
+        reveal(again);
+        if ([101, 150].includes(code)) offerName(box);
+      }, (soundOn) => {
+        const b = $('[data-sound]', box); b.classList.remove('hide');
+        b.onclick = () => { soundOn(); b.classList.add('hide'); };
       });
       reveal(h); $('[data-back]', box).focus({ preventScroll: true });
     };
-    const t = $('[data-tv]', rest); if (t) t.onclick = () => playOnTv({ youtube: 'https://www.youtube.com/watch?v=' + d.trailer, name: d.title + ' (trailer)' }, 'The trailer');
+    const t = $('[data-tv]', rest); if (t) t.onclick = onTv;
   }
   return { toggle, close, refresh, keep };
 })();

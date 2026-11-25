@@ -117,6 +117,8 @@ class ConfigServer(
         val channelCount: Int,
         val providerCount: Int,
         val configUrl: String,
+        /** The page by name, such as http://telly.local:8080, while the TV answers to one. */
+        val nameUrl: String? = null,
         val pinSet: Boolean,
         val hasYoutubeKey: Boolean,
         val hasTmdbKey: Boolean = false,
@@ -250,6 +252,7 @@ class ConfigServer(
             channelCount = channels,
             providerCount = providers,
             configUrl = NetworkAddress.configUrl(appContext, port),
+            nameUrl = app.configNameUrl(),
             pinSet = pinSet(),
             hasYoutubeKey = !app.secrets.current().youtubeApiKey.isNullOrEmpty(),
             hasTmdbKey = app.meta.hasKey(),
