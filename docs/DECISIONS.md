@@ -955,6 +955,8 @@ The player host (youtube.com or youtube-nocookie.com) and the `origin` parameter
 Decision: the page listens to the embedded player's messages (`enablejsapi=1`, no script from Google)
 and on an error replaces the player with a sentence and two buttons, Watch on YouTube and Trailer on
 the TV. The referrer policy is written on the frame, since the player gives error 153 without one.
+Safari will not start a player inside another page with sound, whatever was pressed in the page. When
+the player is still idle 2 s after it is ready, it is started without sound and the page shows Turn the sound on.
 
 Not adopted: claiming another site as the page's origin, and a page on a public site that embeds the
 trailer (the household's choices would leave the house). Opening the page by a name is ADR-032.
@@ -975,3 +977,7 @@ with Android's own mDNS. A browser treats the name as another site, so the PIN i
 
 Not adopted: Android's `NsdManager` (it advertises services, under a host name it makes up) and JmDNS
 (a library of service discovery for one address record).
+
+Port 80, to drop `:8080` from the address, is not possible: Android refuses ports below 1024 to an
+app without root (on the Kogan `ip_unprivileged_port_start` is 1024 and a bind as Telly's user got
+"Permission denied"), and browsers do not look up a port from a name for http.
