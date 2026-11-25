@@ -167,7 +167,8 @@ private fun PlayerBody(state: TvUiState, vm: TvViewModel) {
             )
         }
         // The time in the corner while watching (it can be turned off on the page); over YouTube's player
-        // only with the banner, in the room the player leaves for it.
+        // only with the banner, in the room the player leaves for it. It stays over the picture, so it is
+        // small: 32sp, the least text on the TV may be, in a box that only just holds it.
         val clockOn = state.channels.isNotEmpty() && !listOpen && !state.settingsVisible && state.pendingDigits.isEmpty() &&
             (bannerOn || (state.showClock && !ytEmbed && !cardShown))
         AnimatedVisibility(
@@ -175,8 +176,11 @@ private fun PlayerBody(state: TvUiState, vm: TvViewModel) {
             enter = fadeIn(), exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopEnd),
         ) {
-            Box(Modifier.padding(48.dp).background(BannerBg, RoundedCornerShape(16.dp)).padding(horizontal = 32.dp, vertical = 16.dp)) {
-                Clock(fontSize = 48)
+            Box(
+                Modifier.padding(horizontal = 48.dp, vertical = 32.dp).background(BannerBg, RoundedCornerShape(10.dp))
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+            ) {
+                Clock(fontSize = 32)
             }
         }
 

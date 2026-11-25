@@ -150,6 +150,9 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 
 ## Done
 
+- The corner clock is smaller: 32sp in a tight box, about a third of the area it had (ADR-024). It
+  was too large on the Kogan. Not yet seen on a TV.
+
 - A live channel lets go of its stream when the TV goes to standby or another app is in front, and
   tunes again from live when Telly is back; films keep their place (ADR-028). It came back from
   standby playing half a minute of hours-old video and then froze. Device check: item 0a.
