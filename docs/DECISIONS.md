@@ -930,10 +930,13 @@ Decision:
 - Details open in a panel across the grid, under the row of the chosen poster. The poster travels
   from the grid into the panel, the row opens, and the text follows over the backdrop. Another poster
   moves the same panel. Previous/Next buttons and the arrow keys go through the list; Esc closes
-  (from the trailer, it goes back to the details). "About this series" uses the same panel.
+  (from the trailer, it goes back to the details). Keys typed in a search box or a field are left to it. "About this
+  series" uses the same panel at the top of the series channel's screen, outside the form, which is
+  drawn again on every change: a trailer keeps playing.
 - The grid uses dense packing, so the panel follows its poster in the page (reading and tab order)
   and the browser finds the row, also after a resize. More posters are added after the ones shown
   instead of drawing the list again, so a trailer keeps playing.
+- There is only ever one panel: a title chosen while it closes takes over the closing one.
 - All of it is CSS and the Web Animations API, with no library. Reduced motion gets no movement.
 
 Not adopted: a gradient behind the title (it hides the poster's own name and says it twice), a side

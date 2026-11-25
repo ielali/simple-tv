@@ -281,7 +281,9 @@ details.limits>summary::-webkit-details-marker{display:none}
 .fptools button{width:44px;height:44px;padding:0;border-radius:999px;border:0;background:rgba(14,20,32,.72);color:#F2F4F8;display:grid;place-items:center}
 .fptools button:hover{background:rgba(60,72,94,.9)}
 .fptools button:disabled{opacity:.35;cursor:default}
-.fptools .flip svg{transform:scaleX(-1)}
+.fptools .flip svg,[dir="rtl"] .fptools .fwd svg{transform:scaleX(-1)}
+[dir="rtl"] .fptools .flip svg{transform:none}
+#seriesPanel:empty{display:none}
 .fp .skel{background:rgba(255,255,255,.14)}
 .fptrailer{position:relative;display:none;background:#000;aspect-ratio:16/9;max-height:78vh;width:100%}
 .fptrailer iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
@@ -297,10 +299,13 @@ details.limits>summary::-webkit-details-marker{display:none}
 @container (min-width:620px){
   .fpbody{grid-template-columns:200px minmax(0,1fr);grid-template-rows:auto 1fr;gap:16px 28px;padding:28px;min-height:356px}
   .fpbody>.poster{grid-row:1/3}
+  /* Physical on purpose: a title's own direction (dir=auto) must not move the gap off the buttons. */
   .fphead h3::before{content:"";float:right;width:140px;height:34px}
+  [dir="rtl"] .fphead h3::before{float:left}
   .fprest{grid-column:2}
   .fp .fphead h3{font-size:28px;line-height:33px}
   .fpart{height:auto;inset-inline-start:34%;-webkit-mask-image:linear-gradient(90deg,transparent,#000 70%);mask-image:linear-gradient(90deg,transparent,#000 70%)}
+  [dir="rtl"] .fpart{-webkit-mask-image:linear-gradient(270deg,transparent,#000 70%);mask-image:linear-gradient(270deg,transparent,#000 70%)}
 }
 .thumb{aspect-ratio:16/9;background:var(--navy) center/cover no-repeat;border-radius:14px;display:grid;place-items:center;position:relative;color:#F2F4F8;overflow:hidden}
 .thumb .live{position:absolute;inset-inline-start:10px;top:10px;background:var(--gold);color:#0B1220;font-weight:800;font-size:11px;padding:2px 8px;border-radius:6px}
@@ -1899,6 +1904,7 @@ screens.add = (() => {
     grid.insertAdjacentHTML('beforeend', cat.items.slice(have).map(posterTile).join(''));
     const line = $('#catMore', el); if (line) line.innerHTML = moreLine('moreItems', cat.loadingMore, cat.items.length, cat.total, unit()[1]);
     infinite('catalog', 'moreItems', () => loadItems(true));
+    filmPanel.refresh();
     return true;
   }
   function paintItems() {
@@ -2267,7 +2273,7 @@ function posterHtml(it, cls = '') {
 }
 // Art shows once it has loaded; art that fails leaves the plain tile. (load and error don't bubble.)
 document.addEventListener('load', (e) => { const p = e.target.tagName === 'IMG' && e.target.closest('.poster,.fpart'); if (p) p.classList.add('ok'); }, true);
-document.addEventListener('error', (e) => { if (e.target.tagName === 'IMG' && e.target.closest('.poster,.fpart')) e.target.remove(); }, true);
+document.addEventListener('error', (e) => { const p = e.target.tagName === 'IMG' && e.target.closest('.poster,.fpart'); if (p) { p.classList.remove('ok'); e.target.remove(); } }, true);
 /** A title without the year its provider put at the end, and the year, so it is said once. */
 function nameYear(it) {
   const m = /^(.+?)\s*[([]((?:19|20)\d\d)[)\]]\s*$/.exec(it.name || '');
@@ -2280,6 +2286,7 @@ function nameYear(it) {
  */
 const filmPanel = (() => {
   let cur = null; // { el, box, o }
+  let closing = null; // the same, while its closing animation runs
   let seq = 0;
   let scrollRun = 0;
   const EASE = 'cubic-bezier(.22,1,.36,1)';
@@ -2301,8 +2308,10 @@ const filmPanel = (() => {
     const run = ++scrollRun; const { el, o } = cur;
     const room = innerHeight - (currentSize === 'phone' ? 100 : 16);
     const top = el.getBoundingClientRect().top;
-    const down = Math.max(0, Math.min(top + height - room, (o.host ? top : o.opener.getBoundingClientRect().top) - 16));
-    if (down < 1) return;
+    const first = (o.host ? top : o.opener.getBoundingClientRect().top) - 16;
+    const need = Math.min(top + height - room, first);
+    const down = o.host && first < 0 ? first : Math.max(0, need); // a hosted panel may open above the screen
+    if (Math.abs(down) < 1) return;
     if (still()) { scrollBy(0, down); return; }
     const stop = () => { scrollRun++; };
     addEventListener('wheel', stop, { once: true, passive: true }); addEventListener('touchstart', stop, { once: true, passive: true });
@@ -2334,11 +2343,24 @@ const filmPanel = (() => {
     const { el, box, o } = cur; cur = null; seq++; scrollRun++;
     o.opener.setAttribute('aria-expanded', 'false');
     $$('.fpfly').forEach((x) => x.remove());
-    if (focus) o.opener.focus({ preventScroll: true });
+    if (focus) o.opener.focus({ preventScroll: !o.host });
     if (still()) { el.remove(); return; }
-    el.inert = true;
-    box.animate([{ height: box.getBoundingClientRect().height + 'px', opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 260, easing: 'ease-in-out', fill: 'forwards' }).onfinish = () => el.remove();
+    el.inert = true; closing = { el, box, o };
+    box.animate([{ height: box.getBoundingClientRect().height + 'px', opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 260, easing: 'ease-in-out', fill: 'forwards' }).onfinish = () => { el.remove(); if (closing && closing.el === el) closing = null; };
     if (!o.host) el.animate([{ marginTop: '0px' }, { marginTop: '-20px' }], { duration: 260, easing: 'ease-in-out', fill: 'forwards' });
+  }
+  /** Previous and Next follow the posters on screen, which grow as the list scrolls. */
+  function refresh() {
+    const c = live(); if (!c) return;
+    const all = tiles(c.o); const i = all.indexOf(c.o.opener);
+    $('.flip', c.el).disabled = i <= 0; $('.fwd', c.el).disabled = i === all.length - 1;
+  }
+  /** After a redraw around a hosted panel: its new button, or close when that title is no longer there. */
+  function keep(opener, id) {
+    const c = live(); if (!c || !c.o.host) return;
+    if (!opener || c.o.id !== id) { close(false); return; }
+    c.o.opener = opener;
+    opener.setAttribute('aria-expanded', 'true'); opener.setAttribute('aria-controls', 'filmPanel');
   }
   function step(by) {
     const c = live(); if (!c || c.o.host) return;
@@ -2352,9 +2374,18 @@ const filmPanel = (() => {
   }
   document.addEventListener('keydown', (e) => {
     const c = live(); if (!c || $('#dialogs').children.length) return;
-    if (e.key === 'Escape') { if (c.box.classList.contains('playing')) stopTrailer(c.box); else close(); return; }
-    if (c.box.classList.contains('playing') || !(c.el.contains(e.target) || e.target === c.o.opener)) return;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); step(e.key === 'ArrowRight' ? 1 : -1); }
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return; // Alt+Left is the browser's own Back
+    const near = c.el.contains(e.target) || e.target === c.o.opener;
+    // Escape in a search box or another field belongs to that field.
+    if (e.key === 'Escape' && (near || e.target === document.body || e.target.closest('.postergrid'))) {
+      if (c.box.classList.contains('playing')) stopTrailer(c.box); else close();
+      return;
+    }
+    if (!near || c.o.host || c.box.classList.contains('playing')) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      step((e.key === 'ArrowRight') === (getComputedStyle(c.el).direction !== 'rtl') ? 1 : -1);
+    }
   });
   function stopTrailer(box) {
     resize(box, () => { box.classList.remove('playing'); $('.fptrailer', box).innerHTML = ''; });
@@ -2371,25 +2402,28 @@ const filmPanel = (() => {
     return { el, box };
   }
   async function toggle(o) {
-    const was = live();
-    if (was && was.o.opener === o.opener) { close(); return; }
+    const open = live();
+    if (open && open.o.opener === o.opener) { close(); return; }
     const my = ++seq;
     $$('.fpfly').forEach((x) => x.remove());
-    const c = was || build();
-    const { el, box } = c;
+    // One panel ever: a panel still closing is taken over from the height it has reached.
+    const was = open || (closing && closing.el.isConnected ? closing : null);
+    closing = null;
+    const { el, box } = was || build();
     const sameRow = was && !o.host && !was.o.host && was.o.opener.offsetTop === o.opener.offsetTop;
     const keepAt = o.opener.getBoundingClientRect().top;
     if (was) was.o.opener.setAttribute('aria-expanded', 'false');
     cur = { el, box, o };
     const from = sameRow ? box.getBoundingClientRect().height : 0;
-    box.getAnimations && box.getAnimations().forEach((a) => a.cancel());
+    [el, box].forEach((x) => x.getAnimations && x.getAnimations().forEach((a) => a.cancel()));
+    el.inert = false;
     el.setAttribute('aria-label', 'About ' + o.name);
     o.opener.setAttribute('aria-expanded', 'true'); o.opener.setAttribute('aria-controls', 'filmPanel');
     // In the grid it follows its poster (reading and tab order); dense packing draws it under the row.
     if (o.host) o.host.appendChild(el); else o.opener.after(el);
-    const all = tiles(o); const i = all.indexOf(o.opener);
     $$('.flip,.fwd', el).forEach((b) => { b.style.display = o.host ? 'none' : ''; });
-    $('.flip', el).disabled = i <= 0; $('.fwd', el).disabled = i === all.length - 1;
+    refresh();
+    (o.host ? $('.fpx', el) : o.opener).focus({ preventScroll: true });
     box.classList.remove('playing'); $('.fptrailer', box).innerHTML = '';
     const [name, year] = nameYear({ name: o.name });
     $('.fpglow', el).style.backgroundImage = o.art ? `url("${String(o.art).replace(/["\\\n]/g, encodeURIComponent)}")` : '';
@@ -2397,8 +2431,10 @@ const filmPanel = (() => {
     const body = $('.fpbody', el);
     body.innerHTML = `${posterHtml({ poster: o.art })}<div class="fphead fpin"><h3 dir="auto">${esc(name)}</h3>${year ? `<div class="muted">${esc(year)}</div>` : ''}</div>
       <div class="fprest" aria-busy="true"><div class="skel"></div><div class="skel"></div><div class="skel" style="width:60%"></div><div class="skel" style="width:40%;height:44px;border-radius:999px"></div></div>`;
+    // Art the grid already shows is there at once: the flying poster must not land on a blank one.
+    if ($('.poster.ok', o.opener)) { const p = $('.fpbody .poster', el); p.classList.add('ok'); $('img', p).loading = 'eager'; }
     // A panel that closed higher up must not pull the chosen poster from under the finger.
-    scrollBy(0, o.opener.getBoundingClientRect().top - keepAt);
+    if (!o.host) scrollBy(0, o.opener.getBoundingClientRect().top - keepAt);
     const h = box.offsetHeight;
     if (!o.host) fly(o, el);
     if (!still()) box.animate([{ height: from + 'px' }, { height: h + 'px' }], { duration: 420, easing: EASE });
@@ -2440,7 +2476,7 @@ const filmPanel = (() => {
     };
     const t = $('[data-tv]', rest); if (t) t.onclick = () => playOnTv({ youtube: 'https://www.youtube.com/watch?v=' + d.trailer, name: d.title + ' (trailer)' }, 'The trailer');
   }
-  return { toggle, close };
+  return { toggle, close, refresh, keep };
 })();
 
 /* ---------- Film and series channels ---------- */
@@ -2541,7 +2577,10 @@ screens.film = (() => {
   }
   const titleOf = () => f.spec.mode === 'SERIES' ? (f.id ? 'Edit series channel' : 'New series channel') : (f.id ? 'Edit film channel' : 'New film channel');
   function paint() {
-    const el = $('#content'); if (!el || route.name !== 'film') return;
+    const content = $('#content'); if (!content || route.name !== 'film') return;
+    // About this series opens outside the part that is drawn again, so a trailer in it keeps playing.
+    if (!$('#filmForm', content)) content.innerHTML = '<div id="seriesPanel"></div><div id="filmForm" style="display:contents"></div>';
+    const el = $('#filmForm', content);
     const sp = f.spec; const isFilm = sp.mode === 'FILM';
     setTitle(titleOf(), isFilm ? 'A numbered channel that plays films one after another.' : 'Plays one series, episode by episode, and remembers where it stopped.');
     const num = parseInt(f.number, 10);
@@ -2650,7 +2689,7 @@ screens.film = (() => {
   function seriesRating() {
     const i = f.seriesDetails;
     if (!i) return '';
-    return `<div class="f fw g8" style="align-items:center">${i.rating ? rbadge(i.rating) + `<span class="cap">${esc(i.ratingMeaning || 'Rated ' + i.rating)}</span>` : '<span class="cap">No official rating</span>'}${i.score ? `<span class="cap">· ${esc(scoreText(i.score))}</span>` : ''}<button class="btn ghost" id="seriesAbout" aria-expanded="false">About this series</button></div><div id="seriesPanel"></div>`;
+    return `<div class="f fw g8" style="align-items:center">${i.rating ? rbadge(i.rating) + `<span class="cap">${esc(i.ratingMeaning || 'Rated ' + i.rating)}</span>` : '<span class="cap">No official rating</span>'}${i.score ? `<span class="cap">· ${esc(scoreText(i.score))}</span>` : ''}<button class="btn ghost" id="seriesAbout" aria-expanded="false">About this series</button></div>`;
   }
   /** "Play this now" needs the saved channel (an edited one is saved first). */
   const canPick = () => !!(f && f.id && !changed());
@@ -2719,7 +2758,8 @@ screens.film = (() => {
     const yF = $('#yFrom', el); const yT = $('#yTo', el);
     if (yF && yT) { yF.onchange = yT.onchange = () => setYears(yF.value, yT.value); }
     $$('[data-noyear]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'skipNoYear', b.dataset.noyear === 'skip'); paint(); loadQueue(); });
-    const sa = $('#seriesAbout', el); if (sa) sa.onclick = () => filmPanel.toggle({ pid: sp.providerId, type: 'SERIES', id: sp.seriesId, name: f.seriesName || f.name, art: f.seriesDetails && f.seriesDetails.poster, opener: sa, host: $('#seriesPanel', el) });
+    const sa = $('#seriesAbout', el); if (sa) sa.onclick = () => filmPanel.toggle({ pid: sp.providerId, type: 'SERIES', id: sp.seriesId, name: f.seriesName || f.name, art: f.seriesDetails && f.seriesDetails.poster, opener: sa, host: $('#seriesPanel') });
+    filmPanel.keep(sa, sp.seriesId);
     $$('[data-sub]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'subtitles', b.dataset.sub); paint(); });
     $$('[data-audio]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'audio', b.dataset.audio); paint(); });
     $$('[data-order]', el).forEach((b) => b.onclick = () => {
