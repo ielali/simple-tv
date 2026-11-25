@@ -968,9 +968,12 @@ opened by a name (ADR-031). The address also changes when the router hands out a
 
 Decision: a small mDNS responder (`MdnsMessage`, `MdnsResponder`) answers questions about one name,
 `telly.local`, with the TV's IPv4 address. It asks first and takes `telly-2.local` and so on when
-another TV has the name; two TVs that took one at the same moment settle it by address. The TV screen and QR code
+another device has the name, up to `telly-5.local`; then it does without for ten minutes. Two TVs that
+took one at the same moment settle it by address, and a device that keeps claiming it (more than five
+times in a minute) gets it. When the address changes or the name is given up, a goodbye makes devices
+drop the old one. A change is noticed within about 2 s and announced after 1.5 s of asking. The TV screen and QR code
 keep the IP address, since not every device finds such names. The page mentions the name where it
-helps: when a trailer is refused.
+helps, when a trailer is refused, and asks the TV for it then.
 
 Consequences: the app holds a Wi-Fi multicast lock (the box is on mains power). It shares port 5353
 with Android's own mDNS. A browser treats the name as another site, so the PIN is entered once there.

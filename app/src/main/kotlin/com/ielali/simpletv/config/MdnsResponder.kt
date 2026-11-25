@@ -24,17 +24,26 @@ class MdnsResponder(private val lanIp: () -> String?, private val log: (String) 
     private val claim = MdnsClaim()
     private val group = InetSocketAddress(InetAddress.getByName(MdnsMessage.GROUP), MdnsMessage.PORT)
 
+    /** The name and address last announced, until a goodbye takes them back. */
+    private var announced: Pair<String, List<Int>>? = null
+
     fun start() = thread(isDaemon = true, name = "mdns") {
         while (true) {
+            var pause = NO_NETWORK_MS
             try {
                 val ip = lanIp()
                 val nic = ip?.let { NetworkInterface.getByInetAddress(InetAddress.getByName(it)) }
-                if (ip != null && nic != null) serve(ip, nic)
+                if (ip != null && nic != null) {
+                    serve(ip, nic)
+                    pause = 0 // the address changed: come straight back with the new one
+                }
             } catch (e: Exception) {
+                // A Wi-Fi blip after the name was up is worth a quick retry; a port that cannot be had is not.
+                pause = if (name != null) BLIP_MS else FAILED_MS
                 log("Local name stopped: ${e.javaClass.simpleName}: ${e.message}")
             }
             name = null
-            Thread.sleep(RETRY_MS)
+            if (pause > 0) Thread.sleep(pause)
         }
     }
 
@@ -45,29 +54,46 @@ class MdnsResponder(private val lanIp: () -> String?, private val log: (String) 
             socket.networkInterface = nic
             socket.timeToLive = 255
             socket.joinGroup(group, nic)
+            if (announced?.second != mine) sayGoodbye(socket)
             claim.restart()
             claimName(socket, mine)
-            var checked = System.nanoTime()
+            var checked = nowMs()
+            var gaveUpAt = checked
             while (true) {
                 val packet = receive(socket, CHECK_MS)
-                val now = System.nanoTime()
-                if (now - checked > CHECK_MS * 1_000_000L) {
-                    checked = now
+                if (nowMs() - checked >= CHECK_MS) {
+                    checked = nowMs()
                     if (lanIp() != ip || NetworkInterface.getByInetAddress(InetAddress.getByName(ip))?.index != nic.index) return
                 }
-                if (packet == null) continue
-                val m = MdnsMessage.parse(packet.data, packet.length) ?: continue
-                val rival = claim.rival(m, mine)
-                if (rival != null) {
-                    if (MdnsClaim.yields(mine, rival)) { name = null; claim.taken(); claimName(socket, mine) }
-                    else send(socket, MdnsMessage.answer(claim.name, mine))
+                val current = claim.name
+                if (current == null) {
+                    // Every name is taken. Look again now and then; the IP address works meanwhile.
+                    if (nowMs() - gaveUpAt > GIVE_UP_MS) {
+                        claim.restart()
+                        claimName(socket, mine)
+                        gaveUpAt = nowMs()
+                    }
                     continue
                 }
-                val q = MdnsMessage.questionFor(m, claim.name) ?: continue
+                val m = packet?.let { MdnsMessage.parse(it.data, it.length) } ?: continue
+                val rival = claim.rival(m, mine)
+                if (rival != null) {
+                    if (claim.mustYield(mine, rival, nowMs())) {
+                        name = null
+                        sayGoodbye(socket)
+                        claim.taken()
+                        claimName(socket, mine)
+                        gaveUpAt = nowMs()
+                    } else {
+                        send(socket, MdnsMessage.answer(current, mine))
+                    }
+                    continue
+                }
+                val q = MdnsMessage.questionFor(m, current) ?: continue
                 if (packet.port != MdnsMessage.PORT) {
                     send(socket, MdnsMessage.legacyAnswer(m, q, mine), packet.address, packet.port)
                 } else {
-                    val answer = MdnsMessage.answer(claim.name, mine, q.type)
+                    val answer = MdnsMessage.answer(current, mine, q.type)
                     if (q.unicast) send(socket, answer, packet.address, packet.port)
                     send(socket, answer)
                 }
@@ -75,29 +101,48 @@ class MdnsResponder(private val lanIp: () -> String?, private val log: (String) 
         }
     }
 
-    /** Asks three times whether another device has the name, then says it is this TV's. */
+    /** Takes the first free name, asking three times for each, and says so; none when all are taken. */
     private fun claimName(socket: MulticastSocket, mine: List<Int>) {
         while (true) {
-            var free = true
-            for (i in 1..3) {
-                send(socket, MdnsMessage.query(claim.name))
-                val until = System.nanoTime() + PROBE_MS * 1_000_000L
-                while (free) {
-                    val left = (until - System.nanoTime()) / 1_000_000L
-                    if (left <= 0) break
-                    val p = receive(socket, left.toInt()) ?: break
-                    val m = MdnsMessage.parse(p.data, p.length) ?: continue
-                    if (claim.rival(m, mine) != null) free = false
-                }
-                if (!free) break
+            val wanted = claim.name
+            if (wanted == null) {
+                log("Every local name is taken; the config page is at the IP address only")
+                return
             }
-            if (free) break
+            if (isFree(socket, wanted, mine)) {
+                name = wanted
+                announced = wanted to mine
+                log("Config page is also at $wanted")
+                repeat(2) { send(socket, MdnsMessage.answer(wanted, mine)) }
+                return
+            }
             claim.taken()
         }
-        name = claim.name
-        log("Config page is also at ${claim.name}")
-        repeat(2) { send(socket, MdnsMessage.answer(claim.name, mine)) }
     }
+
+    private fun isFree(socket: MulticastSocket, wanted: String, mine: List<Int>): Boolean {
+        repeat(3) {
+            send(socket, MdnsMessage.query(wanted))
+            val until = nowMs() + PROBE_MS
+            while (true) {
+                val left = until - nowMs()
+                if (left <= 0) break
+                val p = receive(socket, left.toInt()) ?: break
+                val m = MdnsMessage.parse(p.data, p.length) ?: continue
+                if (claim.rival(m, mine) != null) return false
+            }
+        }
+        return true
+    }
+
+    /** Devices forget what was announced at once, instead of keeping it until it expires. */
+    private fun sayGoodbye(socket: MulticastSocket) {
+        val (name, ip) = announced ?: return
+        repeat(2) { send(socket, MdnsMessage.goodbye(name, ip)) }
+        announced = null
+    }
+
+    private fun nowMs() = System.nanoTime() / 1_000_000L
 
     private fun receive(socket: MulticastSocket, timeoutMs: Int): DatagramPacket? {
         socket.soTimeout = timeoutMs
@@ -114,8 +159,11 @@ class MdnsResponder(private val lanIp: () -> String?, private val log: (String) 
     }
 
     private companion object {
-        const val RETRY_MS = 10_000L
-        const val CHECK_MS = 5_000
-        const val PROBE_MS = 250L
+        const val FAILED_MS = 10_000L
+        const val BLIP_MS = 1_000L
+        const val NO_NETWORK_MS = 2_000L
+        const val GIVE_UP_MS = 600_000L
+        const val CHECK_MS = 2_000
+        const val PROBE_MS = 500L // a TV in standby answers late: 250 was missed once
     }
 }

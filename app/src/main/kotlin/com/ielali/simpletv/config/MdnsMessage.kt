@@ -32,10 +32,12 @@ object MdnsMessage {
         }
         val addresses = ArrayList<Address>()
         repeat(counts[1] + counts[2] + counts[3]) {
-            val name = r.name(); val type = r.u16(); r.u16(); r.u16(); r.u16()
+            val name = r.name(); val type = r.u16(); r.u16()
+            val ttl = r.u16() or r.u16()
             val size = r.u16()
             val bytes = r.bytes(size)
-            if (type == TYPE_A && size == 4) addresses += Address(name, bytes)
+            // A record that lives 0 seconds is a goodbye, not a claim.
+            if (type == TYPE_A && size == 4 && ttl != 0) addresses += Address(name, bytes)
         }
         Message(id, flags and TOP_BIT != 0, questions, addresses)
     }.getOrNull()
@@ -58,6 +60,12 @@ object MdnsMessage {
         val a = type == TYPE_A || type == TYPE_ANY
         header(0, 0x8400, 0, 1, 1)
         if (a) { address(name, ip); none(name) } else { none(name); address(name, ip) }
+    }.bytes()
+
+    /** [name] is no longer at [ip]. Without the flush bit, so another device's record of the name stays. */
+    fun goodbye(name: String, ip: List<Int>): ByteArray = Writer().apply {
+        header(0, 0x8400, 0, 1, 0)
+        record(name, TYPE_A, CLASS_IN, 0, ip)
     }.bytes()
 
     /** For a plain DNS asker (its port is not 5353): its id and question come back, and it must not cache long. */
@@ -125,26 +133,48 @@ object MdnsMessage {
     }
 }
 
-/** Which name this TV uses: telly.local, or telly-2.local and so on when another TV has it. */
+/** Which name this TV uses: telly.local, or telly-2.local and so on when another device has it. */
 class MdnsClaim(private val base: String = "telly") {
     private var number = 1
-    val name: String get() = if (number == 1) "$base.local" else "$base-$number.local"
+    private val conflicts = ArrayDeque<Long>()
 
-    /** Another device answered for [name] while this TV was still asking: try the next one. */
-    fun taken() { number++ }
+    /** Null once every name was taken: the page is then at the IP address only. */
+    val name: String?
+        get() = when {
+            number > MAX_NAMES -> null
+            number == 1 -> "$base.local"
+            else -> "$base-$number.local"
+        }
+
+    /** Another device has [name]: try the next one. */
+    fun taken() { number++; conflicts.clear() }
 
     /** A new network: start again from the plain name. */
-    fun restart() { number = 1 }
+    fun restart() { number = 1; conflicts.clear() }
 
-    /** Is [m] another device saying it has [name]? */
+    /** The address another device says [name] is at, if [m] says so. */
     fun rival(m: MdnsMessage.Message, mine: List<Int>): List<Int>? =
         if (!m.response) null else m.addresses.firstOrNull { it.name == name && it.ip != mine }?.ip
 
+    /**
+     * Another device claims the name this TV took. Of two Tellys the lower address gives it up. A
+     * device that does not follow that rule and keeps claiming it wins too, or the two would argue for ever.
+     */
+    fun mustYield(mine: List<Int>, other: List<Int>, nowMs: Long): Boolean {
+        if (lower(mine, other)) return true
+        while (conflicts.isNotEmpty() && nowMs - conflicts.first() > CONFLICT_WINDOW_MS) conflicts.removeFirst()
+        conflicts.addLast(nowMs)
+        return conflicts.size > MAX_CONFLICTS
+    }
+
+    private fun lower(mine: List<Int>, other: List<Int>): Boolean {
+        val i = mine.indices.firstOrNull { mine[it] != other[it] } ?: return false
+        return mine[i] < other[i]
+    }
+
     companion object {
-        /** Two TVs that took one name at the same moment: the lower address gives it up. */
-        fun yields(mine: List<Int>, other: List<Int>): Boolean {
-            val i = mine.indices.firstOrNull { mine[it] != other[it] } ?: return false
-            return mine[i] < other[i]
-        }
+        const val MAX_NAMES = 5
+        const val MAX_CONFLICTS = 5
+        const val CONFLICT_WINDOW_MS = 60_000L
     }
 }

@@ -76,9 +76,39 @@ class MdnsMessageTest {
     }
 
     @Test
+    fun `a goodbye is a response that claims nothing`() {
+        val m = MdnsMessage.parse(MdnsMessage.goodbye("telly.local", ip))!!
+        assertTrue(m.response)
+        assertTrue(m.addresses.isEmpty())
+        assertNull(MdnsClaim().rival(m, other))
+    }
+
+    @Test
+    fun `names run out, and a new network starts again`() {
+        val claim = MdnsClaim()
+        repeat(MdnsClaim.MAX_NAMES) { assertNotNull(claim.name); claim.taken() }
+        assertNull(claim.name)
+        claim.restart()
+        assertEquals("telly.local", claim.name)
+    }
+
+    @Test
     fun `of two TVs with one name exactly one gives it up`() {
-        assertTrue(MdnsClaim.yields(ip, other))
-        assertFalse(MdnsClaim.yields(other, ip))
-        assertFalse(MdnsClaim.yields(ip, ip))
+        assertTrue(MdnsClaim().mustYield(ip, other, 0))
+        assertFalse(MdnsClaim().mustYield(other, ip, 0))
+    }
+
+    @Test
+    fun `a device that will not let go gets the name, occasional conflicts do not count`() {
+        val claim = MdnsClaim()
+        repeat(MdnsClaim.MAX_CONFLICTS) { assertFalse(claim.mustYield(other, ip, it * 100L)) }
+        assertTrue(claim.mustYield(other, ip, 1_000))
+        val calm = MdnsClaim()
+        repeat(50) { assertFalse(calm.mustYield(other, ip, it * 30_000L)) }
+        // Conflicts over one name are not held against the next.
+        val next = MdnsClaim()
+        repeat(MdnsClaim.MAX_CONFLICTS) { next.mustYield(other, ip, 0) }
+        next.taken()
+        assertFalse(next.mustYield(other, ip, 1))
     }
 }
