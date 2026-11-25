@@ -288,6 +288,9 @@ details.limits>summary::-webkit-details-marker{display:none}
 .fptrailer{position:relative;display:none;background:#000;aspect-ratio:16/9;max-height:78vh;width:100%}
 .fptrailer iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .fpbox.playing .fptrailer{display:block}
+.fptrailer.refused{aspect-ratio:auto}
+.fpsorry{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;min-height:240px;padding:24px;text-align:center;color:#fff}
+.fpsorry p{margin:0;max-width:46ch}
 .fpbox.playing .fpbody,.fpbox.playing .fpart,.fpbox.playing .fpglow,.fpbox.playing .fptools{display:none}
 .fpbar{display:none;padding:8px 12px}
 .fpbox.playing .fpbar{display:flex}
@@ -2387,8 +2390,32 @@ const filmPanel = (() => {
       step((e.key === 'ArrowRight') === (getComputedStyle(c.el).direction !== 'rtl') ? 1 : -1);
     }
   });
+  function emptyTrailer(box) { const t = $('.fptrailer', box); t.innerHTML = ''; t.classList.remove('refused'); }
+  /**
+   * Calls [refused] when YouTube's player reports an error, over the player's own message API. Some
+   * owners refuse pages opened by a bare address such as 192.168.0.79, so this is common here (ADR-031).
+   */
+  function onRefused(frame, refused) {
+    const origin = 'https://www.youtube-nocookie.com';
+    const done = () => { removeEventListener('message', hear); clearInterval(asking); };
+    const hear = (e) => {
+      if (!frame.isConnected) { done(); return; }
+      if (e.source !== frame.contentWindow || e.origin !== origin) return;
+      clearInterval(asking);
+      let m; try { m = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch (x) { return; }
+      if (m && m.event === 'onError') { done(); refused(); }
+    };
+    // The player answers only once it has loaded, so it is asked until it does.
+    const asking = setInterval(() => {
+      if (!frame.isConnected) done();
+      else if (loaded) frame.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), origin);
+    }, 250);
+    let loaded = false;
+    frame.addEventListener('load', () => { loaded = true; });
+    addEventListener('message', hear);
+  }
   function stopTrailer(box) {
-    resize(box, () => { box.classList.remove('playing'); $('.fptrailer', box).innerHTML = ''; });
+    resize(box, () => { box.classList.remove('playing'); emptyTrailer(box); });
     const w = $('[data-watch]', box); if (w) w.focus({ preventScroll: true });
   }
   function build() {
@@ -2424,7 +2451,7 @@ const filmPanel = (() => {
     $$('.flip,.fwd', el).forEach((b) => { b.style.display = o.host ? 'none' : ''; });
     refresh();
     (o.host ? $('.fpx', el) : o.opener).focus({ preventScroll: true });
-    box.classList.remove('playing'); $('.fptrailer', box).innerHTML = '';
+    box.classList.remove('playing'); emptyTrailer(box);
     const [name, year] = nameYear({ name: o.name });
     $('.fpglow', el).style.backgroundImage = o.art ? `url("${String(o.art).replace(/["\\\n]/g, encodeURIComponent)}")` : '';
     const art = $('.fpart', el); art.classList.remove('ok'); art.innerHTML = '';
@@ -2466,15 +2493,32 @@ const filmPanel = (() => {
       </div>
       ${d.fromTmdb ? `<p class="cap">Details from TMDB${d.matchedByTitle ? ', matched by title and year' : ''}. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>` : ''}`;
     const m = $('[data-main]', rest); if (m) m.onclick = () => { close(false); o.action.run(d); };
+    const watch = 'https://www.youtube.com/watch?v=' + encodeURIComponent(d.trailer || '');
+    const onTv = () => playOnTv({ youtube: watch, name: d.title + ' (trailer)' }, 'The trailer');
     const w = $('[data-watch]', rest);
     if (w) w.onclick = () => {
       const h = resize(box, () => {
         box.classList.add('playing');
-        $('.fptrailer', box).innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(d.trailer)}?autoplay=1&rel=0" title="Trailer" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+        $('.fptrailer', box).innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(d.trailer)}?autoplay=1&rel=0&enablejsapi=1" title="Trailer" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+      });
+      onRefused($('.fptrailer iframe', box), () => {
+        if (!cur || cur.box !== box) return; // the panel is closing
+        const again = resize(box, () => {
+          const t = $('.fptrailer', box); t.classList.add('refused');
+          t.innerHTML = `<div class="fpsorry" role="alert"><p>YouTube won't play this trailer on this page. You can still watch it on YouTube or on the TV.</p>
+            <div class="f fw g8" style="justify-content:center"><a class="btn pri" href="${esc(watch)}" target="_blank" rel="noopener noreferrer">Watch on YouTube ${ico('right', 16)}</a><button type="button" class="btn" data-tv2>${ico('tv', 18)}Trailer on the TV</button></div></div>`;
+          // Opened by a bare address: most of these play when the page is opened by the TV's name (ADR-032).
+          const named = state.status && state.status.nameUrl;
+          if (named && /^[\d.]+$/.test(location.hostname)) {
+            $('p', t).insertAdjacentHTML('afterend', `<p>It may play here if you open this page as <a href="${esc(named)}" style="color:inherit;font-weight:700">${esc(named.replace('http://', ''))}</a> instead. You will enter the PIN again there. If that doesn't open, your device can't find the TV by name: come back to this address.</p>`);
+          }
+          $('[data-tv2]', t).onclick = onTv;
+        });
+        reveal(again);
       });
       reveal(h); $('[data-back]', box).focus({ preventScroll: true });
     };
-    const t = $('[data-tv]', rest); if (t) t.onclick = () => playOnTv({ youtube: 'https://www.youtube.com/watch?v=' + d.trailer, name: d.title + ' (trailer)' }, 'The trailer');
+    const t = $('[data-tv]', rest); if (t) t.onclick = onTv;
   }
   return { toggle, close, refresh, keep };
 })();

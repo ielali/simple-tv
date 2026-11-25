@@ -1,7 +1,12 @@
 package com.ielali.simpletv
 
 import android.app.Application
+import android.content.Context
+import android.net.wifi.WifiManager
+import android.util.Log
 import com.ielali.simpletv.config.ConfigServer
+import com.ielali.simpletv.config.MdnsResponder
+import com.ielali.simpletv.config.NetworkAddress
 import com.ielali.simpletv.data.CatalogRepository
 import com.ielali.simpletv.data.CatalogService
 import com.ielali.simpletv.data.ChannelRepository
@@ -82,6 +87,14 @@ class SimpleTvApp : Application() {
 
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    /** Answers for telly.local on the home network (ADR-032). */
+    val localName = MdnsResponder(NetworkAddress::lanIp) { Log.i("SimpleTvName", it) }
+
+    /** The config page by name, or null while the TV has none. */
+    fun configNameUrl(): String? = localName.name?.let { "http://$it:$CONFIG_PORT" }
+
+    private var multicastLock: WifiManager.MulticastLock? = null
+
     private var configServer: ConfigServer? = null
 
     override fun onCreate() {
@@ -109,6 +122,11 @@ class SimpleTvApp : Application() {
         logos.start()
         catalog.startScheduler()
         configServer = ConfigServer(this, CONFIG_PORT).also { it.start() }
+        // Without the lock some Wi-Fi drivers drop multicast, and questions never arrive.
+        multicastLock = runCatching {
+            (getSystemService(Context.WIFI_SERVICE) as WifiManager).createMulticastLock("telly-name").apply { setReferenceCounted(false); acquire() }
+        }.getOrNull()
+        localName.start()
     }
 
     companion object {
