@@ -17,6 +17,7 @@ import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -29,6 +30,9 @@ import java.net.Socket
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
 /**
@@ -39,11 +43,17 @@ class PreviewRoutesTest {
 
     /** A provider that answers each path from [pages] and remembers what it was asked. */
     private class FakeProvider {
-        class Page(val status: String, val body: ByteArray, val headers: List<String> = emptyList())
+        /** [endless]: the body is sent again and again until the other end goes, as a live stream is. */
+        class Page(val status: String, val body: ByteArray, val headers: List<String> = emptyList(), val endless: Boolean = false)
 
         val pages = ConcurrentHashMap<String, Page>()
         val asked = CopyOnWriteArrayList<String>()
         val agents = CopyOnWriteArrayList<String>()
+        val passes = CopyOnWriteArrayList<String>()
+
+        /** Bytes of endless pages sent so far, and whether the other end has let go of one. */
+        val sent = AtomicLong()
+        val dropped = CountDownLatch(1)
         private val socket = ServerSocket(0, 50, InetAddress.getLoopbackAddress())
         val port: Int get() = socket.localPort
 
@@ -63,15 +73,28 @@ class PreviewRoutesTest {
                 val line = reader.readLine() ?: break
                 if (line.isEmpty()) break
                 if (line.startsWith("User-Agent:", ignoreCase = true)) agents += line.substringAfter(':').trim()
+                if (line.startsWith("Authorization:", ignoreCase = true)) passes += line.substringAfter(':').trim()
             }
             asked += path
             val page = pages[path] ?: Page("404 Not Found", "no such stream at $path".toByteArray())
-            c.getOutputStream().apply {
-                val extra = page.headers.joinToString("") { "$it\r\n" }
-                write("HTTP/1.1 ${page.status}\r\n${extra}Content-Length: ${page.body.size}\r\nConnection: close\r\n\r\n".toByteArray())
-                write(page.body)
-                flush()
+            val out = c.getOutputStream()
+            val extra = page.headers.joinToString("") { "$it\r\n" }
+            if (page.endless) {
+                out.write("HTTP/1.1 ${page.status}\r\n${extra}Connection: close\r\n\r\n".toByteArray())
+                try {
+                    while (true) {
+                        out.write(page.body)
+                        out.flush()
+                        sent.addAndGet(page.body.size.toLong())
+                    }
+                } catch (e: IOException) {
+                    dropped.countDown()
+                }
+                return@use
             }
+            out.write("HTTP/1.1 ${page.status}\r\n${extra}Content-Length: ${page.body.size}\r\nConnection: close\r\n\r\n".toByteArray())
+            out.write(page.body)
+            out.flush()
         }
 
         fun close() = socket.close()
@@ -93,13 +116,24 @@ class PreviewRoutesTest {
     private val youtube = Channel(id = "yt", number = 3, name = "Clips", type = SourceType.YOUTUBE, url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
     private val films = Channel(id = "f", number = 4, name = "Films", type = SourceType.FILMS, url = "", playlist = PlaylistSpec(PlaylistMode.FILM, "xtream"))
 
+    /** A channel in a subscription's own list, not in the lineup. */
+    private val listed = Channel(
+        id = "catalog:m3u:7", number = 0, name = "Listed", url = "http://127.0.0.1:${provider.port}/list/alice/s3cret/7.m3u8",
+        headers = mapOf("Authorization" to "Basic dTpw"), providerId = "m3u", sourceId = "7",
+    )
+
     @Volatile private var onTv: List<Channel> = emptyList()
+    @Volatile private var minutes = 3
+    private val logged = CopyOnWriteArrayList<String>()
     private val routes = PreviewRoutes(
         channels = { listOf(live, other, youtube, films) },
+        catalogChannel = { providerId, itemId -> listed.takeIf { providerId == "m3u" && itemId == "7" } },
         onTv = { onTv },
         streamLimit = { if (it == "xtream") 1 else null },
+        minutes = { minutes },
         asset = { ByteArrayInputStream("/* $it */".toByteArray()) },
         userAgent = "Telly-test",
+        log = { logged += it },
     )
     private lateinit var engine: ApplicationEngine
     private var port = 0
@@ -143,6 +177,7 @@ class PreviewRoutesTest {
     }
 
     private fun preview(id: String) = ask("POST", "/api/preview", """{"channelId":"$id"}""")
+    private fun previewListed(providerId: String, itemId: String) = ask("POST", "/api/preview", """{"providerId":"$providerId","itemId":"$itemId"}""")
     private fun started(a: Answer) = json.decodeFromString(PreviewRoutes.Started.serializer(), a.text)
     private fun problem(a: Answer) = json.decodeFromString(PreviewRoutes.Problem.serializer(), a.text)
     private fun state(token: String) = json.decodeFromString(PreviewRoutes.State.serializer(), ask("GET", "/api/preview/$token").text)
@@ -161,7 +196,7 @@ class PreviewRoutesTest {
         assertNoAddress(begun.text)
         val s = started(begun)
         assertEquals("hls", s.kind)
-        assertEquals(180, s.seconds)
+        assertEquals(180, s.seconds) // the test's setting: 3 minutes
         assertTrue(s.url!!, Regex("/preview/[0-9a-f]{32}/index\\.m3u8").matches(s.url!!))
 
         val playlist = ask("GET", s.url!!)
@@ -284,6 +319,133 @@ class PreviewRoutesTest {
         assertEquals(409, film.status)
         assertTrue(problem(film).error.contains("Play on TV"))
         assertEquals(404, preview("nope").status)
+    }
+
+    @Test
+    fun `a channel in a subscription's list plays before it is added`() {
+        provider.pages["/list/alice/s3cret/7.m3u8"] = FakeProvider.Page("200 OK", "#EXTM3U\n#EXTINF:6,\nhttp://127.0.0.1:${provider.port}/list/alice/s3cret/7/a.ts\n".toByteArray())
+        val begun = previewListed("m3u", "7")
+        assertEquals(200, begun.status)
+        assertNoAddress(begun.text)
+        val s = started(begun)
+        assertEquals("hls", s.kind)
+        val playlist = ask("GET", s.url!!)
+        assertEquals("#EXTM3U\n#EXTINF:6,\n0.ts\n", playlist.text)
+        // Asked the way the TV would play it once added: with the subscription's own sign-in.
+        assertEquals(listOf("Basic dTpw"), provider.passes.toList())
+
+        assertEquals(404, previewListed("m3u", "8").status)
+        assertEquals(404, previewListed("gone", "7").status)
+        assertEquals(400, ask("POST", "/api/preview", "{}").status)
+    }
+
+    @Test
+    fun `a channel in a subscription's list waits for the TV like any other`() {
+        // The TV is on the lineup's copy of the same channel: another id, the same stream.
+        onTv = listOf(listed.copy(id = "lineup-copy", number = 12))
+        val refused = previewListed("m3u", "7")
+        assertEquals(409, refused.status)
+        assertEquals("tv", problem(refused).code)
+        assertTrue(provider.asked.isEmpty())
+    }
+
+    @Test
+    fun `the time chosen counts from the first video, and the page is told how much is left`() {
+        minutes = 5
+        val s = started(preview("ch41"))
+        assertEquals(300, s.seconds)
+        val token = s.url!!.split('/')[2]
+        ask("GET", s.url!!)
+        val waiting = state(token)
+        assertTrue(waiting.active)
+        assertFalse(waiting.playing)
+        assertEquals(200, ask("GET", s.url!!.replace("index.m3u8", "0.ts")).status)
+        val playing = state(token)
+        assertTrue(playing.playing)
+        assertTrue("${playing.secondsLeft}", playing.secondsLeft in 298..300)
+    }
+
+    @Test
+    fun `with no limit chosen the preview has no end of its own`() {
+        minutes = 0
+        val s = started(preview("ch41"))
+        assertNull(s.seconds)
+        val token = s.url!!.split('/')[2]
+        ask("GET", s.url!!)
+        ask("GET", s.url!!.replace("index.m3u8", "0.ts"))
+        val now = state(token)
+        assertTrue(now.active)
+        assertTrue(now.playing)
+        assertNull(now.secondsLeft)
+        // The TV still wins.
+        onTv = listOf(other)
+        routes.tvChanged()
+        assertEquals("tv_needs_it", state(token).ended)
+    }
+
+    @Test
+    fun `a channel that is not HLS is refused in words and let go at once`() {
+        // The channel's own address answers with video, not a playlist: no browser player here can show that.
+        provider.pages["/live/alice/s3cret/42.m3u8"] = FakeProvider.Page("200 OK", segment, listOf("Content-Type: video/mp2t"), endless = true)
+        val s = started(preview("ch42"))
+        val token = s.url!!.split('/')[2]
+        val answer = ask("GET", s.url!!)
+        assertEquals(415, answer.status)
+        assertEquals("kind", problem(answer).code)
+        assertNoAddress(answer.text)
+        assertEquals("unplayable", state(token).ended)
+        assertTrue(provider.dropped.await(5, TimeUnit.SECONDS))
+        assertEquals(410, ask("GET", s.url!!).status)
+    }
+
+    @Test
+    fun `a browser that stops reading does not keep the provider from the TV`() {
+        provider.pages["/hls/alice/s3cret/41/seg2200.ts"] = FakeProvider.Page("200 OK", segment, listOf("Content-Type: video/mp2t"), endless = true)
+        val s = started(preview("ch41"))
+        ask("GET", s.url!!)
+        // A browser that asks for video and then reads none of it, as a tab does when it is frozen.
+        Socket("127.0.0.1", port).use { stuck ->
+            stuck.getOutputStream().apply {
+                write("GET ${s.url!!.replace("index.m3u8", "0.ts")} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n".toByteArray())
+                flush()
+            }
+            // Everything in between fills up, and the provider's stream stands still, held open.
+            var last = -1L
+            val deadline = System.currentTimeMillis() + 15_000
+            while (true) {
+                val now = provider.sent.get()
+                if (now > 0 && now == last) break
+                assertTrue("the stream never stood still", System.currentTimeMillis() < deadline)
+                last = now
+                Thread.sleep(500)
+            }
+            assertEquals(1L, provider.dropped.count)
+
+            // The TV tunes a channel of that subscription. Ending the preview is not enough by itself…
+            onTv = listOf(other)
+            routes.tvChanged()
+            assertFalse(provider.dropped.await(700, TimeUnit.MILLISECONDS))
+            // …the sweep that follows cuts the provider's connection, with the browser still not reading.
+            routes.sweep()
+            assertTrue(provider.dropped.await(5, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun `the playback log gets timings and never an address`() {
+        val s = started(preview("ch41"))
+        ask("GET", s.url!!)
+        ask("GET", s.url!!.replace("index.m3u8", "0.ts"))
+        onTv = listOf(other)
+        routes.tvChanged()
+        val lines = logged.toList()
+        assertEquals("preview: start, channel 41, 3 min", lines[0])
+        assertTrue(lines[1], Regex("preview: playlist in \\d+ ms").matches(lines[1]))
+        assertTrue(lines[2], Regex("preview: video 0\\.2 MB, first byte \\d+ ms, all \\d+ ms, [\\d.]+ Mbit/s").matches(lines[2]))
+        assertEquals("preview: ended, the TV needs the subscription", lines[3])
+        assertEquals(4, lines.size)
+        val all = lines.joinToString("\n")
+        for (secret in listOf("alice", "s3cret", "127.0.0.1", "News", "hls/")) assertFalse(all, all.contains(secret))
     }
 
     @Test

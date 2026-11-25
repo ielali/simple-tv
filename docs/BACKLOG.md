@@ -38,11 +38,20 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
      that evening alone; keep `--min-seconds` at 20 as for the other runs. If channels freeze right
      after they start, raise `START_AFTER_MS` in `PlaybackEngine` from 1 s towards 2.5 s and measure
      again (`tools/tv-playback.py model --settings now,start2.5` gives a first idea).
-0b. **Check the page's preview player on the TV (ADR-029).** Not run on a TV yet. From a phone and
-   from a laptop, on the lineup, with `adb logcat -s SimpleTvPlayback` running:
-   - TV in standby or on a YouTube channel: press the eye on a live channel. Note how long the
-     picture takes, whether it has sound, and that it stops by itself after 3 minutes. Try an iPhone
-     (Safari uses its own player there) and a laptop browser.
+0b. **Check the page's preview player on the TV (ADR-029).** Tried once on the Kogan (build
+   0.1.93): it played, and 3 minutes were not enough with the time a channel took to load; how long
+   that was is not recorded. From a phone and from a laptop, with `adb logcat -s SimpleTvPlayback`
+   running:
+   - TV in standby or on a YouTube channel: press the eye on a live channel in the lineup. Note the
+     seconds the window counts while loading and whether it has sound, and copy the log's
+     `preview:` lines into ADR-029: they give the provider's time to first byte and the rate the TV
+     passed each segment on at. A rate near the stream's own (about 5 Mbit/s for 1080p) means the
+     TV's Wi-Fi is the limit. Try an iPhone (Safari uses its own player there) and a laptop browser.
+   - The same from Add channel, From my TV subscription: the eye on a channel that is not in the
+     lineup, on each subscription.
+   - With No limit chosen in TV settings: leave one playing for half an hour, then close the laptop's
+     lid without closing the window. The log should show nothing more from it, and the TV should
+     tune a channel of that subscription as fast as ever.
    - While it plays, switch the TV on to a live channel of the same subscription. The window should
      say the TV is using the subscription. Note in ADR-029 whether the TV shows the tuning card
      longer than its usual 3 s or logs `ERROR_CODE_IO_BAD_HTTP_STATUS`: that is the provider still
@@ -162,6 +171,13 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- The page's preview plays for a time chosen in TV settings (5 minutes, 15 minutes, 1 hour or no
+  limit), counted from the first picture instead of the ask, and the eye is also on every live
+  channel in a subscription's own list, to try a channel before adding it (ADR-029, update). A
+  channel that is not HLS says so at once. The TV now lets go of a preview whose browser has
+  vanished without being asked. Checked in a desktop browser against a fake provider; device
+  check: item 0b.
 
 - A preview player in the page's channel list (ADR-029): the eye on a live or YouTube channel plays
   it in a window on the page. Live channels come through the TV under a random token, so the page

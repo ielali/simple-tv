@@ -61,6 +61,19 @@ class SettingsMergeTest {
     }
 
     @Test
+    fun `the preview's length is the page's choice, with 0 for no limit`() {
+        assertEquals(15, AppSettings().previewMinutes)
+        assertEquals(60, SettingsMerge.merge(AppSettings(), patch("""{"previewMinutes": 60}""")).previewMinutes)
+        assertEquals(0, SettingsMerge.merge(AppSettings(), patch("""{"previewMinutes": 0}""")).previewMinutes)
+        assertEquals(0, SettingsMerge.merge(AppSettings(), patch("""{"previewMinutes": -5}""")).previewMinutes)
+        assertEquals(240, SettingsMerge.merge(AppSettings(), patch("""{"previewMinutes": 100000}""")).previewMinutes)
+        // Another change leaves it alone, and settings saved before it existed still load.
+        assertEquals(0, SettingsMerge.merge(AppSettings(previewMinutes = 0), patch("""{"showClock": false}""")).previewMinutes)
+        val old = Json { ignoreUnknownKeys = true }.decodeFromString(AppSettings.serializer(), """{"showClock": false}""")
+        assertEquals(15, old.previewMinutes)
+    }
+
+    @Test
     fun `negative pause is clamped`() {
         assertEquals(0L, SettingsMerge.merge(AppSettings(), patch("""{"guardPausedUntil": -5}""")).guardPausedUntil)
     }

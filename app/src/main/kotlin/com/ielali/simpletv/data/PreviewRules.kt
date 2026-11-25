@@ -17,11 +17,16 @@ object PreviewRules {
     fun check(preview: Channel, tv: List<Channel>, limit: (providerId: String) -> Int?): Verdict {
         var verdict = Verdict.OK
         for (on in tv) {
-            if (on.id == preview.id) return Verdict.TV_ON_THIS_CHANNEL
+            if (on.id == preview.id || sameStream(preview, on)) return Verdict.TV_ON_THIS_CHANNEL
             if (sharesStream(preview, on, limit)) verdict = Verdict.TV_USES_SUBSCRIPTION
         }
         return verdict
     }
+
+    /** A channel from a subscription's list is the one on the TV when it is the same stream, whatever its id. */
+    private fun sameStream(preview: Channel, on: Channel): Boolean =
+        (preview.url.isNotEmpty() && preview.url == on.url) ||
+            (preview.providerId != null && preview.providerId == on.providerId && preview.sourceId != null && preview.sourceId == on.sourceId)
 
     private fun sharesStream(preview: Channel, on: Channel, limit: (String) -> Int?): Boolean {
         val tvSub = on.providerId ?: on.playlist?.providerId

@@ -773,8 +773,9 @@ Decision:
   followed on the TV, the channel's own User-Agent is used, and a failure never carries the
   provider's answer. The token is in the path because a video element cannot send the page's
   sign-in; only a signed-in page gets one, and it dies with the preview.
-- One preview at a time (`PreviewSessions`). It ends when the page closes it, after 3 minutes, when
-  the browser has asked for nothing for 30 s, when another preview starts, or when the TV needs it.
+- One preview at a time (`PreviewSessions`). It ends when the page closes it, when its time is up
+  (3 minutes at first; a setting since the update below), when the browser has asked for nothing
+  for 30 s, when another preview starts, or when the TV needs it.
 - The TV always wins (`PreviewRules`). No preview of the channel the TV's own player holds, nor of
   another channel of the same subscription when that allows fewer than two streams. With no limit
   known, the same server is taken as the same account; two subscriptions are two accounts; a channel
@@ -789,8 +790,8 @@ Decision:
   behind live and no offset of our own, half a minute loaded and no more, 10 s kept behind. The
   relay uses the same 8 s timeouts. Sound plays when the browser allows it, else the preview is
   silent and a sound button says so.
-- Nobody watching means no stream: closing the window, leaving the lineup, hiding the page and the
-  3 minutes all let go of it.
+- Nobody watching means no stream: closing the window, leaving the screen it was started on, hiding
+  the page and the time limit all let go of it.
 - YouTube channels use YouTube's own embedded player in the caregiver's browser (rule 6), with no
   relay. Film and series channels are not previewed: their files are often MKV, which browsers do not
   play, and Play on TV is there.
@@ -823,5 +824,58 @@ Consequences and what is not known:
 - The app grows by about 0.6 MB (the library, before compression).
 
 Not adopted: the browser fetching from the provider itself (it would need the address, and most
-providers send no CORS headers), the light build of the library, a preview with no time limit, and
-letting the caregiver override the TV.
+providers send no CORS headers), the light build of the library, and letting the caregiver override
+the TV. A preview with no time limit was on this list at first; see the update.
+
+Update (25 November 2026, after the first try on the Kogan, build 0.1.93): three changes the
+caregiver asked for.
+- **The time is a setting, and it counts from the first picture.** The 3 minutes started at the
+  ask, so a channel that was slow to start had used part of them before it showed anything. Now
+  `previewMinutes` in `AppSettings`, chosen under TV settings ("Preview on this page"): 5 minutes,
+  15 minutes (the default), 1 hour, or no limit (0). The TV starts the clock when the first video
+  has been passed to the browser (`PreviewSessions.pictureStarted`); until then the window counts
+  the seconds of loading. The page takes the time left from the TV every 5 s, so the two agree.
+- **No limit plays until the window is closed.** Everything else that ends a preview still does:
+  the TV needing the subscription, the page out of sight, and a browser that has asked for nothing
+  for 30 s. Two things had only been safe because every preview was short, and are fixed:
+  - Made-up names: at most 600 are kept, and the oldest used to go first. After about 100 minutes
+    of 10 s segments that would have been the playlist the player keeps reloading. Now the least
+    recently used goes first, so a name still in use stays.
+  - A browser that stops reading (a frozen tab, a dropped network) left the relay waiting on it
+    with the provider's connection still open, and nothing looked at the time or at the 30 s
+    unless a request came in. `ConfigServer` now sweeps every 5 s and after every change on the
+    TV (`PreviewRoutes.sweep`, off the main thread): it ends a preview whose time or browser has
+    gone and cuts the provider's connection of every ended preview, read or not.
+- **A subscription's own list can be previewed before a channel is added.** The eye is on every
+  live channel under Add channel, From my TV subscription. `POST /api/preview` takes
+  `{providerId, itemId}`; the channel is built as adding it would build it
+  (`ProviderImport.tryOut`: the same address and headers). The same rules apply, and a list entry
+  that is the stream the TV is showing (the same address, or the same subscription and source id)
+  counts as the TV's channel.
+- A channel that is not HLS cannot play in a browser player. The relay now sees that on the first
+  answer (video where a playlist should be), lets go at once and the window says so and points to
+  Play on TV, instead of loading without end. On the Kogan's three subscriptions on that day,
+  24,302 of 25,055 live entries (97%) have an address ending in `.m3u8`; the rest are DASH, RTMP
+  and plain files.
+- The playback log (`adb logcat -s SimpleTvPlayback`, ADR-028) gets `preview:` lines: the start
+  with its limit, the first twelve timings of each preview (a playlist's time; a segment's size,
+  time to first byte, time to pass on and rate) and an end forced by the TV. No address, host or
+  name. They are there to find out how long a real channel takes through the relay, which is not
+  measured yet.
+- On a wide screen the window sits under the categories in a subscription's list, so the channels
+  keep their width and every eye button stays in reach; while searching, and on narrower screens,
+  it is where the lineup has it.
+
+Checked for the update, on the development Mac, not on the TV: 15 more unit tests (the clock from
+the first video, no limit, a name in use for 5,000 segments, a list entry, the TV's own channel in
+a list, a channel that is not HLS, and a browser that reads nothing while the provider is cut off
+by the sweep). The page's own code in headless Chrome 158 against the relay: a channel whose
+segments each took 6 s to start showed "Loading" for 6 s and then counted its minute from 1:00
+(the TV ended it 60 s after the first video, and the window said so 2 s later); with no limit it
+played until the TV "tuned" and then said so; a
+plain MPEG-TS channel was refused in words within a second and its connection was closed; leaving
+the screen closed the window. Screenshots of the subscription's list at 1440, 1180, 900 and 390 px
+and of the setting.
+
+Still not known: how long the household's channels take to show a picture through the relay on
+the Kogan, and everything else under backlog 0b.

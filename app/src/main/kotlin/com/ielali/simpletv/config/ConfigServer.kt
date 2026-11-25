@@ -3,10 +3,12 @@ package com.ielali.simpletv.config
 import android.content.Context
 import android.util.Log
 import com.ielali.simpletv.SimpleTvApp
+import com.ielali.simpletv.data.CatalogType
 import com.ielali.simpletv.data.FetchErrors
 import com.ielali.simpletv.data.HttpFetcher
 import com.ielali.simpletv.data.M3uParser
 import com.ielali.simpletv.data.PreviewSessions
+import com.ielali.simpletv.data.ProviderImport
 import com.ielali.simpletv.data.ProviderLoader
 import com.ielali.simpletv.data.SettingsMerge
 import com.ielali.simpletv.data.playsOnSimpleTv
@@ -44,6 +46,7 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,17 +77,25 @@ class ConfigServer(
     private val auth = PinAuth()
     private val content = ContentRoutes(app)
 
-    /** The preview player in the page's channel list (ADR-029). */
+    /** The preview player in the page's channel list and in a subscription's own list (ADR-029). */
     private val preview = PreviewRoutes(
         channels = { app.channels.current().channels },
+        catalogChannel = { providerId, itemId ->
+            app.providers.find(providerId)?.let { provider ->
+                app.catalogs.catalog(providerId)?.items?.firstOrNull { it.type == CatalogType.LIVE && it.id == itemId }
+                    ?.let { ProviderImport.tryOut(it, provider, "catalog:$providerId:$itemId") }
+            }
+        },
         // What Telly's own player holds: the channel on screen and, with the list open, the one in its window.
         onTv = {
             if (app.tv.appVisible.value) listOfNotNull(app.tv.current.value, app.tv.listChannel()).filter { it.playsOnSimpleTv }
             else emptyList()
         },
         streamLimit = { app.catalogs.status(it).maxConnections },
+        minutes = { settingsRepo.current().previewMinutes },
         asset = { appContext.assets.open(it) },
         userAgent = ProviderLoader.DEFAULT_USER_AGENT,
+        log = { Log.i(PLAYBACK_TAG, it) },
     )
     private var tvWatch: Job? = null
 
@@ -388,7 +399,18 @@ class ConfigServer(
         }
         // The TV always wins: a preview ends the moment the TV's player needs its subscription.
         tvWatch = app.appScope.launch {
-            combine(app.tv.current, app.tv.appVisible, app.tv.listIndex) { _, _, _ -> }.collect { preview.tvChanged() }
+            // Letting go of the provider closes sockets, so that part runs off the main thread. Every few
+            // seconds too: a preview whose browser has vanished must not keep its stream.
+            launch(Dispatchers.IO) {
+                while (true) {
+                    delay(PREVIEW_SWEEP_MS)
+                    runCatching { preview.sweep() }
+                }
+            }
+            combine(app.tv.current, app.tv.appVisible, app.tv.listIndex) { _, _, _ -> }.collect {
+                preview.tvChanged()
+                launch(Dispatchers.IO) { runCatching { preview.sweep() } }
+            }
         }
         Log.i(TAG, "Config server listening on ${NetworkAddress.configUrl(appContext, port)}")
     }
@@ -447,5 +469,9 @@ class ConfigServer(
 
     private companion object {
         const val TAG = "ConfigServer"
+
+        /** The playback log's tag (PlaybackEngine): `adb logcat -s SimpleTvPlayback` shows a preview's timings too. */
+        const val PLAYBACK_TAG = "SimpleTvPlayback"
+        const val PREVIEW_SWEEP_MS = 5_000L
     }
 }

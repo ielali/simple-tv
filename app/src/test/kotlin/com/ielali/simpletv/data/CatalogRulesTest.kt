@@ -156,6 +156,24 @@ class CatalogRulesTest {
         assertTrue(r.channels.drop(1).all { it.providerId == "p1" && it.sourceId != null })
     }
 
+    @Test
+    fun `a channel tried out from the list is the channel adding it would give`() {
+        val provider = Provider(id = "p1", name = "P", url = "http://p/list.m3u", kind = ProviderKind.M3U, username = "u", password = "p")
+        val item = live("7").copy(headers = mapOf("Referer" to "http://p/"), logo = "http://p/7.png")
+        val tried = ProviderImport.tryOut(item, provider, "catalog:p1:7")!!
+        val added = ProviderImport.merge(emptyList(), ProviderImport.fromCatalog(listOf(item)), provider).channels.single()
+        assertEquals(added.url, tried.url)
+        assertEquals(added.headers, tried.headers)
+        assertTrue(tried.headers.containsKey("Authorization"))
+        assertEquals("p1", tried.providerId)
+        assertEquals("7", tried.sourceId)
+        assertEquals("catalog:p1:7", tried.id)
+        assertEquals(SourceType.STREAM, tried.type)
+        // Films and entries without an address are not live channels.
+        assertEquals(null, ProviderImport.tryOut(film("f1", "Harvey", "Comedy"), provider, "x"))
+        assertEquals(null, ProviderImport.tryOut(live("8").copy(url = null), provider, "x"))
+    }
+
     // ---- queues
     private val films = catalog(film("f1", "Harvey", "Comedy"), film("f2", "Apartment", "Comedy"), film("f3", "Sabrina", "Drama"), film("f4", "Ben-Hur", "Epic"))
 

@@ -295,6 +295,7 @@ details[open] summary svg{transform:rotate(90deg)}
 .pvscreen video,.pvscreen iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:#000}
 .pvnote{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;color:#F2F4F8;background:rgba(11,18,32,.86);font-weight:600}
 .pvnote .btn{background:var(--gold);color:#0B1220;border-color:transparent}
+.pvnote a{color:inherit;font-weight:500;text-decoration:underline}
 .pvbar{display:flex;align-items:center;gap:10px;padding:8px 8px 8px 12px}
 .pvnum{min-width:40px;height:40px;padding:0 6px;border-radius:10px;background:var(--navy);color:var(--gold);display:grid;place-items:center;font-size:20px;font-weight:800;flex:none;font-variant-numeric:tabular-nums}
 .ibtn.pvon{background:var(--primary);color:var(--onp);border-color:transparent}
@@ -307,6 +308,14 @@ body.pvopen .content{padding-bottom:320px}
   .pv{width:400px}
   body.pvopen .content{padding-inline-end:464px}
 }
+/* In a subscription's own list on a wide screen the window sits under the categories, so the channels
+   keep their width and every eye button stays in reach; the categories end above it once they stick.
+   While searching there are no categories, and the rules above apply. */
+@media (min-width:1100px){
+  body.pvcat:has(.catlayout:not(.searching)) .pv{inset-inline:288px auto;top:auto;bottom:24px;width:300px}
+  body.pvcat.pvopen:has(.catlayout:not(.searching)) .content{padding-bottom:48px;padding-inline-end:40px}
+  body.pvcat:has(.catlayout:not(.searching)) .catlayout #catPanel{max-height:calc(100vh - 300px);max-height:calc(100dvh - 300px)}
+}
 @media (max-width:819px){
   .pv{inset-inline:8px;width:auto;max-width:none;bottom:calc(72px + env(safe-area-inset-bottom))}
   /* Three buttons on a phone's row: smaller and closer, so the channel's name keeps its room. */
@@ -314,6 +323,10 @@ body.pvopen .content{padding-bottom:320px}
   .lrow .grip{width:24px}
   .lrow .ibtn{width:38px;height:38px}
   .lrow .ibtn+.ibtn{margin-inline-start:-6px}
+  /* The same for the two buttons in a subscription's list. */
+  .chk{gap:8px}
+  .chk .ibtn{width:38px;height:38px}
+  .chk .ibtn+.ibtn{margin-inline-start:-2px}
 }
 .qitem{display:flex;align-items:center;gap:12px;padding:10px 4px;min-height:56px}
 .qitem .i{width:28px;text-align:center;flex:none}
@@ -696,13 +709,17 @@ function errorCard(e, retry = 'location.reload()') {
 
 /* ---------- Preview player (ADR-029) ---------- */
 /*
- * A channel from the list plays here, in a window over the page. A live channel comes through the TV
- * under a random name, so this page never learns a stream's address; a YouTube channel uses YouTube's
- * own player. The player is set the way the TV's own ended up (ADR-028): start three segments behind
- * live with no offset of our own, keep half a minute loaded, and let go of the stream as soon as nobody
- * is watching. The TV always wins: it refuses a preview that competes with what it is playing, and
- * ends one when it needs the subscription; the window then says why.
+ * A channel from the lineup, or from a subscription's own list before it is added, plays here in a
+ * window over the page. A live channel comes through the TV under a random name, so this page never
+ * learns a stream's address; a YouTube channel uses YouTube's own player. The player is set the way
+ * the TV's own ended up (ADR-028): start three segments behind live with no offset of our own, keep
+ * half a minute loaded, and let go of the stream as soon as nobody is watching. It plays for the time
+ * chosen in TV settings, counted from the first picture, or until it is closed when no limit is
+ * chosen. The TV always wins: it refuses a preview that competes with what it is playing, and ends
+ * one when it needs the subscription; the window then says why.
  */
+/** The choices for how long a preview plays, in minutes; 0 is no limit. */
+const PREVIEW_TIMES = [[5, '5 minutes'], [15, '15 minutes'], [60, '1 hour'], [0, 'No limit']];
 const preview = (() => {
   let cur = null; // the preview on screen: { id, name, number, token, hls, video, tick, endsAt, over }
   let lib = null;
@@ -715,7 +732,9 @@ const preview = (() => {
   };
   const WHY = {
     tv_needs_it: 'The TV is playing from this subscription now, so the preview stopped.',
-    timed_out: 'The preview has ended. It stops after a few minutes so the stream stays free for the TV.',
+    timed_out: 'The preview has played for the time you chose.',
+    idle: 'The preview stopped because this page stopped asking for it.',
+    unplayable: 'This channel sends a kind of stream a browser can’t show. It may still play on the TV: use Play on TV.',
     hidden: 'The preview stopped while this page was out of sight.',
     nosignal: 'This channel isn’t playing right now.',
     offline: "Couldn't reach the TV.",
@@ -737,10 +756,10 @@ const preview = (() => {
   }
   const isOn = (id) => !!cur && cur.id === id;
   function markRows() { $$('[data-preview]').forEach((b) => b.classList.toggle('pvon', isOn(b.dataset.preview))); }
-  function note(text, busy, again) {
+  function note(text, busy, again, more) {
     const el = $('#pvNote'); if (!el) return;
     el.classList.toggle('hide', !text);
-    el.innerHTML = text ? `${busy ? '<span class="spin" style="width:28px;height:28px"></span>' : ''}<span>${esc(text)}</span>${again ? '<button class="btn" type="button" id="pvAgain">Play again</button>' : ''}` : '';
+    el.innerHTML = text ? `${busy ? '<span class="spin" style="width:28px;height:28px"></span>' : ''}<span>${esc(text)}</span>${again ? '<button class="btn" type="button" id="pvAgain">Play again</button>' : ''}${more || ''}` : '';
     const b = $('#pvAgain', el); if (b) b.onclick = () => { const p = cur; if (p) start(p); };
   }
   function sub(text) { const el = $('#pvSub'); if (el) el.textContent = text; }
@@ -763,6 +782,8 @@ const preview = (() => {
     $('#pvClose', el).onclick = stop;
     const sb = $('#pvSound', el); if (sb) sb.onclick = () => { const v = cur && cur.video; if (v) { v.muted = !v.muted; soundButton(); } };
     document.body.classList.add('pvopen');
+    // Started in a subscription's own list: the window has its own place there on a wide screen.
+    document.body.classList.toggle('pvcat', p.home === 'add');
   }
   /** Lets go of the player and its stream; the window stays to say why. */
   function release(p) {
@@ -781,7 +802,8 @@ const preview = (() => {
     p.over = true;
     release(p);
     if (why === 'hidden' || why === 'nosignal') tellTv(p);
-    note(WHY[why] || WHY.ended, false, why !== 'tv_needs_it');
+    note(WHY[why] || WHY.ended, false, why !== 'tv_needs_it' && why !== 'unplayable',
+      why === 'timed_out' ? '<a href="#/settings">Change how long it plays</a>' : '');
     sub('Preview ended');
   }
   /** The picture stopped: ask the TV whether it ended the preview, and say what it says. */
@@ -795,18 +817,32 @@ const preview = (() => {
   }
   function everySecond(p) {
     if (cur !== p || p.over) return;
-    const left = Math.max(0, Math.ceil((p.endsAt - Date.now()) / 1000));
-    sub(`Preview · stops in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`);
+    let left = null;
+    if (!p.playingAt) sub(`Loading · ${Math.floor((Date.now() - p.askedAt) / 1000)} s`);
+    else if (p.endsAt == null) sub('Preview · no time limit');
+    else {
+      left = Math.max(0, Math.ceil((p.endsAt - Date.now()) / 1000));
+      sub(`Stops in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`);
+    }
     p.beat = (p.beat || 0) + 1;
-    // Every few seconds, and when the time is up: has the TV ended it?
+    // Every few seconds, and when the time is up: has the TV ended it, and how long does it say is left?
     if (left === 0 || p.beat % 5 === 0) {
-      GET('/api/preview/' + p.token).then((st) => { if (!st.active) over(p, st.ended); }).catch((e) => { if (e.status === 401) stop(); });
+      GET('/api/preview/' + p.token).then((st) => {
+        if (cur !== p || p.over) return;
+        if (!st.active) over(p, st.ended);
+        else if (p.playingAt && st.playing && st.secondsLeft != null) p.endsAt = Date.now() + st.secondsLeft * 1000;
+      }).catch((e) => { if (e.status === 401) stop(); });
     }
   }
   async function playLive(p, url) {
     const v = p.video = $('#pv video');
     if (!v) return;
-    v.addEventListener('playing', () => { if (cur === p && !p.over) note(null); });
+    v.addEventListener('playing', () => {
+      if (cur !== p || p.over) return;
+      // The time chosen is time with a picture: loading does not use it up.
+      if (!p.playingAt) { p.playingAt = Date.now(); p.endsAt = p.seconds ? p.playingAt + p.seconds * 1000 : null; }
+      note(null);
+    });
     v.addEventListener('waiting', () => { if (cur === p && !p.over) note('Loading…', true); });
     let Hls = null;
     try { Hls = await library(); } catch (e) { /* Safari plays live TV by itself */ }
@@ -848,14 +884,15 @@ const preview = (() => {
     soundButton();
     p.tick = setInterval(() => everySecond(p), 1000);
   }
-  async function start(ch) {
+  async function start(what) {
     stop();
-    const p = cur = { id: ch.id, name: ch.name, number: ch.number };
+    // ask: what the TV is asked for; a lineup channel by its id unless the caller says otherwise.
+    const p = cur = { id: what.id, name: what.name, number: what.number, ask: what.ask || { channelId: what.id }, home: route.name, askedAt: Date.now() };
     open(p, null);
     note('Asking the TV…', true);
     markRows();
     let s;
-    try { s = await POST('/api/preview', { channelId: ch.id }); } catch (e) {
+    try { s = await POST('/api/preview', p.ask); } catch (e) {
       if (cur !== p) return;
       if (e.status === 401) { stop(); return; }
       p.over = true;
@@ -867,7 +904,7 @@ const preview = (() => {
     // Closed while the TV was answering: tell it, unless another preview has taken its place there.
     if (cur !== p) { if (!cur) tellTv(p); return; }
     if (s.kind === 'youtube') { open(p, s.embed); return; }
-    p.endsAt = Date.now() + (s.seconds || 180) * 1000;
+    p.seconds = s.seconds || null; // none: it plays until it is closed
     note('Loading…', true);
     playLive(p, s.url);
   }
@@ -875,13 +912,18 @@ const preview = (() => {
     const p = cur; cur = null;
     if (p) { release(p); if (!p.over) tellTv(p); }
     const el = $('#pv'); if (el) el.remove();
-    document.body.classList.remove('pvopen');
+    document.body.classList.remove('pvopen', 'pvcat');
     markRows();
   }
   // Out of sight means nobody is watching: let go of the stream.
   document.addEventListener('visibilitychange', () => { if (document.hidden && cur && cur.token && !cur.over) over(cur, 'hidden'); });
   window.addEventListener('pagehide', () => { if (cur) tellTv(cur); });
-  return { isOn, stop, toggle(ch) { if (isOn(ch.id)) stop(); else start(ch); } };
+  return {
+    isOn, stop,
+    toggle(what) { if (isOn(what.id)) stop(); else start(what); },
+    /** A preview belongs to the screen it was started on: going anywhere else closes it and lets go of its stream. */
+    leave(name) { if (cur && cur.home !== name) stop(); },
+  };
 })();
 
 /* ---------- Render loop ---------- */
@@ -889,8 +931,7 @@ const screens = {};
 let renderSeq = 0;
 async function render() {
   parseRoute();
-  // The preview belongs to the channel list: leaving the list closes it and lets go of its stream.
-  if (route.name !== 'lineup') preview.stop();
+  preview.leave(route.name);
   const seq = ++renderSeq;
   route.hashShown = location.hash || '#/home';
   if (route.name === 'first') { await screens.first.render(seq); return; }
@@ -1583,6 +1624,7 @@ screens.add = (() => {
       Promise.all([GET('/api/channels'), GET('/api/providers')]).then(([l, p]) => { state.lineup = l; state.providers = p; }).catch(() => {});
     }
     const m = mode();
+    if (m !== 'catalog') preview.stop();
     el.innerHTML = `
       <div class="seg full" role="tablist" aria-label="Where the channel comes from">
         <button role="tab" data-mode="catalog" class="${m === 'catalog' ? 'on' : ''}" aria-selected="${m === 'catalog'}">From my TV subscription</button><button role="tab" data-mode="youtube" class="${m === 'youtube' ? 'on' : ''}" aria-selected="${m === 'youtube'}">From YouTube</button><button role="tab" data-mode="link" class="${m === 'link' ? 'on' : ''}" aria-selected="${m === 'link'}">From a link</button>
@@ -1705,7 +1747,10 @@ screens.add = (() => {
     const sub = searching ? `${plural(cat.total, 'match', 'matches')} across every category` : `${fmtN(cat.total)} ${cat.total === 1 ? one : many} in this category`;
     let list = '';
     if (cat.type === 'live') {
-      list = cat.items.map((it) => `<label class="chk"><input type="checkbox" data-item="${esc(it.id)}" ${cat.selected.has(it.id) ? 'checked' : ''} ${it.inLineup ? 'disabled' : ''}>${logoBox(it.name, it.logo, cat.type)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span><span class="cap" dir="auto">${esc(it.group || 'No category')}</span></span>${it.inLineup ? `<span class="pill ok"><span class="dot"></span>In your lineup as ${esc(it.lineupNumber)}</span>` : ''}<button class="ibtn bd" type="button" data-try="${esc(it.id)}" aria-label="Play ${esc(it.name)} on the TV" title="Play on TV">${ico('play', 18)}</button></label>`).join('');
+      // A phone's row has no room for "in your lineup" beside the name and two buttons: it goes under the name.
+      const narrow = currentSize === 'phone';
+      const mine = (it) => (it.inLineup ? `<span class="pill ok" ${narrow ? 'style="align-self:flex-start"' : ''}><span class="dot"></span>${narrow ? 'In lineup · ' : 'In your lineup as '}${esc(it.lineupNumber)}</span>` : '');
+      list = cat.items.map((it) => `<label class="chk"><input type="checkbox" data-item="${esc(it.id)}" ${cat.selected.has(it.id) ? 'checked' : ''} ${it.inLineup ? 'disabled' : ''}>${logoBox(it.name, it.logo, cat.type)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span>${narrow && it.inLineup ? mine(it) : `<span class="cap" dir="auto">${esc(it.group || 'No category')}</span>`}</span>${narrow ? '' : mine(it)}<button class="ibtn bd ${preview.isOn(cat.pid + '/' + it.id) ? 'pvon' : ''}" type="button" data-preview="${esc(cat.pid + '/' + it.id)}" data-pvitem="${esc(it.id)}" aria-label="Preview ${esc(it.name)} on this page" title="Preview here">${ico('eye', 18)}</button><button class="ibtn bd" type="button" data-try="${esc(it.id)}" aria-label="Play ${esc(it.name)} on the TV" title="Play on TV">${ico('play', 18)}</button></label>`).join('');
     } else {
       list = `<div class="postergrid">${cat.items.map((it) => {
         const inner = `${posterHtml(it)}<div class="cap">${esc([it.year, it.rating, minutesText(it.minutes), scoreText(it.score)].filter(Boolean).join(' · '))}</div>`;
@@ -1725,6 +1770,11 @@ screens.add = (() => {
       ${n ? `<div class="addbar"><div class="grow"><div style="font-weight:700">${fmtN(n)} selected</div><div class="cap">${numbersWords(start, n)} You can change them next.</div></div><button class="btn ghost" id="clearSel">Clear</button><button class="btn pri" id="addSel">Add ${plural(n, 'channel')}</button></div>` : ''}`;
     $$('[data-item]', el).forEach((b) => b.onchange = () => { const it = cat.items.find((x) => x.id === b.dataset.item); if (b.checked) cat.selected.set(it.id, it); else cat.selected.delete(it.id); paintItems(); });
     $$('[data-try]', el).forEach((b) => b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); const it = cat.items.find((x) => x.id === b.dataset.try); playOnTv({ providerId: cat.pid, itemId: it.id, name: it.name }, it.name); });
+    $$('[data-pvitem]', el).forEach((b) => b.onclick = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const it = cat.items.find((x) => x.id === b.dataset.pvitem);
+      preview.toggle({ id: cat.pid + '/' + it.id, name: it.name, number: 0, ask: { providerId: cat.pid, itemId: it.id } });
+    });
     $$('[data-details]', el).forEach((b) => b.onclick = () => {
       const id = b.dataset.details; const name = b.dataset.name; const pid = cat.pid;
       const action = cat.type === 'series'
@@ -2591,6 +2641,7 @@ screens.settings = (() => {
     const s = S(); const st = state.status; const theme = store.get('stv.theme', 'system');
     const lang = s.language || '';
     const clockNow = s.showClock === false ? 'off' : (s.clockSize === 'LARGE' ? 'LARGE' : 'SMALL');
+    const pvMin = s.previewMinutes == null ? 15 : s.previewMinutes;
     const host = st.configUrl;
     const adv = store.get('stv.settingsAdvanced', false);
     el.innerHTML = `<div class="g2">
@@ -2625,6 +2676,10 @@ screens.settings = (() => {
             : st.pinSet ? '<div><button class="btn" id="pinChange">Change PIN</button></div>' : ''}
         </section>
         ${keysCard()}
+        <section class="card col g12"><h2 class="sec" id="pvH">Preview on this page</h2>
+          <p class="muted">How long a channel plays here after you press the eye in a channel list. The time counts from the first picture, so a channel that is slow to start still plays for all of it.</p>
+          <div class="seg full" role="radiogroup" aria-labelledby="pvH">${PREVIEW_TIMES.map(([k, l]) => `<button data-pvmin="${k}" class="${pvMin === k ? 'on' : ''}" role="radio" aria-checked="${pvMin === k}">${l}</button>`).join('')}</div>
+          <p class="hint">Whatever you choose, a preview stops when the TV needs the same subscription, and when this page is out of sight.</p></section>
         <section class="card col g12"><h2 class="sec">Appearance of this page</h2>
           <div class="seg full" role="radiogroup">${[['system', 'Same as my device'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-theme="${k}" class="${theme === k ? 'on' : ''}" role="radio" aria-checked="${theme === k}">${l}</button>`).join('')}</div>
           <p class="hint">Applies on this phone or computer only.</p></section>
@@ -2660,6 +2715,10 @@ screens.settings = (() => {
     $$('[data-clock]', el).forEach((b) => b.onclick = () => (b.dataset.clock === 'off'
       ? setSetting({ showClock: false }, 'The clock is hidden.')
       : setSetting({ showClock: true, clockSize: b.dataset.clock }, b.dataset.clock === 'LARGE' ? 'The clock shows large in the corner.' : 'The clock shows small in the corner.')));
+    $$('[data-pvmin]', el).forEach((b) => b.onclick = () => {
+      const minutes = +b.dataset.pvmin;
+      setSetting({ previewMinutes: minutes }, minutes ? `A preview now plays for ${PREVIEW_TIMES.find(([k]) => k === minutes)[1]}.` : 'A preview now plays until you close it.');
+    });
     const er = $('#eraseAll', el); if (er) er.onclick = async () => {
       if (!(await dialog({ title: 'Erase everything on this TV?', text: 'All channels, subscriptions, keys, the YouTube sign-in and the PIN are deleted from the TV. This can’t be undone.', ok: 'Erase everything', danger: true }))) return;
       if (!(await dialog({ title: 'Are you sure?', text: 'Telly will start again as new, with no channels.', ok: 'Yes, erase it', danger: true }))) return;

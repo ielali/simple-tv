@@ -46,4 +46,25 @@ object ProviderImport {
             epgId = it.epgId,
         )
     }
+
+    /**
+     * A catalog LIVE item as the channel it would be in the lineup, to play it before it is added: the
+     * same address and the same headers as [merge] gives it. Null when it is not a live channel with
+     * an address.
+     */
+    fun tryOut(item: CatalogItem, provider: Provider, id: String): Channel? {
+        if (item.type != CatalogType.LIVE) return null
+        val url = item.url ?: return null
+        return Channel(
+            id = id,
+            number = 0,
+            name = item.name,
+            type = SourceType.STREAM,
+            url = url,
+            logoUrl = item.logo,
+            headers = provider.authHeaders() + item.headers,
+            providerId = provider.id,
+            sourceId = item.id,
+        )
+    }
 }

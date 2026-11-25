@@ -76,13 +76,18 @@ items`, `GET /api/catalog/{pid}/series/{sid}`; `POST /api/youtube/preview`, `PUT
 `GET /api/nowplaying`, `POST /api/play`; `POST /api/preview`, `GET|DELETE /api/preview/{token}`;
 plus the guard, key log and debug routes.
 
-Preview player (ADR-029): `PreviewRoutes` lets the page's channel list play a live channel in the
-browser. The page gets a random token from `POST /api/preview`; `/preview/{token}/{name}` (outside
-`/api`, the token is the pass) is answered by `PreviewRelay`, which fetches from the provider and
-passes it on, with every address in a playlist swapped for a made-up name (`HlsRewrite`).
-`PreviewSessions` keeps the one running preview and ends it after 3 minutes or 30 s of silence;
+Preview player (ADR-029): `PreviewRoutes` lets the page play a live channel in the browser, from
+the lineup (`{channelId}`) or from a subscription's own list before it is added
+(`{providerId, itemId}`, built by `ProviderImport.tryOut`). The page gets a random token from
+`POST /api/preview`; `/preview/{token}/{name}` (outside `/api`, the token is the pass) is answered
+by `PreviewRelay`, which fetches from the provider and passes it on, with every address in a
+playlist swapped for a made-up name (`HlsRewrite`). `PreviewSessions` keeps the one running preview
+and ends it when its picture has played for `previewMinutes` (a setting; 0 is no limit) or after
+30 s of silence; `GET /api/preview/{token}` tells the page whether it runs and how long is left.
 `PreviewRules` refuses a preview that competes with what the TV's player holds, and `ConfigServer`
-ends a running one when the TV tunes into it. `/hls.min.js` serves the bundled hls.js player.
+ends a running one when the TV tunes into it and sweeps every 5 s, so an ended preview's connection
+to the provider is cut even when its browser has stopped reading. The relay writes its first
+timings to the playback log as `preview:` lines. `/hls.min.js` serves the bundled hls.js player.
 
 ## Catalogs, film and series channels
 

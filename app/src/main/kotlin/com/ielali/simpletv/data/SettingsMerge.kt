@@ -31,5 +31,6 @@ object SettingsMerge {
             GuidePresets.find(s) != null || s.startsWith("https://", true) || s.startsWith("http://", true)
         }?.distinct()?.take(6),
         ratingCountry = settings.ratingCountry.trim().uppercase().takeIf { it.length == 2 && it.all(Char::isLetter) }.orEmpty(),
+        previewMinutes = settings.previewMinutes.coerceIn(0, PreviewSessions.MAX_MINUTES),
     )
 }

@@ -61,6 +61,21 @@ class PreviewRulesTest {
     }
 
     @Test
+    fun `a channel from a subscription's list is the TV's channel when it is the same stream`() {
+        // The lineup's copy and the list's entry have different ids.
+        val onTv = live("lineup-id", "two").copy(sourceId = "41")
+        val sameAddress = live("lineup-id", "two").copy(id = "catalog:two:41")
+        assertEquals(Verdict.TV_ON_THIS_CHANNEL, PreviewRules.check(sameAddress, listOf(onTv), { 2 }))
+        // The provider moved the channel to a new address since it was added: still the same channel.
+        val moved = live("moved", "two").copy(id = "catalog:two:41", sourceId = "41")
+        assertEquals(Verdict.TV_ON_THIS_CHANNEL, PreviewRules.check(moved, listOf(onTv), { 2 }))
+        // Another entry of a two-stream subscription may play.
+        assertEquals(Verdict.OK, PreviewRules.check(live("other", "two").copy(id = "catalog:two:42", sourceId = "42"), listOf(onTv), { 2 }))
+        // The same number in another subscription's list is another channel.
+        assertEquals(Verdict.OK, PreviewRules.check(live("other", "m3u", "free.example.org").copy(sourceId = "41"), listOf(onTv), { 2 }))
+    }
+
+    @Test
     fun `the channel in the TV list's preview window counts as well`() {
         val tv = listOf(live("a", "other"), live("c", "xtream"))
         assertEquals(Verdict.TV_USES_SUBSCRIPTION, PreviewRules.check(live("b", "xtream"), tv, oneStream))

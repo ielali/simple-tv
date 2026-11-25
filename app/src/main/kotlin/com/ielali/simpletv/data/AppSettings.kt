@@ -52,4 +52,6 @@ data class AppSettings(
     val hideAdult: Boolean = true,
     /** Free TV guides (preset ids) and guide links to use; null = the default for the TV's region. */
     val guideSources: List<String>? = null,
+    /** How long the page's preview player plays a channel, in minutes of picture; 0 = until it is closed (ADR-029). */
+    val previewMinutes: Int = PreviewSessions.DEFAULT_MINUTES,
 )
