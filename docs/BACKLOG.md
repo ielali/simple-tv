@@ -52,6 +52,11 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
    - With No limit chosen in TV settings: leave one playing for half an hour, then close the laptop's
      lid without closing the window. The log should show nothing more from it, and the TV should
      tune a channel of that subscription as fast as ever.
+   - Full screen: the button on the picture's corner, on a laptop (the bar should fade when the
+     pointer rests, Esc should leave) and on a phone (an iPhone opens its own player).
+   - Marks: preview a channel that plays and one known to be dead; each should say so under its
+     name, still be there after Telly restarts, and show on the lineup's copy of a channel that
+     was tried in a subscription's list and then added.
    - While it plays, switch the TV on to a live channel of the same subscription. The window should
      say the TV is using the subscription. Note in ADR-029 whether the TV shows the tuning card
      longer than its usual 3 s or logs `ERROR_CODE_IO_BAD_HTTP_STATUS`: that is the provider still
@@ -171,6 +176,11 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done
+
+- The page's preview goes full screen from a button on the picture, and each channel previewed
+  keeps a mark under its name in the lineup and in the subscription's list: stream worked, stream
+  failed, or not a kind a browser can preview (ADR-029, second update). The TV keeps the marks.
+  Full screen itself is checked with a stand-in only; device check: item 0b.
 
 - The page's preview plays for a time chosen in TV settings (5 minutes, 15 minutes, 1 hour or no
   limit), counted from the first picture instead of the ask, and the eye is also on every live

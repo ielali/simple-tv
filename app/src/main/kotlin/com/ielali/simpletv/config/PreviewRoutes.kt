@@ -1,6 +1,9 @@
 package com.ielali.simpletv.config
 
 import com.ielali.simpletv.data.Channel
+import com.ielali.simpletv.data.PreviewCheck
+import com.ielali.simpletv.data.PreviewChecks
+import com.ielali.simpletv.data.PreviewResult
 import com.ielali.simpletv.data.PreviewRules
 import com.ielali.simpletv.data.PreviewSessions
 import com.ielali.simpletv.data.SourceType
@@ -29,7 +32,8 @@ import java.io.InputStream
  * channel plays in the browser through the TV: the page gets a random token, never the stream's
  * address, and the TV relays what is behind it. YouTube channels get the address of YouTube's own
  * player. The TV always wins: no preview starts while the TV's player holds the same subscription,
- * and one that is running ends when it does.
+ * and one that is running ends when it does. What each preview showed about its channel (it worked,
+ * no signal, not a kind a browser plays) is kept in [checks] for the lists to mark the channel with.
  *
  * Takes what it needs from the app as functions, so the whole of it runs in JVM tests.
  */
@@ -48,8 +52,9 @@ class PreviewRoutes(
     /** The playback log: how a preview started and why the TV ended it. Never an address or a name. */
     private val log: (String) -> Unit = {},
     val sessions: PreviewSessions = PreviewSessions(),
+    val checks: PreviewChecks = PreviewChecks(),
 ) {
-    private val relay = PreviewRelay(sessions, userAgent, log)
+    private val relay = PreviewRelay(sessions, userAgent, log, checks::record)
 
     /** A lineup channel by [channelId], or a channel in a subscription's list by [providerId] and [itemId]. */
     @Serializable data class Start(val channelId: String? = null, val providerId: String? = null, val itemId: String? = null)
@@ -62,6 +67,12 @@ class PreviewRoutes(
 
     /** [playing]: video has reached the browser. [secondsLeft]: until it stops by itself, null with no limit. */
     @Serializable data class State(val active: Boolean, val ended: String? = null, val playing: Boolean = false, val secondsLeft: Int? = null)
+
+    /** What a preview showed about a channel: "worked", "failed" or "unplayable", and when (epoch millis). */
+    @Serializable data class Mark(val result: String, val at: Long)
+
+    /** Marks for the lineup by channel id, and for subscriptions' own lists by "subscription id/item id". */
+    @Serializable data class Marks(val channels: Map<String, Mark>, val items: Map<String, Mark>)
 
     /** The same shape as the page's other error answers ([ConfigServer.ErrorBody]). */
     @Serializable data class Problem(val error: String, val code: String? = null)
@@ -88,6 +99,8 @@ class PreviewRoutes(
         relay.dropEnded()
     }
 
+    private fun mark(check: PreviewCheck) = Mark(check.result.name.lowercase(), check.at)
+
     private fun state(token: String) = State(
         active = sessions.isLive(token),
         ended = sessions.whyEnded(token)?.name?.lowercase(),
@@ -112,6 +125,10 @@ class PreviewRoutes(
                     call.respond(Started(kind = "youtube", embed = YouTubeEmbed.previewUrl(target)))
                 }
                 SourceType.STREAM -> {
+                    if (!channel.url.startsWith("http://", ignoreCase = true) && !channel.url.startsWith("https://", ignoreCase = true)) {
+                        withContext(Dispatchers.IO) { checks.record(channel, PreviewResult.UNPLAYABLE) }
+                        return@post call.respond(HttpStatusCode.Conflict, Problem("This channel's kind of stream can't play in a browser. It may still play on the TV: use Play on TV.", "kind"))
+                    }
                     when (PreviewRules.check(channel, onTv(), streamLimit)) {
                         PreviewRules.Verdict.TV_ON_THIS_CHANNEL ->
                             return@post call.respond(HttpStatusCode.Conflict, Problem("The TV is showing this channel now, so it can't play here as well.", "tv"))
@@ -131,6 +148,15 @@ class PreviewRoutes(
                 }
                 else -> call.respond(HttpStatusCode.Conflict, Problem("Film and series channels play on the TV only. Use Play on TV."))
             }
+        }
+        // What previews have shown so far, for the lists to mark their channels with.
+        get("/api/preview/checks") {
+            call.respond(
+                Marks(
+                    channels = channels().mapNotNull { c -> checks.of(c)?.let { c.id to mark(it) } }.toMap(),
+                    items = checks.listed().mapValues { mark(it.value) },
+                ),
+            )
         }
         // Whether a preview still runs and how long it has, or why it stopped, for the page to say so.
         get("/api/preview/{token}") {

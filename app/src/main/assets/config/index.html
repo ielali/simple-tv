@@ -296,6 +296,25 @@ details[open] summary svg{transform:rotate(90deg)}
 .pvnote{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;color:#F2F4F8;background:rgba(11,18,32,.86);font-weight:600}
 .pvnote .btn{background:var(--gold);color:#0B1220;border-color:transparent}
 .pvnote a{color:inherit;font-weight:500;text-decoration:underline}
+/* Full screen: a small button on the picture's corner. The whole window goes full screen (the browser
+   sizes it; .pvfs is set while it is), the picture fills it, and the bar lies over its foot and fades
+   when the pointer rests. */
+.pvfull{position:absolute;inset-inline-end:8px;bottom:8px;width:36px;height:36px;border:0;border-radius:10px;background:rgba(11,18,32,.62);color:#F2F4F8;display:grid;place-items:center;cursor:pointer;z-index:2;transition:opacity .2s}
+.pvfull:hover{background:rgba(11,18,32,.86)}
+.pv.pvfs{display:flex;border:0;border-radius:0;background:#000}
+.pv.pvfs .pvscreen{flex:1;aspect-ratio:auto}
+.pv.pvfs .pvbar{position:absolute;inset-inline:0;bottom:0;padding:12px 16px;background:rgba(11,18,32,.82);color:#F2F4F8;transition:opacity .2s}
+.pv.pvfs .pvbar .cap,.pv.pvfs .pvbar .ibtn{color:#DCE1EA}
+.pv.pvfs .pvfull{bottom:76px;inset-inline-end:16px}
+.pv.pvfs.pvidle{cursor:none}
+.pv.pvfs.pvidle .pvbar,.pv.pvfs.pvidle .pvfull{opacity:0;pointer-events:none}
+/* What previewing a channel showed, under its name in the lists. */
+.pvmark:empty{display:none}
+.pvm{display:inline-flex;align-items:center;gap:4px;font-weight:600;font-size:12px;line-height:16px;margin-top:4px}
+.pvm svg{flex:none}
+.pvm.ok{color:var(--okink)}
+.pvm.bad{color:var(--errink)}
+.pvm.na{color:var(--muted)}
 .pvbar{display:flex;align-items:center;gap:10px;padding:8px 8px 8px 12px}
 .pvnum{min-width:40px;height:40px;padding:0 6px;border-radius:10px;background:var(--navy);color:var(--gold);display:grid;place-items:center;font-size:20px;font-weight:800;flex:none;font-variant-numeric:tabular-nums}
 .ibtn.pvon{background:var(--primary);color:var(--onp);border-color:transparent}
@@ -399,6 +418,8 @@ const IC = {
   eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
   sound: 'M4 9v6h4l5 4V5L8 9zM16.5 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11',
   mute: 'M4 9v6h4l5 4V5L8 9zM16 9.5l5 5M21 9.5l-5 5',
+  expand: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
+  shrink: 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5',
 };
 const ico = (name, size = 20, sw = 1.8) =>
   `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${IC[name]}"/></svg>`;
@@ -735,6 +756,7 @@ const preview = (() => {
     timed_out: 'The preview has played for the time you chose.',
     idle: 'The preview stopped because this page stopped asking for it.',
     unplayable: 'This channel sends a kind of stream a browser can’t show. It may still play on the TV: use Play on TV.',
+    codec: 'The stream arrived, but this browser can’t show its picture. It may still play on the TV: use Play on TV.',
     hidden: 'The preview stopped while this page was out of sight.',
     nosignal: 'This channel isn’t playing right now.',
     offline: "Couldn't reach the TV.",
@@ -755,7 +777,54 @@ const preview = (() => {
     return lib;
   }
   const isOn = (id) => !!cur && cur.id === id;
-  function markRows() { $$('[data-preview]').forEach((b) => b.classList.toggle('pvon', isOn(b.dataset.preview))); }
+  /*
+   * What previews have shown about channels, as the TV keeps it: by a lineup channel's id, and by
+   * "subscription/item" for a subscription's own list. A list draws each mark under the channel's name.
+   */
+  let marks = {};
+  const MARK = {
+    worked: ['ok', 'check', 'Stream worked'],
+    failed: ['bad', 'alert', 'Stream failed'],
+    unplayable: ['na', 'alert', 'Can’t preview in a browser · try Play on TV'],
+  };
+  function markHtml(key) {
+    const m = marks[key]; const d = m && MARK[m.result];
+    if (!d) return '';
+    return `<span class="pvm ${d[0]}">${ico(d[1], 14, 2.2)}<span>${d[2]}${m.result === 'unplayable' ? '' : ' · ' + esc(whenPast(m.at))}</span></span>`;
+  }
+  function markRows() {
+    $$('[data-preview]').forEach((b) => b.classList.toggle('pvon', isOn(b.dataset.preview)));
+    $$('[data-pvmark]').forEach((el) => { el.innerHTML = markHtml(el.dataset.pvmark); });
+  }
+  async function loadMarks() {
+    try { const r = await GET('/api/preview/checks'); marks = Object.assign({}, r.channels, r.items); markRows(); } catch (e) { /* the lists simply stay unmarked */ }
+  }
+  /* Full screen: the whole window, so the bar stays within reach; it fades while the pointer rests. */
+  const fullNow = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+  let restT = null;
+  function fullButton() {
+    const el = $('#pv'); if (el) el.classList.toggle('pvfs', fullNow() === el);
+    const b = $('#pvFull'); if (!b) return;
+    const on = !!fullNow();
+    b.innerHTML = ico(on ? 'shrink' : 'expand', 20, 2);
+    b.setAttribute('aria-label', on ? 'Leave full screen' : 'Full screen');
+    b.title = on ? 'Leave full screen' : 'Full screen';
+  }
+  function toggleFull() {
+    const el = $('#pv'); if (!el) return;
+    if (fullNow()) { const leave = document.exitFullscreen || document.webkitExitFullscreen; if (leave) leave.call(document); return; }
+    const enter = el.requestFullscreen || el.webkitRequestFullscreen;
+    const v = cur && cur.video;
+    if (enter) { const asked = enter.call(el); if (asked && asked.catch) asked.catch(() => {}); }
+    // An iPhone lets only the video itself go full screen, in its own player.
+    else if (v && v.webkitEnterFullscreen) v.webkitEnterFullscreen();
+  }
+  function wake() {
+    const el = $('#pv'); if (!el) return;
+    el.classList.remove('pvidle');
+    clearTimeout(restT);
+    if (fullNow()) restT = setTimeout(() => { const now = $('#pv'); if (now && fullNow()) now.classList.add('pvidle'); }, 3000);
+  }
   function note(text, busy, again, more) {
     const el = $('#pvNote'); if (!el) return;
     el.classList.toggle('hide', !text);
@@ -774,13 +843,16 @@ const preview = (() => {
   function open(p, youtube) {
     let el = $('#pv');
     if (!el) { el = document.createElement('section'); el.id = 'pv'; el.className = 'pv'; el.setAttribute('aria-label', 'Preview'); document.body.appendChild(el); }
-    el.innerHTML = `<div class="pvscreen">${youtube ? `<iframe src="${esc(youtube)}" title="${esc(p.name)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>` : '<video playsinline></video>'}<div class="pvnote hide" id="pvNote" role="status"></div></div>
+    el.innerHTML = `<div class="pvscreen">${youtube ? `<iframe src="${esc(youtube)}" title="${esc(p.name)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>` : '<video playsinline></video>'}<div class="pvnote hide" id="pvNote" role="status"></div>${youtube ? '' : '<button class="pvfull" type="button" id="pvFull"></button>'}</div>
       <div class="pvbar"><div class="pvnum">${p.number > 0 ? esc(p.number) : ico('play', 18, 2)}</div>
         <div class="grow"><div class="nm" dir="auto">${esc(p.name)}</div><div class="cap" id="pvSub">${youtube ? 'YouTube · playing here, not on the TV' : 'Preview · playing here, not on the TV'}</div></div>
         ${youtube ? '' : '<button class="ibtn" type="button" id="pvSound"></button>'}
         <button class="ibtn" type="button" id="pvClose" aria-label="Close the preview" title="Close">${ico('close', 20)}</button></div>`;
     $('#pvClose', el).onclick = stop;
     const sb = $('#pvSound', el); if (sb) sb.onclick = () => { const v = cur && cur.video; if (v) { v.muted = !v.muted; soundButton(); } };
+    // YouTube's own player has its own full-screen button.
+    const fb = $('#pvFull', el); if (fb) { fb.onclick = toggleFull; fullButton(); }
+    el.onmousemove = el.ontouchstart = el.onkeydown = wake;
     document.body.classList.add('pvopen');
     // Started in a subscription's own list: the window has its own place there on a wide screen.
     document.body.classList.toggle('pvcat', p.home === 'add');
@@ -801,10 +873,13 @@ const preview = (() => {
     if (cur !== p || p.over) return;
     p.over = true;
     release(p);
-    if (why === 'hidden' || why === 'nosignal') tellTv(p);
-    note(WHY[why] || WHY.ended, false, why !== 'tv_needs_it' && why !== 'unplayable',
+    if (why === 'hidden' || why === 'nosignal' || why === 'codec') tellTv(p);
+    note(WHY[why] || WHY.ended, false, why !== 'tv_needs_it' && why !== 'unplayable' && why !== 'codec',
       why === 'timed_out' ? '<a href="#/settings">Change how long it plays</a>' : '');
     sub('Preview ended');
+    wake();
+    // The TV has noted what this preview showed: bring the lists' marks up to date.
+    if (p.token) loadMarks();
   }
   /** The picture stopped: ask the TV whether it ended the preview, and say what it says. */
   async function stopped(p) {
@@ -840,7 +915,7 @@ const preview = (() => {
     v.addEventListener('playing', () => {
       if (cur !== p || p.over) return;
       // The time chosen is time with a picture: loading does not use it up.
-      if (!p.playingAt) { p.playingAt = Date.now(); p.endsAt = p.seconds ? p.playingAt + p.seconds * 1000 : null; }
+      if (!p.playingAt) { p.playingAt = Date.now(); p.endsAt = p.seconds ? p.playingAt + p.seconds * 1000 : null; loadMarks(); }
       note(null);
     });
     v.addEventListener('waiting', () => { if (cur === p && !p.over) note('Loading…', true); });
@@ -859,11 +934,14 @@ const preview = (() => {
       }
     };
     v.muted = false;
+    v.ondblclick = toggleFull;
     if (Hls && Hls.isSupported()) {
       const hls = p.hls = new Hls(PLAYER);
       hls.on(Hls.Events.MANIFEST_PARSED, go);
       hls.on(Hls.Events.ERROR, (_, d) => {
         if (cur !== p || !d.fatal) return;
+        // The stream came, in a coding this browser has no decoder for: the channel is not at fault.
+        if (/codec/i.test(d.details || '')) { over(p, 'codec'); return; }
         // One try at carrying on after a decoding slip; the player retries what it could not load by itself.
         if (d.type === Hls.ErrorTypes.MEDIA_ERROR && !p.recovered) { p.recovered = true; hls.recoverMediaError(); return; }
         stopped(p);
@@ -871,7 +949,7 @@ const preview = (() => {
       hls.loadSource(url);
       hls.attachMedia(v);
     } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
-      v.addEventListener('error', () => stopped(p));
+      v.addEventListener('error', () => (v.error && v.error.code === 3 ? over(p, 'codec') : stopped(p)));
       v.src = url;
       go();
     } else {
@@ -896,8 +974,11 @@ const preview = (() => {
       if (cur !== p) return;
       if (e.status === 401) { stop(); return; }
       p.over = true;
-      note(e.status === 0 ? "Couldn't reach the TV." : e.message, false, e.status !== 404);
+      // 'kind': not a stream a browser plays, so trying again changes nothing; the TV has marked the channel.
+      const kind = !!e.body && e.body.code === 'kind';
+      note(e.status === 0 ? "Couldn't reach the TV." : e.message, false, e.status !== 404 && !kind);
       sub(e.body && e.body.code === 'tv' ? 'The TV comes first' : 'No preview');
+      if (kind) loadMarks();
       return;
     }
     if (s.kind === 'hls') p.token = s.url.split('/')[2];
@@ -911,15 +992,22 @@ const preview = (() => {
   function stop() {
     const p = cur; cur = null;
     if (p) { release(p); if (!p.over) tellTv(p); }
-    const el = $('#pv'); if (el) el.remove();
+    const el = $('#pv');
+    if (el) {
+      // Closing from full screen goes back to the page.
+      if (fullNow() === el) { const leave = document.exitFullscreen || document.webkitExitFullscreen; if (leave) { const left = leave.call(document); if (left && left.catch) left.catch(() => {}); } }
+      el.remove();
+    }
+    clearTimeout(restT);
     document.body.classList.remove('pvopen', 'pvcat');
     markRows();
   }
   // Out of sight means nobody is watching: let go of the stream.
   document.addEventListener('visibilitychange', () => { if (document.hidden && cur && cur.token && !cur.over) over(cur, 'hidden'); });
   window.addEventListener('pagehide', () => { if (cur) tellTv(cur); });
+  ['fullscreenchange', 'webkitfullscreenchange'].forEach((name) => document.addEventListener(name, () => { fullButton(); wake(); }));
   return {
-    isOn, stop,
+    isOn, stop, markHtml, loadMarks,
     toggle(what) { if (isOn(what.id)) stop(); else start(what); },
     /** A preview belongs to the screen it was started on: going anywhere else closes it and lets go of its stream. */
     leave(name) { if (cur && cur.home !== name) stop(); },
@@ -1250,6 +1338,7 @@ screens.lineup = (() => {
       state.lineup = lineup; load(lineup);
     }
     refreshNow();
+    preview.loadMarks();
     loadGuideNow(true).then(paintGuide);
     paint();
   }
@@ -1270,6 +1359,7 @@ screens.lineup = (() => {
       <div class="grow">
         <div class="nm" dir="auto">${esc(r.name)}${changed ? ' <span class="pill info" style="vertical-align:middle">Changed</span>' : ''}</div>
         <div class="rowsub"><span class="badge ${TYPE_BADGE[r.type]}">${TYPE_LABEL[r.type]}</span><span dir="auto">${esc(channelSub(r))}${playing ? ' · playing on the TV now' : ''}</span></div>
+        ${r.type === 'STREAM' ? `<div class="pvmark" data-pvmark="${esc(r.id)}">${preview.markHtml(r.id)}</div>` : ''}
         ${flagged ? `<div class="flag">${ico('alert', 14)}${esc(FLAG_TEXT[flagged] || '')}</div>` : ''}
         ${r.type === 'STREAM' ? `<div class="guideline" data-guide="${esc(r.id)}">${guideLine(r.id)}</div>` : ''}
       </div>
@@ -1410,6 +1500,7 @@ screens.lineup = (() => {
       <div class="lcbody">
         <div class="nm" dir="auto">${esc(r.name)}</div>
         <div class="rowsub"><span class="badge ${TYPE_BADGE[r.type]}">${TYPE_LABEL[r.type]}</span>${changed ? '<span class="pill info">Changed</span>' : ''}${playing ? '<span class="pill ok">On the TV</span>' : ''}</div>
+        ${r.type === 'STREAM' ? `<div class="pvmark" data-pvmark="${esc(r.id)}">${preview.markHtml(r.id)}</div>` : ''}
         ${flagged ? `<div class="flag">${ico('alert', 14)}${esc(FLAG_TEXT[flagged] || '')}</div>` : ''}
         ${r.type === 'STREAM' ? `<div class="guideline" data-guide="${esc(r.id)}">${guideLine(r.id)}</div>` : ''}
       </div>
@@ -1646,6 +1737,7 @@ screens.add = (() => {
     if (want && subs.some((p) => p.id === want)) { if (cat.pid !== want) reset(want); }
     else if (!cat.pid || !subs.some((p) => p.id === cat.pid)) reset(subs[0].id);
     const t = route.q.get('type'); if (t && ['live', 'film', 'series'].includes(t) && t !== cat.type) { cat.type = t; cat.category = null; cat.cats = null; }
+    preview.loadMarks();
     await loadCats(seq);
   }
   function reset(pid) { Object.assign(cat, { pid, category: null, q: '', items: [], total: 0, cats: null, catsShown: 60, catFind: '' }); cat.selected.clear(); }
@@ -1750,7 +1842,7 @@ screens.add = (() => {
       // A phone's row has no room for "in your lineup" beside the name and two buttons: it goes under the name.
       const narrow = currentSize === 'phone';
       const mine = (it) => (it.inLineup ? `<span class="pill ok" ${narrow ? 'style="align-self:flex-start"' : ''}><span class="dot"></span>${narrow ? 'In lineup · ' : 'In your lineup as '}${esc(it.lineupNumber)}</span>` : '');
-      list = cat.items.map((it) => `<label class="chk"><input type="checkbox" data-item="${esc(it.id)}" ${cat.selected.has(it.id) ? 'checked' : ''} ${it.inLineup ? 'disabled' : ''}>${logoBox(it.name, it.logo, cat.type)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span>${narrow && it.inLineup ? mine(it) : `<span class="cap" dir="auto">${esc(it.group || 'No category')}</span>`}</span>${narrow ? '' : mine(it)}<button class="ibtn bd ${preview.isOn(cat.pid + '/' + it.id) ? 'pvon' : ''}" type="button" data-preview="${esc(cat.pid + '/' + it.id)}" data-pvitem="${esc(it.id)}" aria-label="Preview ${esc(it.name)} on this page" title="Preview here">${ico('eye', 18)}</button><button class="ibtn bd" type="button" data-try="${esc(it.id)}" aria-label="Play ${esc(it.name)} on the TV" title="Play on TV">${ico('play', 18)}</button></label>`).join('');
+      list = cat.items.map((it) => `<label class="chk"><input type="checkbox" data-item="${esc(it.id)}" ${cat.selected.has(it.id) ? 'checked' : ''} ${it.inLineup ? 'disabled' : ''}>${logoBox(it.name, it.logo, cat.type)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span>${narrow && it.inLineup ? mine(it) : `<span class="cap" dir="auto">${esc(it.group || 'No category')}</span>`}<span class="pvmark" data-pvmark="${esc(cat.pid + '/' + it.id)}">${preview.markHtml(cat.pid + '/' + it.id)}</span></span>${narrow ? '' : mine(it)}<button class="ibtn bd ${preview.isOn(cat.pid + '/' + it.id) ? 'pvon' : ''}" type="button" data-preview="${esc(cat.pid + '/' + it.id)}" data-pvitem="${esc(it.id)}" aria-label="Preview ${esc(it.name)} on this page" title="Preview here">${ico('eye', 18)}</button><button class="ibtn bd" type="button" data-try="${esc(it.id)}" aria-label="Play ${esc(it.name)} on the TV" title="Play on TV">${ico('play', 18)}</button></label>`).join('');
     } else {
       list = `<div class="postergrid">${cat.items.map((it) => {
         const inner = `${posterHtml(it)}<div class="cap">${esc([it.year, it.rating, minutesText(it.minutes), scoreText(it.score)].filter(Boolean).join(' · '))}</div>`;

@@ -62,12 +62,14 @@ class PreviewSessions(
 
     /**
      * The first video has reached the browser. The time limit counts from here, not from the ask: a
-     * channel that takes long to load still plays for the whole time chosen.
+     * channel that takes long to load still plays for the whole time chosen. True the first time.
      */
     @Synchronized
-    fun pictureStarted(token: String) {
-        val s = live()?.takeIf { it.token == token } ?: return
-        if (s.pictureAt == null) s.pictureAt = clock()
+    fun pictureStarted(token: String): Boolean {
+        val s = live()?.takeIf { it.token == token } ?: return false
+        if (s.pictureAt != null) return false
+        s.pictureAt = clock()
+        return true
     }
 
     /** True once [token]'s preview has passed video on. */

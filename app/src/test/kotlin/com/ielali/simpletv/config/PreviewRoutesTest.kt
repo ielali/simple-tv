@@ -122,11 +122,12 @@ class PreviewRoutesTest {
         headers = mapOf("Authorization" to "Basic dTpw"), providerId = "m3u", sourceId = "7",
     )
 
+    @Volatile private var lineup: List<Channel> = listOf(live, other, youtube, films)
     @Volatile private var onTv: List<Channel> = emptyList()
     @Volatile private var minutes = 3
     private val logged = CopyOnWriteArrayList<String>()
     private val routes = PreviewRoutes(
-        channels = { listOf(live, other, youtube, films) },
+        channels = { lineup },
         catalogChannel = { providerId, itemId -> listed.takeIf { providerId == "m3u" && itemId == "7" } },
         onTv = { onTv },
         streamLimit = { if (it == "xtream") 1 else null },
@@ -181,6 +182,7 @@ class PreviewRoutesTest {
     private fun started(a: Answer) = json.decodeFromString(PreviewRoutes.Started.serializer(), a.text)
     private fun problem(a: Answer) = json.decodeFromString(PreviewRoutes.Problem.serializer(), a.text)
     private fun state(token: String) = json.decodeFromString(PreviewRoutes.State.serializer(), ask("GET", "/api/preview/$token").text)
+    private fun marks() = json.decodeFromString(PreviewRoutes.Marks.serializer(), ask("GET", "/api/preview/checks").text)
 
     /** Nothing the page receives may say where the stream comes from. */
     private fun assertNoAddress(text: String) {
@@ -446,6 +448,92 @@ class PreviewRoutesTest {
         assertEquals(4, lines.size)
         val all = lines.joinToString("\n")
         for (secret in listOf("alice", "s3cret", "127.0.0.1", "News", "hls/")) assertFalse(all, all.contains(secret))
+    }
+
+    @Test
+    fun `a channel whose stream came is marked as working, for the lineup and the list alike`() {
+        assertTrue(marks().channels.isEmpty())
+        val s = started(preview("ch41"))
+        ask("GET", s.url!!)
+        // A playlist alone proves nothing yet.
+        assertTrue(marks().channels.isEmpty())
+        ask("GET", s.url!!.replace("index.m3u8", "0.ts"))
+        val worked = marks()
+        assertEquals("worked", worked.channels["ch41"]?.result)
+        assertTrue(worked.channels["ch41"]!!.at > 0)
+        // A lineup channel that came with no source id is not in any subscription's list.
+        assertTrue(worked.items.isEmpty())
+
+        // Tried in a subscription's own list, then added: the lineup's copy carries the mark.
+        provider.pages["/list/alice/s3cret/7.m3u8"] = FakeProvider.Page("200 OK", "#EXTM3U\n#EXTINF:6,\na.ts\n".toByteArray())
+        provider.pages["/list/alice/s3cret/a.ts"] = FakeProvider.Page("200 OK", segment, listOf("Content-Type: video/mp2t"))
+        val l = started(previewListed("m3u", "7"))
+        ask("GET", l.url!!)
+        ask("GET", l.url!!.replace("index.m3u8", "0.ts"))
+        assertEquals("worked", marks().items["m3u/7"]?.result)
+        lineup = lineup + listed.copy(id = "added", number = 12)
+        val both = marks()
+        assertEquals("worked", both.channels["added"]?.result)
+        assertNoAddress(ask("GET", "/api/preview/checks").text)
+    }
+
+    @Test
+    fun `a channel that gives no signal is marked so, until a later preview shows otherwise`() {
+        provider.pages["/hls/alice/s3cret/41/index.m3u8"] = FakeProvider.Page("403 Forbidden", "over the limit".toByteArray())
+        val s = started(preview("ch41"))
+        assertEquals(502, ask("GET", s.url!!).status)
+        assertEquals("failed", marks().channels["ch41"]?.result)
+
+        // The provider answers again: the same preview goes on to show video, and the mark follows.
+        provider.pages["/hls/alice/s3cret/41/index.m3u8"] = FakeProvider.Page("200 OK", "#EXTM3U\n#EXTINF:10,\nseg2200.ts\n".toByteArray())
+        ask("GET", s.url!!)
+        ask("GET", s.url!!.replace("index.m3u8", "0.ts"))
+        assertEquals("worked", marks().channels["ch41"]?.result)
+
+        // Once there has been a picture, a later hiccup does not take the mark back.
+        provider.pages["/hls/alice/s3cret/41/index.m3u8"] = FakeProvider.Page("500 Oops", ByteArray(0))
+        assertEquals(502, ask("GET", s.url!!).status)
+        assertEquals("worked", marks().channels["ch41"]?.result)
+    }
+
+    @Test
+    fun `a web page where the stream should be is no signal, not another kind of stream`() {
+        provider.pages["/live/alice/s3cret/42.m3u8"] = FakeProvider.Page("200 OK", "<html>Your account has expired</html>".toByteArray(), listOf("Content-Type: text/html; charset=utf-8"))
+        val s = started(preview("ch42"))
+        val answer = ask("GET", s.url!!)
+        assertEquals(502, answer.status)
+        assertFalse(answer.text, answer.text.contains("expired"))
+        assertEquals("failed", marks().channels["ch42"]?.result)
+    }
+
+    @Test
+    fun `channels a browser cannot play are marked as such, not as broken`() {
+        // Video where the playlist should be.
+        provider.pages["/live/alice/s3cret/42.m3u8"] = FakeProvider.Page("200 OK", segment, listOf("Content-Type: video/mp2t"))
+        val s = started(preview("ch42"))
+        assertEquals(415, ask("GET", s.url!!).status)
+        assertEquals("unplayable", marks().channels["ch42"]?.result)
+
+        // An address that is not a web address at all is refused before anything is asked for.
+        lineup = lineup + Channel(id = "rtmp", number = 50, name = "Old feed", url = "rtmp://127.0.0.1/live/alice/s3cret")
+        val asked = provider.asked.size
+        val refused = preview("rtmp")
+        assertEquals(409, refused.status)
+        assertEquals("kind", problem(refused).code)
+        assertNoAddress(refused.text)
+        assertEquals(asked, provider.asked.size)
+        assertEquals("unplayable", marks().channels["rtmp"]?.result)
+        assertNull(routes.sessions.active())
+    }
+
+    @Test
+    fun `a preview closed before anything came, or refused for the TV, leaves no mark`() {
+        val s = started(preview("ch41"))
+        ask("DELETE", "/api/preview/${s.url!!.split('/')[2]}")
+        onTv = listOf(live)
+        assertEquals(409, preview("ch42").status)
+        assertTrue(marks().channels.isEmpty())
+        assertTrue(marks().items.isEmpty())
     }
 
     @Test

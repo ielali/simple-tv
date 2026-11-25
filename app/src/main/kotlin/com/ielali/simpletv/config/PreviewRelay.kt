@@ -1,6 +1,8 @@
 package com.ielali.simpletv.config
 
+import com.ielali.simpletv.data.Channel
 import com.ielali.simpletv.data.HlsRewrite
+import com.ielali.simpletv.data.PreviewResult
 import com.ielali.simpletv.data.PreviewSessions
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
@@ -18,11 +20,14 @@ import java.util.concurrent.ConcurrentHashMap
  * held in memory. The same timeouts as the TV's own player (ADR-028). Android-free.
  *
  * [log] gets the first few timings of each preview, for the playback log; never an address or a name.
+ * [onResult] hears what a preview showed about its channel: video came, the provider failed before
+ * any did, or the channel is not HLS.
  */
 class PreviewRelay(
     private val sessions: PreviewSessions,
     private val userAgent: String,
     private val log: (String) -> Unit = {},
+    private val onResult: (Channel, PreviewResult) -> Unit = { _, _ -> },
 ) {
 
     sealed interface Reply {
@@ -95,8 +100,8 @@ class PreviewRelay(
         val connection = try {
             open(address, session.channel.headers)
         } catch (e: Exception) {
-            return Reply.Failed
-        } ?: return Reply.Failed
+            return failed(session)
+        } ?: return failed(session)
         try {
             val body = BufferedInputStream(connection.inputStream, BUFFER)
             body.mark(HEAD)
@@ -111,8 +116,12 @@ class PreviewRelay(
             val firstByteMs = msSince(asked)
             if (!HlsRewrite.isPlaylist(head, read)) {
                 if (name == PreviewSessions.INDEX) {
-                    // The channel's own address gave video, not a playlist: a browser cannot play that.
+                    val type = connection.contentType.orEmpty()
                     connection.disconnect()
+                    // A web page where the stream should be is the provider saying no, not another kind of stream.
+                    if (type.startsWith("text/html", ignoreCase = true)) return failed(session)
+                    // The channel's own address gave video, not a playlist: a browser cannot play that.
+                    onResult(session.channel, PreviewResult.UNPLAYABLE)
                     sessions.end(token, PreviewSessions.Ended.UNPLAYABLE)
                     note(token) { "the channel is not HLS, no preview" }
                     return Reply.Unplayable
@@ -122,7 +131,7 @@ class PreviewRelay(
                     stillWanted = { sessions.find(token) != null },
                     onClose = { open.remove(it) },
                     onPassed = { bytes ->
-                        sessions.pictureStarted(token)
+                        if (sessions.pictureStarted(token)) onResult(session.channel, PreviewResult.WORKED)
                         val ms = msSince(asked)
                         note(token) {
                             String.format(Locale.ROOT, "video %.1f MB, first byte %d ms, all %d ms, %.1f Mbit/s", bytes / 1e6, firstByteMs, ms, bytes * 8 / 1e3 / ms.coerceAtLeast(1))
@@ -144,8 +153,14 @@ class PreviewRelay(
             return Reply.Playlist(HlsRewrite.rewrite(text, connection.url.toString()) { sessions.nameFor(session, it) })
         } catch (e: Exception) {
             connection.disconnect()
-            return Reply.Failed
+            return failed(session)
         }
+    }
+
+    /** The provider refused or did not answer. Before any video has come, that is what the preview showed. */
+    private fun failed(session: PreviewSessions.Session): Reply {
+        if (sessions.isLive(session.token) && !sessions.hasPicture(session.token)) onResult(session.channel, PreviewResult.FAILED)
+        return Reply.Failed
     }
 
     /**

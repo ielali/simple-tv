@@ -879,3 +879,41 @@ and of the setting.
 
 Still not known: how long the household's channels take to show a picture through the relay on
 the Kogan, and everything else under backlog 0b.
+
+Second update (25 November 2026): full screen, and marks on the channels that were previewed.
+- **Full screen.** A button on the corner of the picture (and a double click on it) puts the whole
+  preview window full screen: the picture fills the screen and the bar with the name, the time
+  left, sound and close lies over its foot, fading after 3 s without the pointer moving. The whole
+  window rather than the video alone, so the reasons a preview ends and Play again show there too.
+  An iPhone lets only a video go full screen, so there the video opens in the phone's own player.
+  YouTube's player keeps its own button.
+- **Marks.** The caregiver goes down a subscription's list to see which channels are worth
+  adding, and needs each one tried to say how it went. The TV judges, not the page, because only
+  the TV sees the provider: `PreviewChecks` notes **worked** when the first video has been passed
+  to the browser, **failed** when the provider refused or did not answer before any video came (a
+  web page where the stream should be counts as that), and **unplayable** when the address is not
+  http or what it gives is not HLS, which says nothing about whether the TV can play it. A later
+  preview replaces the mark; a failure after a picture does not take "worked" back; a preview
+  closed early or refused for the TV leaves none.
+- Marks are kept by subscription and source id where a channel has them, so a channel tried in a
+  subscription's list shows its mark in the lineup once added, and by channel id otherwise. They
+  are in `files/preview_checks.json` (results and times only, no address or name; at most 2,000,
+  the oldest going first) and survive a restart; Erase Telly deletes the file with the others.
+  `GET /api/preview/checks` gives them to the page: by channel id for the lineup, by
+  "subscription/item" for the lists. Each list shows the mark under the channel's name.
+- One case the mark cannot tell: the stream arrives but the browser has no decoder for it (HEVC or
+  MPEG-2 in most browsers). The TV notes "worked", which is true of the stream, and the window
+  says the browser cannot show the picture and points to Play on TV.
+- Not adopted: marks in the browser's own storage (they would not follow the caregiver from the
+  laptop to the phone), and the page reporting the result (the TV already knows, and a page
+  cannot tell a dead channel from a browser that cannot decode it).
+
+Checked for the second update, on the development Mac: 10 more unit tests (the marks' store, and
+through the routes: worked, failed then worked, a web page as failure, the two unplayable cases,
+no mark for an early close, the lineup copy of a list entry). In headless Chrome the marks
+appeared under the right channel in both lists within a second of each outcome. Headless Chrome
+refuses the Fullscreen API, so the full-screen layout and the button were checked with a stand-in
+that does what the browser does (sizes the element to the screen and names it as the full-screen
+element): the picture filled 1440 by 900, the bar faded after 3 s and came back when the pointer
+moved, and the button led in and out. Real full screen in a browser, and on a phone, is not
+checked.

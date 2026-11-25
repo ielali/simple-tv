@@ -73,7 +73,8 @@ catalog|film`, `GET /api/channels/{id}/queue`, `POST /api/channels/{id}/restart`
 `POST /api/films/queue-preview`; `GET|POST /api/providers`, `POST /api/providers/test|refresh-all`,
 `POST /api/providers/{id}/refresh`, `DELETE /api/providers/{id}`; `GET /api/catalog/{pid}/categories|
 items`, `GET /api/catalog/{pid}/series/{sid}`; `POST /api/youtube/preview`, `PUT /api/youtube/key`;
-`GET /api/nowplaying`, `POST /api/play`; `POST /api/preview`, `GET|DELETE /api/preview/{token}`;
+`GET /api/nowplaying`, `POST /api/play`; `POST /api/preview`, `GET|DELETE /api/preview/{token}`,
+`GET /api/preview/checks`;
 plus the guard, key log and debug routes.
 
 Preview player (ADR-029): `PreviewRoutes` lets the page play a live channel in the browser, from
@@ -88,6 +89,9 @@ and ends it when its picture has played for `previewMinutes` (a setting; 0 is no
 ends a running one when the TV tunes into it and sweeps every 5 s, so an ended preview's connection
 to the provider is cut even when its browser has stopped reading. The relay writes its first
 timings to the playback log as `preview:` lines. `/hls.min.js` serves the bundled hls.js player.
+What each preview showed about its channel (worked, failed, or not a kind a browser plays) is kept
+by `PreviewChecks` in `files/preview_checks.json`, by subscription and source id where the channel
+has them; `GET /api/preview/checks` gives the marks to the page's lists.
 
 ## Catalogs, film and series channels
 

@@ -7,6 +7,7 @@ import com.ielali.simpletv.data.CatalogType
 import com.ielali.simpletv.data.FetchErrors
 import com.ielali.simpletv.data.HttpFetcher
 import com.ielali.simpletv.data.M3uParser
+import com.ielali.simpletv.data.PreviewChecks
 import com.ielali.simpletv.data.PreviewSessions
 import com.ielali.simpletv.data.ProviderImport
 import com.ielali.simpletv.data.ProviderLoader
@@ -96,6 +97,8 @@ class ConfigServer(
         asset = { appContext.assets.open(it) },
         userAgent = ProviderLoader.DEFAULT_USER_AGENT,
         log = { Log.i(PLAYBACK_TAG, it) },
+        // What each preview showed, kept across restarts; "Erase Telly" deletes it with the rest of the files.
+        checks = PreviewChecks(java.io.File(appContext.filesDir, "preview_checks.json")),
     )
     private var tvWatch: Job? = null
 

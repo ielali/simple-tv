@@ -86,6 +86,8 @@ app/src/main/kotlin/com/ielali/simpletv/
   data/HlsRewrite.kt      Pure: swaps every address in an HLS playlist for a made-up name
   data/PreviewSessions.kt Pure: the one running preview, its token, names and time limits
   data/PreviewRules.kt    Pure: the TV always wins; when a preview would compete with its stream
+  data/PreviewChecks.kt   What each preview showed about its channel (worked, failed, not for
+                          browsers), kept in preview_checks.json for the lists' marks
   config/PinAuth.kt       PIN rules: 4-6 digits, 5 tries then 5-minute lock, in-memory sessions
   data/Catalog*.kt        Cached catalogs, refresh service and schedule, queries, lineup flags
   data/PlaylistQueue.kt   Film/series queue rules (pure); data/QueuePlayback.kt plays and resumes
