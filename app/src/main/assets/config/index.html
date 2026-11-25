@@ -242,11 +242,71 @@ details.limits>summary::-webkit-details-marker{display:none}
 .chk .grow{display:flex;flex-direction:column}
 .addbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;margin:12px -8px -8px;border-radius:14px;background:var(--tint);border:1px solid var(--line);position:sticky;bottom:8px}
 .phone .addbar{bottom:84px}
-.poster{aspect-ratio:2/3;border-radius:12px;background:var(--tint) center/cover no-repeat;border:1px solid var(--line);display:flex;align-items:flex-end;padding:10px;font-weight:700;line-height:18px;overflow:hidden;width:100%;text-align:start;color:var(--ink)}
-.poster.img{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8)}
-.poster.sm{width:56px;flex:none;padding:6px;font-size:10px;line-height:12px}
-.postergrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
-.postergrid button{border:0;background:none;padding:0;text-align:start}
+/* The art stands alone: posters carry their own lettering, so the name always sits beside or below. */
+.poster{position:relative;display:block;aspect-ratio:2/3;border-radius:12px;background:var(--tint);border:1px solid var(--line);overflow:hidden;width:100%}
+.poster .none{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted)}
+.poster img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .25s}
+.poster.ok img{opacity:1}.poster.ok .none{display:none}
+.poster.sm{width:56px;flex:none}
+.postergrid{position:relative;margin-top:6px;display:grid;gap:20px 12px;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));grid-auto-flow:row dense}
+.postergrid>button{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:2px;min-width:0;border:0;background:none;padding:0;text-align:start}
+.postergrid>button .poster{margin-bottom:6px;transition:transform .25s cubic-bezier(.22,1,.36,1),box-shadow .25s}
+@media (hover:hover){.postergrid>button:hover .poster{transform:translateY(-4px);box-shadow:0 10px 24px rgba(10,10,20,.28)}}
+.postergrid>button[aria-expanded="true"] .poster{transform:none;box-shadow:0 0 0 3px var(--card),0 0 0 6px var(--primary)}
+.ptitle{font-weight:600;line-height:18px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
+.pcap{line-height:20px}
+.pcap .rbadge{vertical-align:1px;margin-inline-end:6px;min-height:18px;padding:0 5px;font-size:11px;border-width:1px}
+/* Film details (ADR-030): a panel that opens under the chosen poster's row. Dark in both themes. */
+.fp{position:relative;grid-column:1/-1;min-width:0;color:#F2F4F8;container-type:inline-size;scroll-margin:16px}
+.fpbox{position:relative;overflow:hidden;border-radius:18px;background:#0e1420}
+.fpglow,.fpart{position:absolute;inset:0;pointer-events:none}
+.fpglow{inset:-60px;background:center/cover no-repeat;filter:blur(48px) saturate(1.3);opacity:.22}
+.fpart{height:220px;opacity:0;transition:opacity .7s;-webkit-mask-image:linear-gradient(#000,transparent);mask-image:linear-gradient(#000,transparent);overflow:hidden}
+.fpart.ok{opacity:.36}
+.fpart img{width:100%;height:100%;object-fit:cover;display:block;animation:fpdrift 14s ease-out both}
+.fpbody{position:relative;display:grid;grid-template-columns:96px minmax(0,1fr);gap:16px;padding:68px 16px 20px;align-items:start}
+.fpbody .poster{border-color:rgba(255,255,255,.16);background:#1b2433;box-shadow:0 10px 28px rgba(0,0,0,.5)}
+.fpbody .poster .none{color:#A9B4C6}
+.fphead,.fprest{display:flex;flex-direction:column;gap:10px;min-width:0}
+.fprest{grid-column:1/-1;gap:14px}
+.fp .fphead h3{font-size:20px;line-height:25px;font-weight:800;margin:0;overflow-wrap:anywhere;text-wrap:balance}
+.fp .cap,.fp .muted,.fp .fpwho{color:#C3CCDA}
+.fpplot{max-width:62ch;font-size:15px;line-height:23px}
+.fp .btn{background:rgba(14,20,32,.66);color:#F2F4F8;border-color:rgba(255,255,255,.32)}
+.fp .btn:hover{background:rgba(255,255,255,.14)}
+.fp .btn.pri{background:#FFC857;color:#0B1220;border-color:transparent}
+.fp .hint.err{color:#ffb4ac}
+.fp :focus-visible{outline-color:#FFC857}
+.fptools{position:absolute;top:12px;inset-inline-end:12px;display:flex;gap:6px;z-index:2}
+.fptools button{width:44px;height:44px;padding:0;border-radius:999px;border:0;background:rgba(14,20,32,.72);color:#F2F4F8;display:grid;place-items:center}
+.fptools button:hover{background:rgba(60,72,94,.9)}
+.fptools button:disabled{opacity:.35;cursor:default}
+.fptools .flip svg,[dir="rtl"] .fptools .fwd svg{transform:scaleX(-1)}
+[dir="rtl"] .fptools .flip svg{transform:none}
+#seriesPanel:empty{display:none}
+.fp .skel{background:rgba(255,255,255,.14)}
+.fptrailer{position:relative;display:none;background:#000;aspect-ratio:16/9;max-height:78vh;width:100%}
+.fptrailer iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.fpbox.playing .fptrailer{display:block}
+.fpbox.playing .fpbody,.fpbox.playing .fpart,.fpbox.playing .fpglow,.fpbox.playing .fptools{display:none}
+.fpbar{display:none;padding:8px 12px}
+.fpbox.playing .fpbar{display:flex}
+.fpin>*{animation:fpup .45s cubic-bezier(.22,1,.36,1) both}
+.fpin>:nth-child(2){animation-delay:.05s}.fpin>:nth-child(3){animation-delay:.1s}.fpin>:nth-child(4){animation-delay:.15s}.fpin>:nth-child(n+5){animation-delay:.2s}
+.fpfly{position:absolute;top:0;left:0;margin:0;z-index:6;pointer-events:none;border-radius:12px;object-fit:cover;transform-origin:0 0;box-shadow:0 16px 40px rgba(0,0,0,.5)}
+@keyframes fpup{from{opacity:0;transform:translateY(14px)}}
+@keyframes fpdrift{from{transform:scale(1.1)}}
+@container (min-width:620px){
+  .fpbody{grid-template-columns:200px minmax(0,1fr);grid-template-rows:auto 1fr;gap:16px 28px;padding:28px;min-height:356px}
+  .fpbody>.poster{grid-row:1/3}
+  /* Physical on purpose: a title's own direction (dir=auto) must not move the gap off the buttons. */
+  .fphead h3::before{content:"";float:right;width:140px;height:34px}
+  [dir="rtl"] .fphead h3::before{float:left}
+  .fprest{grid-column:2}
+  .fp .fphead h3{font-size:28px;line-height:33px}
+  .fpart{height:auto;inset-inline-start:34%;-webkit-mask-image:linear-gradient(90deg,transparent,#000 70%);mask-image:linear-gradient(90deg,transparent,#000 70%)}
+  [dir="rtl"] .fpart{-webkit-mask-image:linear-gradient(270deg,transparent,#000 70%);mask-image:linear-gradient(270deg,transparent,#000 70%)}
+}
 .thumb{aspect-ratio:16/9;background:var(--navy) center/cover no-repeat;border-radius:14px;display:grid;place-items:center;position:relative;color:#F2F4F8;overflow:hidden}
 .thumb .live{position:absolute;inset-inline-start:10px;top:10px;background:var(--gold);color:#0B1220;font-weight:800;font-size:11px;padding:2px 8px;border-radius:6px}
 .qr{width:132px;height:132px;background:#fff;border-radius:12px;padding:8px;flex:none;color:#0B1220}
@@ -260,7 +320,7 @@ details.limits>summary::-webkit-details-marker{display:none}
 .sw.on{background:var(--okink)}.sw.on::after{inset-inline-start:24px}
 .skel{height:16px;border-radius:8px;background:var(--tint);animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.5}}
-@media (prefers-reduced-motion:reduce){.skel{animation:none}.sw::after{transition:none}}
+@media (prefers-reduced-motion:reduce){.skel,.fpin>*,.fpart img{animation:none!important}.sw::after,.poster img,.postergrid>button .poster,.fpart{transition:none!important}.postergrid>button:hover .poster{transform:none}}
 .pin{display:flex;gap:8px}.pin span{width:44px;height:52px;border-radius:10px;border:1px solid var(--line);display:grid;place-items:center;font-size:22px;font-weight:700;background:var(--card)}
 .pin span.cur{border-color:var(--primary);box-shadow:0 0 0 3px var(--ring)}
 .pin.bad span{border-color:var(--errink);background:var(--errbg)}
@@ -350,11 +410,6 @@ body.pvopen .content{padding-bottom:320px}
 .qitem{display:flex;align-items:center;gap:12px;padding:10px 4px;min-height:56px}
 .qitem .i{width:28px;text-align:center;flex:none}
 .rbadge{display:inline-flex;align-items:center;min-height:22px;padding:0 7px;border:1.5px solid currentColor;border-radius:6px;font-weight:800;font-size:12px;line-height:1;white-space:nowrap}
-.poster{position:relative}
-.poster .rb{position:absolute;top:8px;inset-inline-start:8px;background:var(--card);color:var(--ink);border-radius:6px;padding:2px 6px;font-size:11px;font-weight:800;text-shadow:none;border:1px solid var(--line)}
-.poster.md{width:120px;flex:none}
-.sheet{max-width:640px;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow:auto}
-.detailtop{display:flex;gap:16px;align-items:flex-start}
 .selrow{display:flex;flex-wrap:wrap;gap:8px}
 .selrow .chip{min-height:40px}
 .gbar{height:6px;border-radius:999px;background:var(--tint);overflow:hidden;max-width:420px}
@@ -1754,7 +1809,7 @@ screens.add = (() => {
   }
   async function loadItems(more) {
     if (more && (cat.loadingMore || cat.items.length >= cat.total)) return;
-    if (more) { cat.loadingMore = true; paintItems(); }
+    if (more) { cat.loadingMore = true; if (!growPosters()) paintItems(); }
     const qs = new URLSearchParams({ type: cat.type, offset: more ? cat.items.length : 0, limit: 50 });
     if (cat.q.trim()) qs.set('q', cat.q.trim()); else if (cat.category != null) qs.set('category', cat.category);
     if (cat.type !== 'live') qs.set('sort', store.get('stv.sort.' + cat.type, 'name'));
@@ -1764,7 +1819,7 @@ screens.add = (() => {
     finally { if (my === loadItems.seq) cat.loadingMore = false; }
     if (my !== loadItems.seq) return; // a newer search or category won
     cat.items = more ? cat.items.concat(r.page.items) : r.page.items; cat.total = r.page.total;
-    paintItems();
+    if (!more || !growPosters()) paintItems();
   }
   const unit = () => ({ live: ['channel', 'channels'], film: ['film', 'films'], series: ['series', 'series'] }[cat.type]);
   function paintCatalog() {
@@ -1830,6 +1885,28 @@ screens.add = (() => {
     });
     infinite('categories', 'moreCats', () => { cat.catsShown = (cat.catsShown || 60) + 40; paintCats(); }, currentSize === 'desktop' ? box : null);
   }
+  const posterTile = (it) => {
+    const [name, year] = nameYear(it);
+    const bits = [year, minutesText(it.minutes), scoreText(it.score)].filter(Boolean).join(' · ');
+    return `<button type="button" data-details="${esc(it.id)}" aria-expanded="false" aria-label="About ${esc(it.name)}">${posterHtml(it)}<span class="ptitle" dir="auto">${esc(name)}</span><span class="cap pcap">${rbadge(it.rating)}${esc(bits)}</span></button>`;
+  };
+  function openTile(e) {
+    const b = e.target.closest('[data-details]'); if (!b) return;
+    const id = b.dataset.details; const pid = cat.pid; const it = cat.items.find((x) => x.id === id); if (!it) return;
+    const series = cat.type === 'series';
+    const action = series ? { label: 'Make a series channel', run: () => go(`#/film/new?mode=series&pid=${encodeURIComponent(pid)}&series=${encodeURIComponent(id)}&name=${encodeURIComponent(it.name)}`) } : null;
+    filmPanel.toggle({ pid, type: series ? 'SERIES' : 'FILM', id, name: it.name, art: it.poster || it.logo, opener: b, action });
+  }
+  /** More posters go after the ones on screen, so an open film panel (and its trailer) is left alone. */
+  function growPosters() {
+    const el = $('#itemsPanel'); const grid = el && $('.postergrid', el); if (!grid) return false;
+    const have = $$('[data-details]', grid).length;
+    grid.insertAdjacentHTML('beforeend', cat.items.slice(have).map(posterTile).join(''));
+    const line = $('#catMore', el); if (line) line.innerHTML = moreLine('moreItems', cat.loadingMore, cat.items.length, cat.total, unit()[1]);
+    infinite('catalog', 'moreItems', () => loadItems(true));
+    filmPanel.refresh();
+    return true;
+  }
   function paintItems() {
     const el = $('#itemsPanel'); if (!el) return;
     const searching = !!cat.q.trim();
@@ -1844,10 +1921,7 @@ screens.add = (() => {
       const mine = (it) => (it.inLineup ? `<span class="pill ok" ${narrow ? 'style="align-self:flex-start"' : ''}><span class="dot"></span>${narrow ? 'In lineup · ' : 'In your lineup as '}${esc(it.lineupNumber)}</span>` : '');
       list = cat.items.map((it) => `<label class="chk"><input type="checkbox" data-item="${esc(it.id)}" ${cat.selected.has(it.id) ? 'checked' : ''} ${it.inLineup ? 'disabled' : ''}>${logoBox(it.name, it.logo, cat.type)}<span class="grow"><span class="nm" dir="auto">${esc(it.name)}</span>${narrow && it.inLineup ? mine(it) : `<span class="cap" dir="auto">${esc(it.group || 'No category')}</span>`}<span class="pvmark" data-pvmark="${esc(cat.pid + '/' + it.id)}">${preview.markHtml(cat.pid + '/' + it.id)}</span></span>${narrow ? '' : mine(it)}<button class="ibtn bd ${preview.isOn(cat.pid + '/' + it.id) ? 'pvon' : ''}" type="button" data-preview="${esc(cat.pid + '/' + it.id)}" data-pvitem="${esc(it.id)}" aria-label="Preview ${esc(it.name)} on this page" title="Preview here">${ico('eye', 18)}</button><button class="ibtn bd" type="button" data-try="${esc(it.id)}" aria-label="Play ${esc(it.name)} on the TV" title="Play on TV">${ico('play', 18)}</button></label>`).join('');
     } else {
-      list = `<div class="postergrid">${cat.items.map((it) => {
-        const inner = `${posterHtml(it)}<div class="cap">${esc([it.year, it.rating, minutesText(it.minutes), scoreText(it.score)].filter(Boolean).join(' · '))}</div>`;
-        return `<button type="button" data-details="${esc(it.id)}" data-name="${esc(it.name)}" aria-label="About ${esc(it.name)}">${inner}</button>`;
-      }).join('')}</div>`;
+      list = `<div class="postergrid">${cat.items.map(posterTile).join('')}</div>`;
     }
     const callout = cat.type === 'film' && !searching && c ? `<div class="callout"><div class="grow" style="min-width:200px"><div class="sec" dir="auto">Turn ${esc(c.name)} into a film channel</div><div>The TV plays these films one after another. No library to browse.</div></div><a class="btn" href="#/film/new?mode=film&pid=${encodeURIComponent(cat.pid)}&cat=${encodeURIComponent(c.id)}">Make a film channel</a></div>`
       : cat.type === 'series' ? `<div class="callout"><div class="grow" style="min-width:200px"><div class="sec">Pick a series to make a channel</div><div>Tap one to see what it’s about. The TV plays it episode by episode and remembers where it stopped.</div></div></div>` : '';
@@ -1858,7 +1932,7 @@ screens.add = (() => {
       <div class="f fw g12"><div class="grow" style="min-width:180px"><h2 class="sec" dir="auto">${esc(title)}</h2><div class="cap">${esc(sub)}</div></div>${cat.type !== 'live' ? sortMenu('itemSort', store.get('stv.sort.' + cat.type, 'name')) : ''}${allBtn}</div>
       ${callout}
       ${cat.items.length ? list : `<p class="muted" style="padding:12px 0">${searching ? 'Nothing matches. Try fewer letters.' : 'Nothing in this category.'}</p>`}
-      ${moreLine('moreItems', cat.loadingMore, cat.items.length, cat.total, unit()[1])}
+      <div id="catMore">${moreLine('moreItems', cat.loadingMore, cat.items.length, cat.total, unit()[1])}</div>
       ${n ? `<div class="addbar"><div class="grow"><div style="font-weight:700">${fmtN(n)} selected</div><div class="cap">${numbersWords(start, n)} You can change them next.</div></div><button class="btn ghost" id="clearSel">Clear</button><button class="btn pri" id="addSel">Add ${plural(n, 'channel')}</button></div>` : ''}`;
     $$('[data-item]', el).forEach((b) => b.onchange = () => { const it = cat.items.find((x) => x.id === b.dataset.item); if (b.checked) cat.selected.set(it.id, it); else cat.selected.delete(it.id); paintItems(); });
     $$('[data-try]', el).forEach((b) => b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); const it = cat.items.find((x) => x.id === b.dataset.try); playOnTv({ providerId: cat.pid, itemId: it.id, name: it.name }, it.name); });
@@ -1867,13 +1941,7 @@ screens.add = (() => {
       const it = cat.items.find((x) => x.id === b.dataset.pvitem);
       preview.toggle({ id: cat.pid + '/' + it.id, name: it.name, number: 0, ask: { providerId: cat.pid, itemId: it.id } });
     });
-    $$('[data-details]', el).forEach((b) => b.onclick = () => {
-      const id = b.dataset.details; const name = b.dataset.name; const pid = cat.pid;
-      const action = cat.type === 'series'
-        ? { label: 'Make a series channel', run: () => go(`#/film/new?mode=series&pid=${encodeURIComponent(pid)}&series=${encodeURIComponent(id)}&name=${encodeURIComponent(name)}`) }
-        : null;
-      showDetails(pid, cat.type === 'series' ? 'SERIES' : 'FILM', id, name, action);
-    });
+    const grid = $('.postergrid', el); if (grid) grid.onclick = openTile;
     infinite('catalog', 'moreItems', () => loadItems(true));
     const so = $('#itemSort', el); if (so) so.onchange = () => { store.set('stv.sort.' + cat.type, so.value); loadItems(false); };
     const cs = $('#clearSel', el); if (cs) cs.onclick = () => { cat.selected.clear(); paintItems(); };
@@ -2201,52 +2269,215 @@ const scoreText = (s) => s ? `${(Math.round(s * 10) / 10).toFixed(1)}/10` : '';
 const minutesText = (m) => m ? (m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min') : '';
 function posterHtml(it, cls = '') {
   const img = it.poster || it.logo;
-  return `<div class="poster ${cls}${img ? ' img' : ''}" ${img ? `style="background-image:url('${esc(img).replace(/'/g, '%27')}')"` : ''}>${it.rating ? `<span class="rb">${esc(it.rating)}</span>` : ''}<span dir="auto">${esc(it.name)}</span></div>`;
+  return `<span class="poster ${cls}"><span class="none">${ico('film', cls === 'sm' ? 20 : 32)}</span>${img ? `<img src="${esc(img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : ''}</span>`;
+}
+// Art shows once it has loaded; art that fails leaves the plain tile. (load and error don't bubble.)
+document.addEventListener('load', (e) => { const p = e.target.tagName === 'IMG' && e.target.closest('.poster,.fpart'); if (p) p.classList.add('ok'); }, true);
+document.addEventListener('error', (e) => { const p = e.target.tagName === 'IMG' && e.target.closest('.poster,.fpart'); if (p) { p.classList.remove('ok'); e.target.remove(); } }, true);
+/** A title without the year its provider put at the end, and the year, so it is said once. */
+function nameYear(it) {
+  const m = /^(.+?)\s*[([]((?:19|20)\d\d)[)\]]\s*$/.exec(it.name || '');
+  return m && (!it.year || String(it.year) === m[2]) ? [m[1], m[2]] : [it.name, it.year];
 }
 /**
- * A sheet with a film's or series' details: poster, rating and what it means, score, plot, cast and
- * the trailer (on this phone, or on the TV). [action] adds a main button, e.g. "Make a series channel".
+ * A film's or series' details (ADR-030): poster, rating and what it means, score, plot, cast and the
+ * trailer (on this phone, or on the TV). One panel at a time, in the page rather than over it: under
+ * the row of the poster that opened it, or inside [host]. [action] adds a main button.
  */
-async function showDetails(pid, type, itemId, name, action) {
-  const back = document.createElement('div');
-  back.className = 'dialogback';
-  back.innerHTML = `<div class="dialog sheet col g16" role="dialog" aria-modal="true" aria-label="${esc(name)}"><div class="f g12"><h3 class="grow" dir="auto">${esc(name)}</h3><button class="ibtn" data-close aria-label="Close">${ico('close', 20)}</button></div><div class="col g12" aria-busy="true"><div class="skel" style="height:180px"></div><div class="skel"></div><div class="skel" style="width:60%"></div></div></div>`;
-  const close = () => { back.remove(); document.removeEventListener('keydown', onKey); };
-  const onKey = (e) => { if (e.key === 'Escape') close(); };
-  back.addEventListener('click', (e) => { if (e.target === back || e.target.closest('[data-close]')) close(); });
-  document.addEventListener('keydown', onKey);
-  $('#dialogs').appendChild(back);
-  let d;
-  try { d = await GET(`/api/details/${encodeURIComponent(pid)}/${type === 'SERIES' ? 'series' : 'film'}/${encodeURIComponent(itemId)}`); }
-  catch (e) { if (e.status !== 401) back.querySelector('[aria-busy]').outerHTML = `<p class="hint err">${esc(e.message)}</p>`; return; }
-  const meta = [d.year, d.genres.slice(0, 3).join(', ')].filter(Boolean).join(' · ');
-  back.querySelector('.sheet').innerHTML = `
-    <div class="f g12"><h3 class="grow" dir="auto">${esc(d.title)}</h3><button class="ibtn" data-close aria-label="Close">${ico('close', 20)}</button></div>
-    <div class="detailtop">
-      ${posterHtml({ name: d.title, poster: d.poster }, 'md')}
-      <div class="col g8 grow">
-        ${meta ? `<div class="muted">${esc(meta)}</div>` : ''}
-        <div class="f fw g8">
-          ${d.rating ? `${rbadge(d.rating)}<span class="cap">${esc(d.ratingMeaning || 'Rated ' + d.rating + ' in ' + countryName(d.country))}</span>` : d.providerRating ? `${rbadge(d.providerRating)}<span class="cap">From your provider</span>` : `<span class="cap">No official rating${state.status && state.status.hasTmdbKey ? ' for ' + esc(countryName(d.country)) : ''}</span>`}
-        </div>
-        ${d.score ? `<div><span style="font-weight:700">${esc(scoreText(d.score))}</span> <span class="cap">score</span></div>` : ''}
-        ${d.director ? `<div class="cap">${d.type === 'SERIES' ? 'Created by' : 'Directed by'} ${esc(d.director)}</div>` : ''}
+const filmPanel = (() => {
+  let cur = null; // { el, box, o }
+  let closing = null; // the same, while its closing animation runs
+  let seq = 0;
+  let scrollRun = 0;
+  const EASE = 'cubic-bezier(.22,1,.36,1)';
+  const still = () => !Element.prototype.animate || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const live = () => { if (cur && !cur.el.isConnected) cur = null; return cur; };
+  const tiles = (o) => (o.host ? [] : $$('[data-details]', o.opener.parentElement));
+
+  /** Runs [change] on the panel and eases its height from what it was to what it became. */
+  function resize(box, change) {
+    const from = box.getBoundingClientRect().height;
+    box.getAnimations && box.getAnimations().forEach((a) => a.cancel());
+    change();
+    const to = box.offsetHeight;
+    if (!still() && Math.abs(from - to) > 1) box.animate([{ height: from + 'px' }, { height: to + 'px' }], { duration: 380, easing: EASE });
+    return to;
+  }
+  /** Brings the poster and the panel into view; a wheel or a finger stops it. [height] is the final one. */
+  function reveal(height) {
+    const run = ++scrollRun; const { el, o } = cur;
+    const room = innerHeight - (currentSize === 'phone' ? 100 : 16);
+    const top = el.getBoundingClientRect().top;
+    const first = (o.host ? top : o.opener.getBoundingClientRect().top) - 16;
+    const need = Math.min(top + height - room, first);
+    const down = o.host && first < 0 ? first : Math.max(0, need); // a hosted panel may open above the screen
+    if (Math.abs(down) < 1) return;
+    if (still()) { scrollBy(0, down); return; }
+    const stop = () => { scrollRun++; };
+    addEventListener('wheel', stop, { once: true, passive: true }); addEventListener('touchstart', stop, { once: true, passive: true });
+    const t0 = performance.now(); const y0 = scrollY;
+    // By hand, because the page is still growing under the panel while this runs.
+    const step = (t) => {
+      if (run !== scrollRun) return;
+      const k = Math.min(1, Math.max(0, (t - t0) / 420));
+      scrollTo(0, y0 + down * (1 - Math.pow(1 - k, 3)));
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  /** The chosen poster travels from its place in the grid to its place in the panel. */
+  function fly(o, el) {
+    const src = o.opener.querySelector('.poster.ok'); const dst = el.querySelector('.fpbody .poster');
+    if (!src || still()) return;
+    const grid = o.opener.parentElement; const g = grid.getBoundingClientRect();
+    const a = src.getBoundingClientRect(); const b = dst.getBoundingClientRect();
+    const img = src.querySelector('img').cloneNode(); img.className = 'fpfly'; img.loading = 'eager';
+    img.style.width = b.width + 'px'; img.style.height = b.height + 'px';
+    const at = (r) => `translate(${r.left - g.left}px,${r.top - g.top}px) scale(${r.width / b.width})`;
+    dst.style.visibility = 'hidden'; grid.appendChild(img);
+    const run = img.animate([{ transform: at(a) }, { transform: at(b) }], { duration: 480, easing: EASE, fill: 'forwards' });
+    run.onfinish = run.oncancel = () => { img.remove(); dst.style.visibility = ''; };
+  }
+  function close(focus = true) {
+    if (!live()) return;
+    const { el, box, o } = cur; cur = null; seq++; scrollRun++;
+    o.opener.setAttribute('aria-expanded', 'false');
+    $$('.fpfly').forEach((x) => x.remove());
+    if (focus) o.opener.focus({ preventScroll: !o.host });
+    if (still()) { el.remove(); return; }
+    el.inert = true; closing = { el, box, o };
+    box.animate([{ height: box.getBoundingClientRect().height + 'px', opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 260, easing: 'ease-in-out', fill: 'forwards' }).onfinish = () => { el.remove(); if (closing && closing.el === el) closing = null; };
+    if (!o.host) el.animate([{ marginTop: '0px' }, { marginTop: '-20px' }], { duration: 260, easing: 'ease-in-out', fill: 'forwards' });
+  }
+  /** Previous and Next follow the posters on screen, which grow as the list scrolls. */
+  function refresh() {
+    const c = live(); if (!c) return;
+    const all = tiles(c.o); const i = all.indexOf(c.o.opener);
+    $('.flip', c.el).disabled = i <= 0; $('.fwd', c.el).disabled = i === all.length - 1;
+  }
+  /** After a redraw around a hosted panel: its new button, or close when that title is no longer there. */
+  function keep(opener, id) {
+    const c = live(); if (!c || !c.o.host) return;
+    if (!opener || c.o.id !== id) { close(false); return; }
+    c.o.opener = opener;
+    opener.setAttribute('aria-expanded', 'true'); opener.setAttribute('aria-controls', 'filmPanel');
+  }
+  function step(by) {
+    const c = live(); if (!c || c.o.host) return;
+    const all = tiles(c.o); const next = all[all.indexOf(c.o.opener) + by];
+    if (!next) return;
+    const inPanel = c.el.contains(document.activeElement) ? document.activeElement.className : null;
+    next.click();
+    // The panel moved to another place in the page, which drops the focus: give it back.
+    const f = inPanel != null && cur ? $$('.fptools button', cur.el).find((x) => x.className === inPanel && !x.disabled) || cur.el.querySelector('.fpx') : next;
+    f.focus({ preventScroll: true });
+  }
+  document.addEventListener('keydown', (e) => {
+    const c = live(); if (!c || $('#dialogs').children.length) return;
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return; // Alt+Left is the browser's own Back
+    const near = c.el.contains(e.target) || e.target === c.o.opener;
+    // Escape in a search box or another field belongs to that field.
+    if (e.key === 'Escape' && (near || e.target === document.body || e.target.closest('.postergrid'))) {
+      if (c.box.classList.contains('playing')) stopTrailer(c.box); else close();
+      return;
+    }
+    if (!near || c.o.host || c.box.classList.contains('playing')) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      step((e.key === 'ArrowRight') === (getComputedStyle(c.el).direction !== 'rtl') ? 1 : -1);
+    }
+  });
+  function stopTrailer(box) {
+    resize(box, () => { box.classList.remove('playing'); $('.fptrailer', box).innerHTML = ''; });
+    const w = $('[data-watch]', box); if (w) w.focus({ preventScroll: true });
+  }
+  function build() {
+    const el = document.createElement('section');
+    el.className = 'fp'; el.id = 'filmPanel';
+    el.innerHTML = `<div class="fpbox"><div class="fpglow"></div><div class="fpart"></div><div class="fpbody"></div>
+      <div class="fptrailer"></div><div class="fpbar"><button type="button" class="btn" data-back>Back to the details</button></div>
+      <div class="fptools"><button type="button" class="flip" aria-label="Previous title">${ico('right', 20)}</button><button type="button" class="fwd" aria-label="Next title">${ico('right', 20)}</button><button type="button" class="fpx" aria-label="Close">${ico('close', 20)}</button></div></div>`;
+    $('.flip', el).onclick = () => step(-1); $('.fwd', el).onclick = () => step(1); $('.fpx', el).onclick = () => close();
+    const box = $('.fpbox', el); $('[data-back]', el).onclick = () => stopTrailer(box);
+    return { el, box };
+  }
+  async function toggle(o) {
+    const open = live();
+    if (open && open.o.opener === o.opener) { close(); return; }
+    const my = ++seq;
+    $$('.fpfly').forEach((x) => x.remove());
+    // One panel ever: a panel still closing is taken over from the height it has reached.
+    const was = open || (closing && closing.el.isConnected ? closing : null);
+    closing = null;
+    const { el, box } = was || build();
+    const sameRow = was && !o.host && !was.o.host && was.o.opener.offsetTop === o.opener.offsetTop;
+    const keepAt = o.opener.getBoundingClientRect().top;
+    if (was) was.o.opener.setAttribute('aria-expanded', 'false');
+    cur = { el, box, o };
+    const from = sameRow ? box.getBoundingClientRect().height : 0;
+    [el, box].forEach((x) => x.getAnimations && x.getAnimations().forEach((a) => a.cancel()));
+    el.inert = false;
+    el.setAttribute('aria-label', 'About ' + o.name);
+    o.opener.setAttribute('aria-expanded', 'true'); o.opener.setAttribute('aria-controls', 'filmPanel');
+    // In the grid it follows its poster (reading and tab order); dense packing draws it under the row.
+    if (o.host) o.host.appendChild(el); else o.opener.after(el);
+    $$('.flip,.fwd', el).forEach((b) => { b.style.display = o.host ? 'none' : ''; });
+    refresh();
+    (o.host ? $('.fpx', el) : o.opener).focus({ preventScroll: true });
+    box.classList.remove('playing'); $('.fptrailer', box).innerHTML = '';
+    const [name, year] = nameYear({ name: o.name });
+    $('.fpglow', el).style.backgroundImage = o.art ? `url("${String(o.art).replace(/["\\\n]/g, encodeURIComponent)}")` : '';
+    const art = $('.fpart', el); art.classList.remove('ok'); art.innerHTML = '';
+    const body = $('.fpbody', el);
+    body.innerHTML = `${posterHtml({ poster: o.art })}<div class="fphead fpin"><h3 dir="auto">${esc(name)}</h3>${year ? `<div class="muted">${esc(year)}</div>` : ''}</div>
+      <div class="fprest" aria-busy="true"><div class="skel"></div><div class="skel"></div><div class="skel" style="width:60%"></div><div class="skel" style="width:40%;height:44px;border-radius:999px"></div></div>`;
+    // Art the grid already shows is there at once: the flying poster must not land on a blank one.
+    if ($('.poster.ok', o.opener)) { const p = $('.fpbody .poster', el); p.classList.add('ok'); $('img', p).loading = 'eager'; }
+    // A panel that closed higher up must not pull the chosen poster from under the finger.
+    if (!o.host) scrollBy(0, o.opener.getBoundingClientRect().top - keepAt);
+    const h = box.offsetHeight;
+    if (!o.host) fly(o, el);
+    if (!still()) box.animate([{ height: from + 'px' }, { height: h + 'px' }], { duration: 420, easing: EASE });
+    reveal(h);
+    let d;
+    try { d = await GET(`/api/details/${encodeURIComponent(o.pid)}/${o.type === 'SERIES' ? 'series' : 'film'}/${encodeURIComponent(o.id)}`); }
+    catch (e) { if (my === seq && e.status !== 401) { const busy = $('[aria-busy]', body); if (busy) busy.outerHTML = `<p class="fprest hint err" role="alert">${esc(e.message)}</p>`; } return; }
+    if (my !== seq || !el.isConnected) return; // another title was chosen, or the panel closed
+    const full = resize(box, () => fill(d, o, el, box));
+    reveal(full);
+  }
+  function fill(d, o, el, box) {
+    const [name, year] = nameYear({ name: d.title, year: d.year });
+    const meta = [year, d.genres.slice(0, 3).join(', ')].filter(Boolean).join(' · ');
+    const head = $('.fphead', el); const rest = $('.fprest', el);
+    if (!o.art && d.poster) $('.fpbody .poster', el).outerHTML = posterHtml({ poster: d.poster });
+    if (d.backdrop) $('.fpart', el).innerHTML = `<img src="${esc(d.backdrop)}" alt="" referrerpolicy="no-referrer">`;
+    head.innerHTML = `<h3 dir="auto" style="animation:none">${esc(name)}</h3>
+      ${meta ? `<div class="muted">${esc(meta)}</div>` : ''}
+      <div class="f fw g8">${d.score ? `<span style="font-weight:700">★ ${esc(scoreText(d.score))}</span>` : ''}${d.rating ? `${rbadge(d.rating)}<span class="cap">${esc(d.ratingMeaning || 'Rated ' + d.rating + ' in ' + countryName(d.country))}</span>` : d.providerRating ? `${rbadge(d.providerRating)}<span class="cap">From your provider</span>` : `<span class="cap">No official rating${state.status && state.status.hasTmdbKey ? ' for ' + esc(countryName(d.country)) : ''}</span>`}</div>`;
+    rest.removeAttribute('aria-busy'); rest.classList.add('fpin');
+    const who = [d.director ? `${d.type === 'SERIES' ? 'Created by' : 'Directed by'} ${d.director}` : '', d.cast.length ? `With ${listWords(d.cast.slice(0, 5))}` : ''].filter(Boolean);
+    rest.innerHTML = `${d.plot ? `<p class="fpplot" dir="auto">${esc(d.plot)}</p>` : '<p class="muted">No description for this one.</p>'}
+      ${who.length ? `<div class="fpwho">${who.map((x) => `<div>${esc(x)}</div>`).join('')}</div>` : ''}
+      <div class="f fw g8">
+        ${o.action ? `<button type="button" class="btn pri" data-main>${esc(o.action.label)}</button>` : ''}
+        ${d.trailer ? `<button type="button" class="btn ${o.action ? '' : 'pri'}" data-watch>${ico('play', 18)}Watch the trailer here</button><button type="button" class="btn" data-tv>${ico('tv', 18)}Trailer on the TV</button>` : ''}
+        ${d.imdbUrl ? `<a class="btn" href="${esc(d.imdbUrl)}" target="_blank" rel="noopener noreferrer">IMDb ${ico('right', 16)}</a>` : ''}
       </div>
-    </div>
-    ${d.plot ? `<p dir="auto">${esc(d.plot)}</p>` : '<p class="muted">No description for this one.</p>'}
-    ${d.cast.length ? `<div class="cap">With ${esc(listWords(d.cast.slice(0, 5)))}</div>` : ''}
-    <div id="trailerBox"></div>
-    <div class="f fw g8">
-      ${action ? `<button class="btn pri" data-main>${esc(action.label)}</button>` : ''}
-      ${d.imdbUrl ? `<a class="btn" href="${esc(d.imdbUrl)}" target="_blank" rel="noopener noreferrer">IMDb ${ico('right', 16)}</a>` : ''}
-      ${d.trailer ? `<button class="btn" data-watch>${ico('play', 18)}Watch the trailer here</button><button class="btn" data-tv>${ico('tv', 18)}Trailer on the TV</button>` : ''}
-    </div>
-    ${d.fromTmdb ? `<p class="cap">Details from TMDB${d.matchedByTitle ? ', matched by title and year' : ''}. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>` : ''}`;
-  const m = back.querySelector('[data-main]'); if (m) m.onclick = () => { close(); action.run(d); };
-  const w = back.querySelector('[data-watch]');
-  if (w) w.onclick = () => { $('#trailerBox').innerHTML = `<div class="thumb"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(d.trailer)}?autoplay=1&rel=0" title="Trailer" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen style="border:0;width:100%;height:100%;position:absolute;inset:0"></iframe></div>`; w.remove(); };
-  const t = back.querySelector('[data-tv]'); if (t) t.onclick = () => playOnTv({ youtube: 'https://www.youtube.com/watch?v=' + d.trailer, name: d.title + ' (trailer)' }, 'The trailer');
-}
+      ${d.fromTmdb ? `<p class="cap">Details from TMDB${d.matchedByTitle ? ', matched by title and year' : ''}. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>` : ''}`;
+    const m = $('[data-main]', rest); if (m) m.onclick = () => { close(false); o.action.run(d); };
+    const w = $('[data-watch]', rest);
+    if (w) w.onclick = () => {
+      const h = resize(box, () => {
+        box.classList.add('playing');
+        $('.fptrailer', box).innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(d.trailer)}?autoplay=1&rel=0" title="Trailer" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+      });
+      reveal(h); $('[data-back]', box).focus({ preventScroll: true });
+    };
+    const t = $('[data-tv]', rest); if (t) t.onclick = () => playOnTv({ youtube: 'https://www.youtube.com/watch?v=' + d.trailer, name: d.title + ' (trailer)' }, 'The trailer');
+  }
+  return { toggle, close, refresh, keep };
+})();
 
 /* ---------- Film and series channels ---------- */
 const SUB_CHOICES = [['', 'Off'], ['ar', 'العربية'], ['en', 'English'], ['any', 'Any language']];
@@ -2346,7 +2577,10 @@ screens.film = (() => {
   }
   const titleOf = () => f.spec.mode === 'SERIES' ? (f.id ? 'Edit series channel' : 'New series channel') : (f.id ? 'Edit film channel' : 'New film channel');
   function paint() {
-    const el = $('#content'); if (!el || route.name !== 'film') return;
+    const content = $('#content'); if (!content || route.name !== 'film') return;
+    // About this series opens outside the part that is drawn again, so a trailer in it keeps playing.
+    if (!$('#filmForm', content)) content.innerHTML = '<div id="seriesPanel"></div><div id="filmForm" style="display:contents"></div>';
+    const el = $('#filmForm', content);
     const sp = f.spec; const isFilm = sp.mode === 'FILM';
     setTitle(titleOf(), isFilm ? 'A numbered channel that plays films one after another.' : 'Plays one series, episode by episode, and remembers where it stopped.');
     const num = parseInt(f.number, 10);
@@ -2455,7 +2689,7 @@ screens.film = (() => {
   function seriesRating() {
     const i = f.seriesDetails;
     if (!i) return '';
-    return `<div class="f fw g8" style="align-items:center">${i.rating ? rbadge(i.rating) + `<span class="cap">${esc(i.ratingMeaning || 'Rated ' + i.rating)}</span>` : '<span class="cap">No official rating</span>'}${i.score ? `<span class="cap">· ${esc(scoreText(i.score))}</span>` : ''}<button class="btn ghost" id="seriesAbout">About this series</button></div>`;
+    return `<div class="f fw g8" style="align-items:center">${i.rating ? rbadge(i.rating) + `<span class="cap">${esc(i.ratingMeaning || 'Rated ' + i.rating)}</span>` : '<span class="cap">No official rating</span>'}${i.score ? `<span class="cap">· ${esc(scoreText(i.score))}</span>` : ''}<button class="btn ghost" id="seriesAbout" aria-expanded="false">About this series</button></div>`;
   }
   /** "Play this now" needs the saved channel (an edited one is saved first). */
   const canPick = () => !!(f && f.id && !changed());
@@ -2524,7 +2758,8 @@ screens.film = (() => {
     const yF = $('#yFrom', el); const yT = $('#yTo', el);
     if (yF && yT) { yF.onchange = yT.onchange = () => setYears(yF.value, yT.value); }
     $$('[data-noyear]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'skipNoYear', b.dataset.noyear === 'skip'); paint(); loadQueue(); });
-    const sa = $('#seriesAbout', el); if (sa) sa.onclick = () => showDetails(sp.providerId, 'SERIES', sp.seriesId, f.seriesName || f.name);
+    const sa = $('#seriesAbout', el); if (sa) sa.onclick = () => filmPanel.toggle({ pid: sp.providerId, type: 'SERIES', id: sp.seriesId, name: f.seriesName || f.name, art: f.seriesDetails && f.seriesDetails.poster, opener: sa, host: $('#seriesPanel') });
+    filmPanel.keep(sa, sp.seriesId);
     $$('[data-sub]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'subtitles', b.dataset.sub); paint(); });
     $$('[data-audio]', el).forEach((b) => b.onclick = () => { setOpt(sp, 'audio', b.dataset.audio); paint(); });
     $$('[data-order]', el).forEach((b) => b.onclick = () => {

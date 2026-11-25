@@ -917,3 +917,28 @@ that does what the browser does (sizes the element to the screen and names it as
 element): the picture filled 1440 by 900, the bar faded after 3 s and came back when the pointer
 moved, and the button led in and out. Real full screen in a browser, and on a phone, is not
 checked.
+
+## ADR-030 Posters stand alone, and film details open in the page instead of over it
+
+Context: The page wrote each title over its poster. Posters carry their own lettering, usually at the
+foot, so the two fought and neither could be read. Details opened in a dialog that hid the list.
+
+Decision:
+- Nothing is written on a poster: name (two lines at most), rating badge, year, length and score sit
+  below it. A year at the end of the provider's name is moved to that line, so it is said once. A poster that is missing or fails
+  to load leaves a plain tile with the film icon. Posters load as they come near the screen.
+- Details open in a panel across the grid, under the row of the chosen poster. The poster travels
+  from the grid into the panel, the row opens, and the text follows over the backdrop. Another poster
+  moves the same panel. Previous/Next buttons and the arrow keys go through the list; Esc closes
+  (from the trailer, it goes back to the details). Keys typed in a search box or a field are left to it. "About this
+  series" uses the same panel at the top of the series channel's screen, outside the form, which is
+  drawn again on every change: a trailer keeps playing.
+- The grid uses dense packing, so the panel follows its poster in the page (reading and tab order)
+  and the browser finds the row, also after a resize. More posters are added after the ones shown
+  instead of drawing the list again, so a trailer keeps playing.
+- There is only ever one panel: a title chosen while it closes takes over the closing one.
+- All of it is CSS and the Web Animations API, with no library. Reduced motion gets no movement.
+
+Not adopted: a gradient behind the title (it hides the poster's own name and says it twice), a side
+drawer (half the width on a tablet, a dialog again on a phone) and a page of its own (the
+caregiver loses their place in the list).
