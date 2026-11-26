@@ -62,3 +62,22 @@ TV work.
 3. IPTV stream URLs that rotate or require auth headers.
 
 All three are testable in a one-day spike on real hardware before committing further.
+
+## Full mode (ADR-033, November 2026)
+
+Verdict: feasible on the existing engine. Subscriptions, catalogs, the guide, films and series with
+resume, and the player are built and in daily use; Full mode is mostly TV screens over them. The
+risks are elsewhere:
+
+1. **Catalog and guide size on cheap boxes.** A big subscription has 10,000+ channels and a guide of
+   tens of megabytes. Moving both to SQLite (M2) is the answer; measure on the Kogan before building
+   screens on top.
+2. **Google Play policy.** Play allows IPTV players that ship no content, but the home guard is an
+   accessibility service used as a kiosk and is very unlikely to pass review. The `play` build leaves
+   it out; Simple mode there is weaker (it relies on Telly being the home app).
+3. **The signing change.** Moving from the committed debug key to a release key cannot update the
+   installed TV in place; export and import (M1) must work before the switch.
+4. **Competition.** Established players have years of features. Telly competes on Simple mode and
+   phone setup, not on feature count.
+5. **Remote navigation quality.** Focus handling on Android TV is where players feel cheap;
+   `androidx.tv` Material (ADR-034) and testing on a second device reduce the risk.

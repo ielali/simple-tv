@@ -1,8 +1,11 @@
 # Telly
 
-An Android TV app that turns a modern set-top box into an old-style television for elderly viewers.
-Numbered channels, one classic remote, no menus. Channels come from IPTV streams or YouTube live
-channels and are configured by a caregiver from a phone or laptop.
+An IPTV player for Android TV and Google TV with a **Simple mode** that turns the TV into an
+old-style television for elderly viewers: numbered channels, one classic remote, no menus. Channels
+come from IPTV subscriptions or YouTube and can be set up from a phone or laptop on the home network.
+
+Simple mode is what Telly has been so far and is in daily use. **Full mode**, a household IPTV player
+with Live TV, a guide, films, series and search, is being built (ADR-033, backlog M1–M8).
 
 Telly was called Simple TV. The package (`com.ielali.simpletv`), the repository and the release file
 (`simple-tv.apk`) keep the old name so updates install over the existing app (ADR-026).
@@ -43,9 +46,10 @@ CI builds the debug APK on every push to `main` and attaches it to the workflow 
 
 ## Status
 
-In daily use on a Google TV dongle. Live TV, YouTube, film and series channels, the TV guide, the
-channel list, logos and the caregiver web app are in place; the pure logic is unit tested and every
-push to `main` publishes a build. Next work is in `docs/BACKLOG.md`.
+Simple mode is in daily use on a Google TV dongle. Live TV, YouTube, film and series channels, the
+TV guide, the channel list, logos and the caregiver web app are in place; the pure logic is unit tested and every
+push to `main` publishes a build. Full mode is next, after the open device checks; see
+`docs/BACKLOG.md`.
 
 ## Acknowledgements
 

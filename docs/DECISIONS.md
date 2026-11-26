@@ -984,3 +984,80 @@ Not adopted: Android's `NsdManager` (it advertises services, under a host name i
 Port 80, to drop `:8080` from the address, is not possible: Android refuses ports below 1024 to an
 app without root (on the Kogan `ip_unprivileged_port_start` is 1024 and a bind as Telly's user got
 "Permission denied"), and browsers do not look up a port from a name for http.
+
+## ADR-033 Telly becomes a household IPTV player, with Simple mode per TV
+
+Context: the engine behind the elderly viewer's TV already covers most of an IPTV player:
+Xtream and M3U subscriptions, cached catalogs, the TV guide, films and series with resume, logos,
+ratings and previews. Only the TV-side interface is missing. General IPTV players (TiviMate,
+IPTV Smarters) are feature-rich and hard for a household to set up; none has a mode for someone who
+needs a plain television. The question was whether to grow Telly into a full player without losing
+what the current viewer relies on.
+
+Decision:
+- One app, two modes, chosen per TV. **Simple mode** is today's product and keeps its rules unchanged
+  (CLAUDE.md, S1–S8). **Full mode** is a household player: a side rail with Live TV (start screen),
+  Guide, Films, Series, Search and Settings, and full-screen playback with channel up/down, digits and
+  an info banner. No per-person profiles at start; a profile picker would put a menu in front of the
+  Simple-mode viewer.
+- **My channels** is the lineup under a new name: the numbered list Simple mode plays, Full mode's
+  first Live TV category, and what number keys tune in both modes. One list, edited from the TV or
+  the web page.
+- **Switching**: Simple to Full from the web page, or by holding MENU for 5 s and typing the PIN with
+  the number keys (off when no PIN is set). Full to Simple from Settings, optionally behind the PIN.
+- **First run** on a new install: language, a subscription (typed on the TV or sent from a phone by
+  QR code), My channels (can be skipped), then "Who is this TV for?" which sets the mode and, for
+  Simple, asks for a PIN. Existing installs skip it and open in Simple mode.
+- **The web page stays on the home network and becomes optional.** Day-to-day setup works with the
+  remote in Full mode; the page remains the tool for bulk editing, film-channel rules, guide matching,
+  keys, export/import and the mode switch. A PIN is set at first run so the page is never open, and
+  Full mode can turn the server off.
+- **Audience**: sideloaded first, Google Play later, free and open source, with no content and no
+  provider suggestions. The name Telly stays, pending a trademark check before Play.
+- **Two build flavours**: `sideload` with the home guard, `play` without it. Google Play's
+  accessibility policy is very unlikely to accept an accessibility service used as a kiosk, and the
+  guard also needs a permission granted over adb. In the `play` build Simple mode relies on Telly
+  being the home app, which is weaker; the household that needs the guard sideloads.
+- **Release key**: a real keystore outside the repo, held in CI secrets. The committed debug key is
+  public, so anyone could sign an "update" with it. Because the signature changes, the installed
+  Kogan cannot update in place; settings export and import (lineup, subscriptions with their
+  passwords, film channels, settings; one PIN-protected file) moves it once and serves as a backup.
+- **Storage**: the catalog and the TV guide move to SQLite (Room). Full mode searches and pages
+  10,000+ channels; reading one JSON file whole is already slow for big providers. The guide keeps
+  every channel for 24 hours (today it is trimmed to the lineup); if a large guide is too much for
+  the Kogan, it falls back to My channels plus the category being browsed. Small files (lineup,
+  subscriptions, settings) stay JSON.
+- **Parental**: adult categories are recognised by name and hidden by default in Full mode; the PIN
+  shows them for the session, and the web page can hide or show any category. Film rating rules stay
+  as they are. Simple mode plays only My channels, so it needs nothing new.
+- **Scope**: Android TV and Google TV. Fire TV is a likely follow-up (same APK, guard unchecked
+  there). YouTube stays a channel source through the official player in both modes; no YouTube
+  browsing or search in Full mode. Catch-up is left out of the first release.
+- **Order**: the open Kogan checks and playback fixes first (both modes share the engine), then
+  M1–M8 in `docs/BACKLOG.md`. Every milestone is checked on the Kogan; a second device (a Chromecast
+  with Google TV or a Google TV Streamer) and the Android TV emulator join before Play.
+
+Consequences: CLAUDE.md's product rules are split into All modes, Simple mode and Full mode. Old
+rule 8 ("configuration happens off the TV") becomes A6, "configuration is possible off the TV".
+On-screen keyboards are allowed in Full mode only, always with a QR code to type on a phone
+instead. Every word stays translated and right-to-left in both modes; the huge text sizes are
+Simple mode's only.
+
+Not adopted:
+- Two separate apps: two installs, two copies of the subscriptions, two update paths.
+- A hosted configuration site with accounts: running costs, the household's IPTV passwords on a
+  server, and network calls the project rules forbid. A caregiver in another city stays on the
+  "Later" list (a hosted JSON config or Tailscale).
+- Competing feature for feature with the established players.
+
+## ADR-034 Full mode's screens use androidx.tv Material
+
+Context: Simple mode's screens are video, a banner and one list, built with plain Compose. Full
+mode has rails, rows of posters, a guide grid and settings, all driven by D-pad focus, which plain
+Compose handles poorly on TV (focus restoration, scrolling to the focused item, focus indication).
+
+Decision: Full mode's screens use `androidx.tv:tv-material` (cards, navigation drawer, immersive
+list, focus indication). Simple mode's screens stay on plain Compose and Material3 so a library
+change cannot touch them. The dependency is added in its own commit with M3.
+
+Consequences: one more library to keep current. Leanback fragments and XML layouts stay out.
