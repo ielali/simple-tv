@@ -34,16 +34,19 @@ A4. **YouTube goes through the official embedded player or the YouTube app only.
     WebView sign-in block. Both violate the terms and break constantly. See ADR-007.
 A5. **Never disable, hide or suspend the stock Google TV home** (`com.google.android.apps.tv.launcherx`),
     by `pm`, device-owner policy or debloat list. On Android 14 Google TV it can loop the device into
-    black-screen recovery (RescueParty). Cover it with the home guard instead. `tools/tv-admin.sh`
-    enforces this; keep its protected list in step with any new tooling.
+    black-screen recovery (RescueParty). In Simple mode's `sideload` build the home guard covers it
+    (S7); elsewhere it is simply left alone. `tools/tv-admin.sh` enforces this; keep its protected
+    list in step with any new tooling.
 A6. **Configuration is possible off the TV.** Every setting can be changed from the web UI at
     `app/src/main/assets/config/index.html` through the JSON API in `ConfigServer`. In Full mode
     what a household needs day to day (add a subscription, browse, edit My channels, PIN, mode) can
     also be done with the remote; bulk editing and expert settings may stay web-only.
 A7. **No content.** Telly ships with no channels and never suggests or links to a provider. Public
     guide listings are fine. This is what Google Play allows of an IPTV player.
-A8. **The web page signs in with the PIN** (`PinAuth`). From M7 a PIN is set at first run in both
-    modes, so the page is never open on the network.
+A8. **The web page signs in with the PIN** (`PinAuth`). From M7 the PIN is required in both modes:
+    it is set at first run, can be changed but not removed, and a TV updated without one keeps
+    working while the page asks for one on its next visit. From M3 the TV never shows the PIN; the
+    page's "Forgot PIN?" makes the TV show a one-time code for 2 minutes instead (ADR-033).
 
 ### Simple mode
 
@@ -58,11 +61,12 @@ S4. **Never blank.** A missing number lands on the nearest real channel. An empt
     the config URL in large text.
 S5. **Text on the TV is huge.** Banner number 96sp, names 48sp, hints 32sp minimum. Light text on
     dark, no thin weights.
-S6. **Leaving Simple mode needs the household.** Only from the web page, or by holding MENU for 5 s
-    and typing the PIN with the number keys. With no PIN set, the hold-MENU route is off. Nothing a
-    viewer can stumble into leaves Simple mode.
-S7. **The home guard runs only in Simple mode and only in the `sideload` build.** The `play` build
-    has no accessibility service; there Simple mode relies on Telly being the home app (ADR-033).
+S6. **Leaving Simple mode needs the household** (from M3). Only from the web page, or by holding MENU
+    for 5 s and typing the PIN with the number keys, also over YouTube. With no PIN set, the hold-MENU
+    route is off. Nothing a viewer can stumble into leaves Simple mode; entering Simple mode needs no
+    PIN, and turns the web server back on.
+S7. **The home guard runs only in Simple mode and only in the `sideload` build** (from M1). The `play`
+    build has no accessibility service; there Simple mode relies on Telly being the home app (ADR-033).
 S8. **An update never changes a viewer's TV.** Existing installs open in Simple mode with their
     lineup, PIN and guard as they were.
 
@@ -75,7 +79,7 @@ F2. **Normal TV text sizes**: about 18–24sp for body text, 28–32sp for title
 F3. **Number keys tune My channels**, with the same tuner and banner as Simple mode. Other categories
     show the provider's numbering and cannot be tuned by number.
 F4. **Adult categories are hidden by default** (recognised by name, or marked on the web page) and
-    shown for the session after the PIN.
+    shown for the session after the PIN (which the TV never displays, A8).
 F5. **Telly is an ordinary app in Full mode**: no home guard, not the home screen.
 
 ADRs before ADR-033 cite the old single list of rules: 1 is S1, 2 is A1 and S2, 3 is S3, 4 is A2 and
@@ -193,6 +197,9 @@ docs/                                   Feasibility, architecture, decisions, ba
   (ADR-034); keep it out of Simple mode's screens.
 - **Two build flavours from M1** (ADR-033): `sideload` carries the home guard, `play` leaves out the
   accessibility service and anything that needs adb-granted permissions. Everything else is shared.
+  From M1 release builds are signed with a key held only in CI; debug builds keep the committed
+  shared key and install as a separate app (`.debug` package suffix), so a laptop build never has
+  to replace the TV's release install.
 - **Keep dependencies in `gradle/libs.versions.toml`.** Bump versions in one commit on their own.
 - **No secrets, no analytics, no network calls except stream playback, YouTube embeds and the LAN
   config server.**

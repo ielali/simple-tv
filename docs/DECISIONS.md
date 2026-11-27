@@ -219,6 +219,9 @@ once in plain text, the same as provider passwords.
 
 ## ADR-015 Caregiver API that never returns secrets, with an optional PIN
 
+Updated by ADR-033: from M3 the TV no longer shows the PIN (a one-time code replaces it), and from
+M7 the PIN is required and cannot be removed.
+
 Context: The redesigned caregiver page (docs/design/handoff) is served over plain HTTP on the home
 network. IPTV stream addresses and M3U links embed the account password, and the old API returned
 whole channel lists, so any device on the Wi-Fi could read them.
@@ -1004,29 +1007,49 @@ Decision:
   first Live TV category, and what number keys tune in both modes. One list, edited from the TV or
   the web page.
 - **Switching**: Simple to Full from the web page, or by holding MENU for 5 s and typing the PIN with
-  the number keys (off when no PIN is set). Full to Simple from Settings, optionally behind the PIN.
+  the number keys (off when no PIN is set). Over a YouTube channel the guard swallows MENU today; it
+  will notice a 5 s hold and pass it to Telly, while a short press there still does nothing. Full to
+  Simple from Settings or the page, without the PIN: Simple mode only takes things away. Entering
+  Simple mode turns the web server back on, since the page is how Simple mode is set up.
+- **The TV stops showing the PIN.** ADR-015 printed it in the MENU overlay so whoever is in the room
+  could sign in; a PIN anyone can read cannot guard leaving Simple mode or adult categories. Instead
+  the page's "Forgot PIN?" makes the TV show a one-time sign-in code for 2 minutes. One secret,
+  and the person in the room can still get in. Not adopted: a second, never-shown household code
+  beside the page PIN (two secrets to explain and forget).
 - **First run** on a new install: language, a subscription (typed on the TV or sent from a phone by
-  QR code), My channels (can be skipped), then "Who is this TV for?" which sets the mode and, for
-  Simple, asks for a PIN. Existing installs skip it and open in Simple mode.
+  QR code), My channels (can be skipped), "Who is this TV for?" which sets the mode, then a PIN in
+  either mode. Existing installs skip it and open in Simple mode.
 - **The web page stays on the home network and becomes optional.** Day-to-day setup works with the
   remote in Full mode; the page remains the tool for bulk editing, film-channel rules, guide matching,
-  keys, export/import and the mode switch. A PIN is set at first run so the page is never open, and
-  Full mode can turn the server off.
+  keys, export/import and the mode switch. From M7 the PIN is required in both modes, because the
+  page holds provider passwords in either: it is set at first run, "Remove the PIN" (ADR-015)
+  becomes "Change the PIN", and a TV updated without one keeps working while the page asks for one
+  on its next visit (the viewer's screen does not change, S8). Full mode can turn the server off.
 - **Audience**: sideloaded first, Google Play later, free and open source, with no content and no
   provider suggestions. The name Telly stays, pending a trademark check before Play.
 - **Two build flavours**: `sideload` with the home guard, `play` without it. Google Play's
   accessibility policy is very unlikely to accept an accessibility service used as a kiosk, and the
   guard also needs a permission granted over adb. In the `play` build Simple mode relies on Telly
   being the home app, which is weaker; the household that needs the guard sideloads.
-- **Release key**: a real keystore outside the repo, held in CI secrets. The committed debug key is
-  public, so anyone could sign an "update" with it. Because the signature changes, the installed
-  Kogan cannot update in place; settings export and import (lineup, subscriptions with their
-  passwords, film channels, settings; one PIN-protected file) moves it once and serves as a backup.
-- **Storage**: the catalog and the TV guide move to SQLite (Room). Full mode searches and pages
-  10,000+ channels; reading one JSON file whole is already slow for big providers. The guide keeps
-  every channel for 24 hours (today it is trimmed to the lineup); if a large guide is too much for
-  the Kogan, it falls back to My channels plus the category being browsed. Small files (lineup,
-  subscriptions, settings) stay JSON.
+- **Release key**: a real keystore outside the repo, held in CI secrets, signing release builds. The
+  committed debug key is public, so anyone could sign an "update" with it. Debug builds keep the
+  shared debug key but take a `.debug` package suffix, so a laptop or CI debug build installs beside
+  the TV's release app instead of over it, and no copy of the release key is needed on a laptop.
+  `docs/DEPLOYMENT.md` changes with it.
+- **Export and import.** Because the signature changes, the installed Kogan cannot update in place.
+  An export file moves it once and serves as a backup. It holds everything that is not rebuilt
+  from a provider: the lineup, subscriptions with their passwords, film channels, settings,
+  playback progress (films, series, YouTube playlists), `secrets.json` (PIN, TMDB key, YouTube API
+  key, YouTube OAuth client and refresh token) and `guide/overrides.json` (manual guide matches).
+  Catalogs, guide listings and the logo index are caches and stay out. The file is encrypted with a
+  passphrase typed at export, not the PIN: 4 to 6 digits is too weak for a file that can be copied.
+  M1 records the file format in its own ADR.
+- **Storage**: the plan is to move the catalog and the TV guide to SQLite (Room), since Full mode
+  searches and pages 10,000+ channels. Whether reading the JSON catalog whole is too slow is not
+  measured yet; backlog item 0 measures it on the Kogan and M2 waits for that number. The guide
+  keeps every channel for the next 24 hours, replacing ADR-020's window of the lineup's channels
+  for 36 hours; if a large guide is too much for the Kogan, it falls back to My channels plus the
+  category being browsed. Small files (lineup, subscriptions, settings) stay JSON.
 - **Parental**: adult categories are recognised by name and hidden by default in Full mode; the PIN
   shows them for the session, and the web page can hide or show any category. Film rating rules stay
   as they are. Simple mode plays only My channels, so it needs nothing new.
