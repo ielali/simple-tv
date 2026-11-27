@@ -131,6 +131,58 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
   and a Windows laptop; with the TV in standby for an hour; after the router restarts; and watch one
   refused trailer there.
 
+### Full mode (ADR-033)
+
+Telly becomes a household IPTV player with Simple mode per TV. These come after the Kogan checks
+and playback fixes above, in this order; each milestone may be several PRs and is checked on the
+Kogan before the next starts.
+
+18. **M1 Release key, build flavours, export and import.** A release keystore held in GitHub Actions
+    secrets, never in the repo; CI signs release builds with it. Debug builds keep the shared key
+    and get a `.debug` package suffix so they install beside the release app; update DEPLOYMENT.md. `sideload` and `play` flavours: `play` leaves out
+    `HomeGuardService`, `WRITE_SECURE_SETTINGS` and the guard's page card, and Simple mode there
+    relies on Telly being the home app. Export and import on the web page, with everything ADR-033
+    lists: lineup, subscriptions with their passwords, film channels, settings, playback progress,
+    `secrets.json` and `guide/overrides.json` (caches stay out). It holds passwords, so
+    it is encrypted with a passphrase typed at export (a 4–6 digit PIN is too weak for a file that
+    can be copied); record the format in an ADR.
+    Then move the Kogan to the new key: export, uninstall, install, import. CI builds both flavours.
+19. **M2 Catalog and guide in SQLite.** Starts after item 0 has measured the JSON catalog's size
+    and read time on the Kogan. Room for the catalog (live channels, films, series, categories) and
+    the guide, so Full mode can search and page 10,000+ entries. Keep the guide for every channel
+    for 24 hours (replacing ADR-020's lineup-only 36 hours); measure size and read time on the Kogan
+    with the household's provider, and fall back to My channels plus the browsed category if it is too much. Lineup,
+    subscriptions and settings stay JSON. Existing caches are rebuilt from the provider, not migrated.
+20. **M3 The two modes and Full mode's shell.** A mode setting (existing installs: Simple). Simple
+    to Full from the web page, or hold MENU for 5 s and type the PIN with the number keys (off with
+    no PIN). Over YouTube the guard notices the 5 s hold and passes it to Telly; a short MENU press
+    there still does nothing. Full to Simple from Settings or the page, no PIN; it turns the web
+    server back on. The TV stops showing the PIN in the MENU overlay; the page gets "Forgot PIN?",
+    which shows a one-time sign-in code on the TV for 2 minutes (ADR-033). Add
+    `androidx.tv:tv-material` in its own commit (ADR-034). The side rail, Live TV (subscriptions when there are several, categories, channels, a preview
+    window, now and next) and full-screen playback with up/down, digits and the info banner. Decide
+    what BACK does at the top level of Full mode and record it.
+21. **M4 My channels on the TV, Search, parental hiding.** Add, remove and reorder My channels with
+    the remote. Search across live channels, films and series of every subscription. Adult categories
+    recognised by name and hidden; the PIN shows them for the session; the page can mark any
+    category hidden or shown.
+22. **M5 Films and Series.** Poster rows by category, a details screen (TMDB when a key is set), play
+    and resume, episodes by season. Reuse the film channels' subtitle and soundtrack choices.
+23. **M6 Guide grid.** Times across, channels down, opening on My channels with a category switcher;
+    OK on a programme on now tunes the channel.
+24. **M7 First run, typing on the TV, Settings.** First run: language, a subscription, My channels
+    (can be skipped), "Who is this TV for?" which sets the mode, then a PIN in either mode. The PIN is
+    required from then on: "Remove the PIN" becomes "Change the PIN", and a TV updated without one
+    keeps working while the page asks for one on its next visit. Typing fields use the system keyboard and show a QR code that opens the
+    page at that form; the TV fills in when the phone sends it. Full mode's Settings screen (Simple
+    mode keeps only the read-only MENU overlay, S1): language, mode, PIN, the web server on or off,
+    the page's address and QR code, subscriptions, about. Turning the server off is refused while
+    the TV is in Simple mode, and switching to Simple turns it back on.
+25. **M8 Ready for Google Play.** Trademark check on the name, store listing and screenshots, privacy
+    policy (nothing leaves the house), content rating, the banner bitmap, target SDK as Play requires,
+    a review of the `play` build for anything Play's policies reject, and a check on a second device
+    (Chromecast with Google TV or Google TV Streamer) and the Android TV emulator.
+
 ## Later
 
 - TV guide: a fuller "what's on later" list per channel on the page, and the YouTube live video's
@@ -160,9 +212,6 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
   and played full screen with the remote; ExoPlayer already plays files.
 - App allow-list on the config page, for households that do use Netflix or Prime through the guard.
 
-- Release signing: replace the committed debug key with a release keystore held in GitHub Actions
-  secrets before any distribution outside the family. The debug key in `app/keystore` is not secret.
-
 - Tizen (Samsung) / webOS (LG) web-app port sharing the channel model and config page; needs the
   hosted-config item below first. See DEPLOYMENT.md.
 
@@ -172,11 +221,11 @@ Ordered. Take items from the top. Each item should be one PR. Mark done with the
 - Encrypt providers.json with Android Keystore (today it is plaintext in app-private storage).
 
 - XMLTV EPG: show "now playing" title in the banner.
-- Favourites / hidden channels toggled from the web UI.
-- Export/import of `channels.json` from the web UI.
-- Multiple profiles (two viewers, two channel maps) selected by a coloured remote button.
+- Multiple profiles (two viewers, two channel maps) selected by a coloured remote button. Full mode
+  only: Simple mode never shows a picker (ADR-033).
+- Catch-up in Full mode: Xtream `tv_archive` replays, first from the guide grid, then pausing live TV.
+- Fire TV: the same APK; check the home guard and the remote's keys there before saying it works.
 - Remote config sync from a hosted JSON URL for caregivers in another city.
-- Play Store / sideload release build with signing, banner bitmap, privacy policy.
 - Accessibility: optional spoken channel name on tune (TextToSpeech).
 
 ## Done

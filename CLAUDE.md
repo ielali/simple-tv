@@ -1,40 +1,89 @@
 # Telly (formerly Simple TV) — guide for AI developers
 
-Telly (code name Simple TV, package `com.ielali.simpletv`) is an Android TV app that makes a modern set-top box behave like a 1990s television for
-elderly viewers with no digital background. One remote, numbered channels, nothing else on screen.
-Sources are IPTV streams and YouTube live channels. A caregiver configures channels from a phone or
-laptop through a web page the TV serves on the home network.
+Telly (code name Simple TV, package `com.ielali.simpletv`) is an IPTV player for Android TV and
+Google TV. Each TV runs in one of two modes (ADR-033):
+
+- **Simple mode**, the original product: a modern set-top box behaves like a 1990s television for
+  elderly viewers with no digital background. One remote, numbered channels, nothing else on screen.
+- **Full mode** (being built, backlog M1–M8): a household IPTV player with Live TV, a guide, films,
+  series and search, driven by the remote.
+
+Sources are IPTV subscriptions (Xtream Codes or M3U) and YouTube channels. The TV also serves a web
+page on the home network where a caregiver or householder can set it up from a phone or laptop.
+The page is optional in Full mode and the main way to configure Simple mode.
+
+**"My channels"** is the numbered, hand-picked list the code calls the lineup (`ChannelList`). It is
+what Simple mode plays, the first category of Full mode's Live TV, and what the number keys tune in
+both modes.
 
 This file is the contract for any AI agent working in this repository. Read it fully before changing code.
 
 ## Product rules (non-negotiable)
 
-1. **The viewer never sees a menu.** Every screen the viewer can reach with digits, channel up/down,
-   OK, BACK or INFO must be the video or a big banner over it. The one exception is the channel list
-   on the Live TV button (ADR-022): channels by number with a preview window, big text, no settings.
-   Settings live behind MENU and are a single read-only overlay showing the config URL.
-2. **The remote is the only input.** No touch, no cursor, no on-screen keyboard for the viewer.
-   Volume, mute and power keys must pass through to the system untouched (`TvViewModel.handles`).
-3. **BACK never exits.** It cancels pending digits, nothing more. HOME is handled by making the app
-   the home screen (see docs/DEPLOYMENT.md).
-4. **Never blank.** A missing number lands on the nearest real channel. Stream errors show
-   "No signal" and keep retrying. An empty channel list shows the config URL in large text.
-5. **Every word on the TV screen is translated.** Put on-screen text in `values/strings.xml` and the
-   same key in every `values-<lang>/strings.xml` (Arabic today). `TranslationsTest` fails the build
-   when one is missing. Layouts must work right to left: use start/end, never left/right, except
-   where the TV language must override the system direction (see `BannerOverlay`).
-5b. **Text on the TV is huge.** Banner number 96sp, names 48sp, hints 32sp minimum. Light text on
-   dark, no thin weights.
-6. **YouTube goes through the official embedded player or the YouTube app only.** Never add
-   stream-URL extraction (yt-dlp, NewPipe, Invidious) or user-agent spoofing to get past Google's
-   WebView sign-in block. Both violate the terms and break constantly. See ADR-007.
-7. **Never disable, hide or suspend the stock Google TV home** (`com.google.android.apps.tv.launcherx`),
-   by `pm`, device-owner policy or debloat list. On Android 14 Google TV it can loop the device into
-   black-screen recovery (RescueParty). Cover it with the home guard instead. `tools/tv-admin.sh`
-   enforces this; keep its protected list in step with any new tooling.
-8. **Configuration happens off the TV.** New settings go into the web UI at
-   `app/src/main/assets/config/index.html` and the JSON API in `ConfigServer`, not into on-TV forms.
+### All modes
 
+A1. **The remote is the TV's input.** No touch, no cursor. Volume, mute and power keys pass through
+    to the system untouched (`TvViewModel.handles`).
+A2. **Never blank on a stream error.** Stream errors show "No signal" and keep retrying.
+A3. **Every word on the TV screen is translated.** Put on-screen text in `values/strings.xml` and the
+    same key in every `values-<lang>/strings.xml` (Arabic today). `TranslationsTest` fails the build
+    when one is missing. Layouts must work right to left: use start/end, never left/right, except
+    where the TV language must override the system direction (see `BannerOverlay`).
+A4. **YouTube goes through the official embedded player or the YouTube app only.** Never add
+    stream-URL extraction (yt-dlp, NewPipe, Invidious) or user-agent spoofing to get past Google's
+    WebView sign-in block. Both violate the terms and break constantly. See ADR-007.
+A5. **Never disable, hide or suspend the stock Google TV home** (`com.google.android.apps.tv.launcherx`),
+    by `pm`, device-owner policy or debloat list. On Android 14 Google TV it can loop the device into
+    black-screen recovery (RescueParty). In Simple mode's `sideload` build the home guard covers it
+    (S7); elsewhere it is simply left alone. `tools/tv-admin.sh` enforces this; keep its protected
+    list in step with any new tooling.
+A6. **Configuration is possible off the TV.** Every setting can be changed from the web UI at
+    `app/src/main/assets/config/index.html` through the JSON API in `ConfigServer`. In Full mode
+    what a household needs day to day (add a subscription, browse, edit My channels, PIN, mode) can
+    also be done with the remote; bulk editing and expert settings may stay web-only.
+A7. **No content.** Telly ships with no channels and never suggests or links to a provider. Public
+    guide listings are fine. This is what Google Play allows of an IPTV player.
+A8. **The web page signs in with the PIN** (`PinAuth`). From M7 the PIN is required in both modes:
+    it is set at first run, can be changed but not removed, and a TV updated without one keeps
+    working while the page asks for one on its next visit. From M3 the TV never shows the PIN; the
+    page's "Forgot PIN?" makes the TV show a one-time code for 2 minutes instead (ADR-033).
+
+### Simple mode
+
+S1. **The viewer never sees a menu.** Every screen the viewer can reach with digits, channel up/down,
+    OK, BACK or INFO must be the video or a big banner over it. The one exception is the channel list
+    on the Live TV button (ADR-022): channels by number with a preview window, big text, no settings.
+    Settings live behind MENU and are a single read-only overlay showing the config URL.
+S2. **No on-screen keyboard for the viewer.**
+S3. **BACK never exits.** It cancels pending digits, nothing more. HOME is handled by making the app
+    the home screen (see docs/DEPLOYMENT.md).
+S4. **Never blank.** A missing number lands on the nearest real channel. An empty channel list shows
+    the config URL in large text.
+S5. **Text on the TV is huge.** Banner number 96sp, names 48sp, hints 32sp minimum. Light text on
+    dark, no thin weights.
+S6. **Leaving Simple mode needs the household** (from M3). Only from the web page, or by holding MENU
+    for 5 s and typing the PIN with the number keys, also over YouTube. With no PIN set, the hold-MENU
+    route is off. Nothing a viewer can stumble into leaves Simple mode; entering Simple mode needs no
+    PIN, and turns the web server back on.
+S7. **The home guard runs only in Simple mode and only in the `sideload` build** (from M1). The `play`
+    build has no accessibility service; there Simple mode relies on Telly being the home app (ADR-033).
+S8. **An update never changes a viewer's TV.** Existing installs open in Simple mode with their
+    lineup, PIN and guard as they were.
+
+### Full mode
+
+F1. **Remote first, typing allowed.** The system keyboard may appear. Every typing field also shows a
+    QR code that opens the web page at that form, and the TV fills in when the phone sends it.
+F2. **Normal TV text sizes**: about 18–24sp for body text, 28–32sp for titles. Light text on dark,
+    no thin weights.
+F3. **Number keys tune My channels**, with the same tuner and banner as Simple mode. Other categories
+    show the provider's numbering and cannot be tuned by number.
+F4. **Adult categories are hidden by default** (recognised by name, or marked on the web page) and
+    shown for the session after the PIN (which the TV never displays, A8).
+F5. **Telly is an ordinary app in Full mode**: no home guard, not the home screen.
+
+ADRs before ADR-033 cite the old single list of rules: 1 is S1, 2 is A1 and S2, 3 is S3, 4 is A2 and
+S4, 5 is A3, 5b is S5, 6 is A4, 7 is A5, 8 is A6.
 ## Layout
 
 ```
@@ -143,8 +192,14 @@ docs/                                   Feasibility, architecture, decisions, ba
 - **Every behaviour change to pure logic ships with a unit test.** Tests use JUnit 4 and
   `kotlinx-coroutines-test` with virtual time; see `ChannelTunerTest` for the pattern
   (launch collector, `runCurrent()`, act, `advanceTimeBy`, assert).
-- **Compose only**, no XML layouts or Leanback fragments. Material3 `Text` is fine; do not pull in
-  `androidx.tv` unless a backlog item needs its components.
+- **Compose only**, no XML layouts or Leanback fragments. Simple mode's screens use plain Compose and
+  Material3. Full mode's screens may use `androidx.tv:tv-material` for focus, rails and cards
+  (ADR-034); keep it out of Simple mode's screens.
+- **Two build flavours from M1** (ADR-033): `sideload` carries the home guard, `play` leaves out the
+  accessibility service and anything that needs adb-granted permissions. Everything else is shared.
+  From M1 release builds are signed with a key held only in CI; debug builds keep the committed
+  shared key and install as a separate app (`.debug` package suffix), so a laptop build never has
+  to replace the TV's release install.
 - **Keep dependencies in `gradle/libs.versions.toml`.** Bump versions in one commit on their own.
 - **No secrets, no analytics, no network calls except stream playback, YouTube embeds and the LAN
   config server.**
