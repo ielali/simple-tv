@@ -144,7 +144,7 @@ Full mode. Merge `main` into `full-mode` after every fix that lands on `main`, a
 Each milestone has a GitHub issue in the "Full mode" milestone; a PR that finishes one says
 "Closes #n" and still moves the item to Done here.
 
-18. **M1 Release key, build flavours, export and import.** A release keystore held in GitHub Actions
+18. **M1 Release key, build flavours, export and import (#4).** A release keystore held in GitHub Actions
     secrets, never in the repo; CI signs release builds with it. Debug builds keep the shared key
     and get a `.debug` package suffix so they install beside the release app; update DEPLOYMENT.md. `sideload` and `play` flavours: `play` leaves out
     `HomeGuardService`, `WRITE_SECURE_SETTINGS` and the guard's page card, and Simple mode there
@@ -154,13 +154,13 @@ Each milestone has a GitHub issue in the "Full mode" milestone; a PR that finish
     it is encrypted with a passphrase typed at export (a 4–6 digit PIN is too weak for a file that
     can be copied); record the format in an ADR.
     Then move the Kogan to the new key: export, uninstall, install, import. CI builds both flavours.
-19. **M2 Catalog and guide in SQLite.** Starts after item 0 has measured the JSON catalog's size
+19. **M2 Catalog and guide in SQLite (#5).** Starts after item 0 has measured the JSON catalog's size
     and read time on the Kogan. Room for the catalog (live channels, films, series, categories) and
     the guide, so Full mode can search and page 10,000+ entries. Keep the guide for every channel
     for 24 hours (replacing ADR-020's lineup-only 36 hours); measure size and read time on the Kogan
     with the household's provider, and fall back to My channels plus the browsed category if it is too much. Lineup,
     subscriptions and settings stay JSON. Existing caches are rebuilt from the provider, not migrated.
-20. **M3 The two modes and Full mode's shell.** A mode setting (existing installs: Simple). Simple
+20. **M3 The two modes and Full mode's shell (#6).** A mode setting (existing installs: Simple). Simple
     to Full from the web page, or hold MENU for 5 s and type the PIN with the number keys (off with
     no PIN). Over YouTube the guard notices the 5 s hold and passes it to Telly; a short MENU press
     there still does nothing. Full to Simple from Settings or the page, no PIN; it turns the web
@@ -169,15 +169,15 @@ Each milestone has a GitHub issue in the "Full mode" milestone; a PR that finish
     `androidx.tv:tv-material` in its own commit (ADR-034). The side rail, Live TV (subscriptions when there are several, categories, channels, a preview
     window, now and next) and full-screen playback with up/down, digits and the info banner. Decide
     what BACK does at the top level of Full mode and record it.
-21. **M4 My channels on the TV, Search, parental hiding.** Add, remove and reorder My channels with
+21. **M4 My channels on the TV, Search, parental hiding (#7).** Add, remove and reorder My channels with
     the remote. Search across live channels, films and series of every subscription. Adult categories
     recognised by name and hidden; the PIN shows them for the session; the page can mark any
     category hidden or shown.
-22. **M5 Films and Series.** Poster rows by category, a details screen (TMDB when a key is set), play
+22. **M5 Films and Series (#8).** Poster rows by category, a details screen (TMDB when a key is set), play
     and resume, episodes by season. Reuse the film channels' subtitle and soundtrack choices.
-23. **M6 Guide grid.** Times across, channels down, opening on My channels with a category switcher;
+23. **M6 Guide grid (#9).** Times across, channels down, opening on My channels with a category switcher;
     OK on a programme on now tunes the channel.
-24. **M7 First run, typing on the TV, Settings.** First run: language, a subscription, My channels
+24. **M7 First run, typing on the TV, Settings (#10).** First run: language, a subscription, My channels
     (can be skipped), "Who is this TV for?" which sets the mode, then a PIN in either mode. The PIN is
     required from then on: "Remove the PIN" becomes "Change the PIN", and a TV updated without one
     keeps working while the page asks for one on its next visit. Typing fields use the system keyboard and show a QR code that opens the
@@ -185,7 +185,7 @@ Each milestone has a GitHub issue in the "Full mode" milestone; a PR that finish
     mode keeps only the read-only MENU overlay, S1): language, mode, PIN, the web server on or off,
     the page's address and QR code, subscriptions, about. Turning the server off is refused while
     the TV is in Simple mode, and switching to Simple turns it back on.
-25. **M8 Ready for Google Play.** Trademark check on the name, store listing and screenshots, privacy
+25. **M8 Ready for Google Play (#11).** Trademark check on the name, store listing and screenshots, privacy
     policy (nothing leaves the house), content rating, the banner bitmap, target SDK as Play requires,
     a review of the `play` build for anything Play's policies reject, and a check on a second device
     (Chromecast with Google TV or Google TV Streamer) and the Android TV emulator.
