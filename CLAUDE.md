@@ -180,6 +180,8 @@ docs/                                   Feasibility, architecture, decisions, ba
 
 - **Pick work from `docs/BACKLOG.md`**, top to bottom unless told otherwise. Move an item to "Done"
   in the same commit that finishes it. Add new items you discover rather than fixing them silently.
+- **Full mode (M1–M8) is built on the `full-mode` branch.** Branch from it and target PRs at it; fixes
+  for Simple mode and items 0–17 go to `main` as before. See the Full mode section of the backlog.
 - **Record decisions in `docs/DECISIONS.md`** when you choose between approaches (library, protocol,
   UX behaviour). One short entry: context, decision, consequences.
 - **Pure logic stays Android-free.** Anything in `tv/ChannelTuner`, `tv/ChannelNavigator`, `tv/TvController`, `data/`,

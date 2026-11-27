@@ -137,6 +137,13 @@ Telly becomes a household IPTV player with Simple mode per TV. These come after 
 and playback fixes above, in this order; each milestone may be several PRs and is checked on the
 Kogan before the next starts.
 
+Work happens on the `full-mode` integration branch: branch from it and open PRs against it, not
+`main`. `main` keeps publishing the Simple-mode APK the Kogan installs, untouched by half-built
+Full mode. Merge `main` into `full-mode` after every fix that lands on `main`, and `full-mode` into
+`main` when a milestone is finished, checked on the Kogan and leaves Simple mode unchanged (S8).
+Each milestone has a GitHub issue in the "Full mode" milestone; a PR that finishes one says
+"Closes #n" and still moves the item to Done here.
+
 18. **M1 Release key, build flavours, export and import.** A release keystore held in GitHub Actions
     secrets, never in the repo; CI signs release builds with it. Debug builds keep the shared key
     and get a `.debug` package suffix so they install beside the release app; update DEPLOYMENT.md. `sideload` and `play` flavours: `play` leaves out
